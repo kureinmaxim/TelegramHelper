@@ -1,0 +1,337 @@
+syntax = "proto3";
+
+package devicecontrol;
+
+// ---------------------------------------------------------------------
+//                            БЛОКИ СИСТЕМЫ
+// ---------------------------------------------------------------------
+
+enum BlockType {
+  BLOCKTYPE_UNKNOWN = 0;
+  SHSKM = 1;       // ШСКМ (0x0)
+  BU = 2;          // БУ (0x1)
+  BZ = 3;          // БЗ (0x2)
+  BF = 4;          // БФ (0x3)
+  ARM = 5;         // АРМ (0x4)
+  PC = 6;          // ПЭВМ (0x5)
+}
+
+// ---------------------------------------------------------------------
+//                            ТИПЫ УСТРОЙСТВ
+// ---------------------------------------------------------------------
+
+enum DeviceType {
+  DEVICETYPE_UNKNOWN = 0;
+  // Общие типы устройств
+  DEVICETYPE_CONTROLLER = 1;      // Плата контроллера/ПЛИС
+  DEVICETYPE_LED = 2;             // Светодиод
+  DEVICETYPE_RF_SWITCH = 3;       // ВЧ переключатель
+  DEVICETYPE_ATTENUATOR = 4;      // Аттенюатор
+  DEVICETYPE_TEMPERATURE = 5;     // Датчик температуры
+  DEVICETYPE_VOLTAGE = 6;         // Индикатор напряжения
+  DEVICETYPE_FAN = 7;             // Вентилятор
+  DEVICETYPE_MEMORY = 8;          // Память (ОЗУ, ПЗУ)
+  DEVICETYPE_FPGA = 9;            // ПЛИС как отдельный тип устройства
+  
+  // Специфичные типы устройств для БУ
+  DEVICETYPE_AMPLIFIER = 20;      // Усилитель ВЧ
+  DEVICETYPE_SD_GENERATOR = 21;   // Генератор СД
+  DEVICETYPE_SD_DETECTOR = 22;    // Детектор СД
+  
+  // Специфичные типы устройств для БЗ
+  DEVICETYPE_DELAY_LINE = 30;     // ЛЗП (линия задержки переменная)
+  DEVICETYPE_OPTICAL_MODULE = 31; // ПОМ/ПрОМ (передающий/приемный оптический модуль)
+  DEVICETYPE_MVOK = 32;           // МВОК (модуль волоконно-оптического кабеля)
+  DEVICETYPE_AFC_CORRECTOR = 33; // Корректор АЧХ
+  
+  // Специфичные типы устройств для БФ
+  DEVICETYPE_FLUCTUATION_MODEL = 40; // Модель флюктуаций
+}
+
+// ---------------------------------------------------------------------
+//                          КОДЫ КОМАНД
+// ---------------------------------------------------------------------
+
+enum CommandCode {
+  COMMAND_UNKNOWN = 0;
+  READ = 1;          // Чтение (0 в gRPC protocol.md)
+  WRITE = 2;         // Запись (1 в gRPC protocol.md)
+  INIT = 3;          // Инициализация (2 в gRPC protocol.md)
+  PARAM = 4;         // Параметры (3 в gRPC protocol.md)
+}
+
+// ---------------------------------------------------------------------
+//                      ВОЗМОЖНЫЕ ПОДТИПЫ УСТРОЙСТВ
+// ---------------------------------------------------------------------
+
+enum AttenuatorType {
+  ATTENUATOR_UNKNOWN = 0;
+  ATTENUATOR_OUTPUT = 1;       // Аттенюатор Выходной
+  ATTENUATOR_INPUT = 2;        // Аттенюатор Входной
+  ATTENUATOR_MSV = 3;          // Аттенюатор МСВ
+  ATTENUATOR_POM = 4;          // Аттенюатор Помехи
+  ATTENUATOR_SD = 5;           // Аттенюатор СД
+  ATTENUATOR_CORRECTIVE = 6;   // Аттенюатор Корректирующий
+}
+
+enum MemoryType {
+  MEMORY_UNKNOWN = 0;
+  MEMORY_RAM_CONTROLLER = 1;   // ОЗУ контроллера
+  MEMORY_ROM_CONTROLLER = 2;   // ПЗУ контроллера
+  MEMORY_RAM_EXTERNAL = 3;     // ОЗУ внешнее
+  MEMORY_ROM_EXTERNAL = 4;     // ПЗУ внешнее
+  MEMORY_RAM_FPGA = 5;         // ОЗУ ПЛИС
+  MEMORY_ROM_FPGA = 6;         // ПЗУ ПЛИС
+}
+
+enum RFSwitchType {
+  RFSWITCH_UNKNOWN = 0;
+  RFSWITCH_S1 = 1;   // ВЧ Переключ. S1 (Тракт(S5) – Выход/ Дет. СД(S9))
+  RFSWITCH_S2 = 2;   // ВЧ Переключ. S2 (Вх/Вых - МСВ/совм.(S3). СД(S9))
+  RFSWITCH_S3 = 3;   // ВЧ Переключ. S3 (Вход/ совм. (S2) – ВЧ тракт (S6))
+  RFSWITCH_S4 = 4;   // ВЧ Переключ. S4 (Внутр ГС – Вых. помехи Вкл/Откл)
+  RFSWITCH_S5 = 5;   // ВЧ Переключ. S5 (Вых. атт. – Дет. СД(S10)/Выход (S1))
+  RFSWITCH_S6 = 6;   // ВЧ Переключ. S6 (Вход(S3)/ГС(A1 МКВЧ) – Вх. атт.)
+  RFSWITCH_S7 = 7;   // ВЧ Переключ. S7 (Внутр ГС/Внешн ГС – (S8))
+  RFSWITCH_S8 = 8;   // ВЧ Переключ. S8 (ГС(S7) – А1 МКВЧ /Выход внешн. СД)
+  RFSWITCH_S9 = 9;   // ВЧ Переключ. S9 (Эталон(А1 МКВЧ)/ S1 – Дет СД (S10))
+  RFSWITCH_S10 = 10; // ВЧ Переключ. S10 (S9/ Вых. атт. (S5) – Дет СД)
+  RFSWITCH_S12 = 12; // ВЧ Переключ. S12 (С выхода БЗ на вход БФП)
+  RFSWITCH_S13 = 13; // ВЧ Переключ. S13 (С выхода БФП на вых. аттенюатор)
+  RFSWITCH_A1_MKVCH = 11; // А1 МКВЧ
+}
+
+enum TemperatureSensorType {
+  TEMPSENSOR_UNKNOWN = 0;
+  TEMPSENSOR_1 = 1;  // Датчик температуры 1
+  TEMPSENSOR_2 = 2;  // Датчик температуры 2
+  TEMPSENSOR_3 = 3;  // Датчик температуры 3
+  TEMPSENSOR_4 = 4;  // Датчик температуры 4
+}
+
+enum VoltageIndicatorType {
+  VOLTINDICATOR_UNKNOWN = 0;
+  VOLTINDICATOR_1 = 1;  // Индикатор напряжения 1
+  VOLTINDICATOR_2 = 2;  // Индикатор напряжения 2
+  VOLTINDICATOR_3 = 3;  // Индикатор напряжения 3
+  VOLTINDICATOR_4 = 4;  // Индикатор напряжения 4
+  VOLTINDICATOR_5 = 5;  // Индикатор напряжения 5
+  VOLTINDICATOR_6 = 6;  // Индикатор напряжения 6
+  VOLTINDICATOR_7 = 7;  // Индикатор напряжения 7
+  VOLTINDICATOR_8 = 8;  // Индикатор напряжения 8
+}
+
+enum AmplifierType {
+  AMPLIFIER_UNKNOWN = 0;
+  AMPLIFIER_VF1 = 1;  // Усилитель ВЧ1 (Входной МШУ)
+  AMPLIFIER_VF2 = 2;  // Усилитель ВЧ2 (Усилитель внешней самодиагностики)
+}
+
+enum OpticalModuleType {
+  OPTMODULE_UNKNOWN = 0;
+  OPTMODULE_POM1 = 1;   // ПОМ 1 (передающий)
+  OPTMODULE_PROM1 = 2;  // ПрОМ 1 (приемный)
+  OPTMODULE_POM2 = 3;   // ПОМ 2 (передающий)
+  OPTMODULE_PROM2 = 4;  // ПрОМ 2 (приемный)
+}
+
+enum MVOKType {
+  MVOK_UNKNOWN = 0;
+  MVOK_1 = 1;  // МВОК 1 (4096, 2048, 1024, 512)
+  MVOK_2 = 2;  // МВОК 2 (256, 128, 64, 32)
+  MVOK_3 = 3;  // МВОК 3 (16, 8, 4, 2)
+}
+
+// ---------------------------------------------------------------------
+//                          ОБОБЩЁННАЯ СТРУКТУРА
+// ---------------------------------------------------------------------
+
+// +++ НОВЫЕ СООБЩЕНИЯ ДЛЯ СОСТОЯНИЙ УСТРОЙСТВ +++
+message LedState {
+  bool is_on = 1;
+}
+
+message AttenuatorState {
+  float current_attenuation_db = 1;
+  // AttenuatorType attenuator_type = 2; // Опционально, если нужно хранить тип в состоянии
+}
+
+message TemperatureSensorState {
+  float temperature_celsius = 1;
+  uint64 last_updated_timestamp = 2; // Опционально
+}
+
+message RFSwitchState {
+  bool is_on = 1;
+  // RFSwitchType switch_type = 2; // Опционально, если device_id не уникален для типа
+}
+
+message VoltIndicatorValue {
+  float voltage = 1;
+  uint64 last_updated_timestamp = 2; // Опционально
+  int32 raw_adc_value = 3; // Сырое значение АЦП
+}
+
+message OptModuleState {
+  bool is_active = 1;
+  // OpticalModuleType module_type = 2; // Опционально
+  // float power_level_dbm = 3;      // Опционально
+  // float temperature_celsius = 4;  // Опционально
+}
+
+message MVOKState {
+  uint32 current_delay_value = 1; // Пример, единицы измерения нужно определить
+  // MVOKType mvok_type = 2;          // Опционально
+}
+
+message SDDetectorValue {
+  bytes detector_data = 1; // Для данных типа [0x34, 0x56, 0x78, 0x9A]
+  bool initialized = 2;
+}
+
+// +++ КОНЕЦ НОВЫХ СООБЩЕНИЙ ДЛЯ СОСТОЯНИЙ +++
+
+message DeviceNode {
+  string id = 1;         // Идентификатор устройства, например "rf_switch_1_bu"
+  BlockType block = 2;   // Блок, к которому принадлежит устройство
+  DeviceType type = 3;   // Тип устройства
+  // bytes data = 4;        // Текущее состояние устройства в виде байт - ЗАМЕНЕНО НА oneof
+  map<string, string> parameters = 5; // Дополнительные параметры устройства
+
+  oneof device_specific_state {
+    LedState led_state = 6;
+    AttenuatorState attenuator_state = 7;
+    TemperatureSensorState temperature_state = 8;
+    RFSwitchState rf_switch_state = 9;
+    VoltIndicatorValue volt_indicator_value = 10;
+    OptModuleState opt_module_state = 11;
+    MVOKState mvok_state = 12;
+    SDDetectorValue sd_detector_value = 13;
+    // ... другие специфичные состояния ...
+    bytes generic_state_data = 100; // Для нетипизированных или старых данных
+  }
+}
+
+message DeviceList {
+  repeated DeviceNode devices = 1;
+}
+
+// ---------------------------------------------------------------------
+//                           ОПЕРАЦИИ/КОМАНДЫ
+// ---------------------------------------------------------------------
+
+// +++ НОВЫЕ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ КОМАНД +++
+message SetLedStatePayload {
+  bool state = 1; // true для ON, false для OFF
+}
+
+message SetAttenuatorPayload {
+  // AttenuatorType attenuator_type = 1; // Если device_id не уникален
+  float attenuation_value_db = 2;   // Значение аттенюации в дБ
+}
+
+// Пока пустое, так как device_id обычно идентифицирует сенсор.
+// Может понадобиться, если есть другие параметры для команды чтения.
+message ReadTemperaturePayload {
+  // TemperatureSensorType sensor_type = 1; // Если device_id не уникален
+}
+// +++ КОНЕЦ НОВЫХ СООБЩЕНИЙ ДЛЯ ПАРАМЕТРОВ КОМАНД +++
+
+message CommandRequest {
+   BlockType block_type = 1;
+   string device_id = 2;         // Строковый идентификатор устройства (например, "bu_led_status", "bz_attenuator_corr")
+   CommandCode command_code = 3; // Код команды (READ, WRITE, INIT, PARAM)
+   // bytes payload = 4;            // Полезная нагрузка (параметры) для команды. ЗАМЕНЕНО НА oneof
+
+  oneof command_specific_payload {
+    SetLedStatePayload set_led_state = 5;
+    SetAttenuatorPayload set_attenuator = 6;
+    // ReadTemperaturePayload get_temperature = 7; // Для команд чтения, если нужны параметры. Пока не добавляем, т.к. тело пустое.
+    // ... другие специфичные payload для команд ...
+    bytes generic_payload = 100; // Для обратной совместимости или очень специфичных случаев
+  }
+}
+
+message CommandResponse {
+  enum Status {
+    UNKNOWN = 0;
+    SUCCESS = 1;        // Успешное выполнение
+    ERROR = 2;          // Ошибка
+    TIMEOUT = 3;        // Таймаут
+    NOT_SUPPORTED = 4;  // Не поддерживается
+  }
+  
+  Status status = 1;           // Статус выполнения команды
+  string message = 2;          // Текстовое сообщение (успех/ошибка)
+  bytes read_data = 3;         // Данные, полученные в ответ на команду чтения
+  DeviceNode device_state = 4; // Текущее состояние устройства после выполнения команды
+}
+
+// ---------------------------------------------------------------------
+//                           СЕРВИСНЫЕ ЗАПРОСЫ
+// ---------------------------------------------------------------------
+
+message GetDeviceRequest {
+  BlockType block_type = 1;   // Тип блока
+  DeviceType device_type = 2; // Тип устройства (опционально)
+  string device_id = 3;       // Идентификатор устройства (опционально)
+}
+
+message GetDeviceResponse {
+  repeated DeviceNode devices = 1; // Список устройств, соответствующих запросу
+}
+
+message GetBlockStatusRequest {
+  BlockType block_type = 1; // Тип блока
+}
+
+message GetBlockStatusResponse {
+  BlockType block_type = 1;                  // Тип блока
+  bool connected = 2;                        // Подключен ли блок
+  string status_message = 3;                 // Текстовый статус
+  map<string, string> parameters = 4;        // Дополнительные параметры блока
+  repeated DeviceNode critical_devices = 5;  // Устройства с критическим состоянием
+}
+
+// ---------------------------------------------------------------------
+//                        СОБЫТИЯ (SERVER → PROXY)
+// ---------------------------------------------------------------------
+
+enum EventType {
+  EVENT_UNKNOWN = 0;
+  LIMIT_REACHED = 1;   // Параметр достиг предельного значения, процесс остановлен
+  MANUAL_STOP = 2;     // Штатная остановка оператором (команда СТОП)
+  ERROR_STOP = 3;      // Аварийная остановка (перегрев, обрыв связи и т.д.)
+  EXTERNAL_INTERRUPT = 4; // Внешнее прерывание GPIO/interlock, процесс остановлен
+}
+
+message EventSubscribeRequest {
+  BlockType block_type = 1;  // На какой блок подписаться (BLOCKTYPE_UNKNOWN = все)
+}
+
+message DeviceEvent {
+  BlockType block_type = 1;       // Источник: BU, BZ
+  string device_id = 2;           // Идентификатор устройства (напр. "bu_attenuation", "bz_delay")
+  EventType event_type = 3;       // Тип события
+  uint64 timestamp_unix_ms = 4;   // Unix-время остановки в мс (фиксируется НА СЕРВЕРЕ)
+  bytes payload = 5;              // Доп. данные (значение параметра, код ошибки)
+  uint32 device_byte = 6;         // Оригинальный байт устройства из UDP протокола (0x11, 0x13...)
+}
+
+// ---------------------------------------------------------------------
+//                           СЕРВИС УПРАВЛЕНИЯ
+// ---------------------------------------------------------------------
+
+service DeviceControlService {
+  // Отправка команды устройству
+  rpc SendCommand(CommandRequest) returns (CommandResponse);
+
+  // Получение списка устройств блока
+  rpc GetDevices(GetDeviceRequest) returns (GetDeviceResponse);
+
+  // Получение статуса блока
+  rpc GetBlockStatus(GetBlockStatusRequest) returns (GetBlockStatusResponse);
+
+  // Подписка на события остановки процессов (server-side streaming)
+  rpc SubscribeEvents(EventSubscribeRequest) returns (stream DeviceEvent);
+}

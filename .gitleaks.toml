@@ -1,0 +1,93 @@
+# gitleaks config for TelegramHelper
+# Run locally before commit:
+#   gitleaks detect --config .gitleaks.toml --redact --staged
+# Or full repo / history:
+#   gitleaks detect --config .gitleaks.toml --redact
+
+title = "TelegramHelper gitleaks"
+
+[extend]
+useDefault = true
+
+# ── Custom rules ─────────────────────────────────────────────────────
+
+[[rules]]
+id   = "vless-reality-x25519-key"
+description = "VLESS Reality / x25519 private or public key (43 base64url chars after key= label)"
+regex = '''(?i)(private[_-]?key|public[_-]?key|pbk|priv[_-]?key|pub[_-]?key)["'\s:=]{1,4}[A-Za-z0-9_-]{43}\b'''
+tags = ["vless", "reality", "x25519", "secret"]
+
+[[rules]]
+id   = "vless-uuid-credential"
+description = "VLESS UUID assigned next to a credential label"
+regex = '''(?i)\b(uuid|client[_-]?id|client_id|"id")\s*[:=]\s*["']?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b'''
+tags = ["vless", "uuid"]
+
+[[rules]]
+id   = "telegram-bot-token"
+description = "Telegram Bot API token"
+regex = '''\b\d{8,12}:[A-Za-z0-9_-]{30,40}\b'''
+tags = ["telegram", "token"]
+
+[[rules]]
+id   = "hysteria2-password"
+description = "Hysteria2 password literal in YAML/JSON config"
+regex = '''(?i)(hy2|hysteria2?)[_-]?(password|secret|auth)["'\s:=]{1,4}[A-Za-z0-9_+/=!@#$%-]{12,}\b'''
+tags = ["hysteria2", "secret"]
+
+[[rules]]
+id   = "mtproto-secret"
+description = "MTProto Proxy 32-byte hex secret"
+regex = '''(?i)(mtproto|mt[_-]?secret|mtproto[_-]?secret)["'\s:=]{1,4}[0-9a-f]{32}\b'''
+tags = ["mtproto", "secret"]
+
+# ── Allowlist ────────────────────────────────────────────────────────
+
+[allowlist]
+description = "Templates, examples and well-known reserved values"
+
+paths = [
+    '''(^|/)\.env$''',
+    '''(^|/)app_keys\.json$''',
+    '''(^|/)users\.json$''',
+    '''(^|/)venv/''',
+    '''(^|/)scripts/auto_setup_vps\.sh$''',
+    '''(^|/)example\.env$''',
+    '''(^|/).+\.local\.md$''',
+    '''(^|/).+\.local\.yaml$''',
+    '''(^|/).+\.local\.yml$''',
+    '''(^|/).+\.local\.json$''',
+    '''(^|/).+\.local\.txt$''',
+    '''(^|/)\.gitleaks\.toml$''',
+]
+
+regexes = [
+    # Placeholder values used across docs and example.env
+    '''<[A-Z][A-Z0-9_]+>''',
+    '''YOUR_[A-Z_]+''',
+    '''sk-ant-api03-your-key-here''',
+    '''sk-proj-your-key-here''',
+    '''your_telegram_bot_token_here''',
+    '''your_very_long_random_secret_key_here_64_chars_minimum''',
+    '''another_random_secret_for_hmac_signing_also_64_chars''',
+    '''optional_separate_encryption_key_otherwise_api_secret_is_used''',
+
+    # RFC 5737 reserved IPv4 ranges (TEST-NET-1/2/3) used in safe examples
+    '''\b192\.0\.2\.\d{1,3}\b''',
+    '''\b198\.51\.100\.\d{1,3}\b''',
+    '''\b203\.0\.113\.\d{1,3}\b''',
+
+    # RFC 2606 reserved domains
+    '''\b([a-z0-9-]+\.)*example\.(com|org|net)\b''',
+    '''\b([a-z0-9-]+\.)*(test|invalid|localhost)\b''',
+
+    # Zeroed UUID and obviously-fake patterns
+    '''\b00000000-0000-4000-8000-000000000000\b''',
+    '''\b12345678-1234-1234-1234-123456789abc\b''',
+
+    # Typical example tokens used in docs
+    '''123456789''',
+
+    # Shell templates that assign $HY2_PASSWORD to a same-named variable
+    '''HY2_PASSWORD="\$HY2_PASSWORD''',
+]

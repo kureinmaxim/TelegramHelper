@@ -1,0 +1,146 @@
+# Exclude local configs/secrets (NOT example.env - it's a template!)
+.env
+.env.*
+*.env.local
+CREDENTIALS.txt
+rclone/
+rclone.conf
+
+# Local non-public variants of any tracked document/config.
+# Convention: SOMETHING.md (template, in git) <-> SOMETHING.local.md (real values, ignored).
+*.local.md
+*.local.yaml
+*.local.yml
+*.local.json
+*.local.txt
+
+# Keys / certificates accidentally placed alongside the project
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+known_hosts
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+__pycache_ и. ]_/
+
+# Virtual environments
+venv/
+.venv/
+
+# HA-стек (заглушки) — runtime-артефакты на VPS (identity/ключи НЕ коммитить)
+ha_stack/.rnsdata/
+*identity
+
+# Logs and runtime artifacts
+*.log
+bot.log
+
+# История SSH CLI-дашборда (bind-mount, см. compose.yaml). Хранится на VPS.
+.cli_history
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+*.code-workspace
+.cursor/
+
+# Backups / scratch
+*.bak
+*.backup
+*.orig
+*.tmp
+*~
+
+# gitleaks local reports
+gitleaks-report.json
+gitleaks-report.sarif
+.gitleaks/
+
+# User data
+users.json
+conversation_history.json
+app_keys.json
+mtproto_config.json
+hysteria2_config.json
+vless_config.json
+naiveproxy_config.json
+tuic_config.json
+anytls_config.json
+xhttp_config.json
+headscale_config.json
+mieru_config.json
+xui_config.json
+vless_configs/
+
+# Headplane runtime: реальный config с cookie_secret + headscale API key
+# и persistent data. Шаблон headplane/config.example.yaml — коммитим.
+headplane/config.yaml
+headplane/data/
+
+# Gmail API OAuth (локальные секреты; не коммитить)
+gmail_token.json
+gmail_oauth_client.json
+client_secret*.apps.googleusercontent.com.json
+
+# === Markdown docs: трекаются ПО УМОЛЧАНИЮ ===
+# Любой новый *.md в репозитории попадает в git автоматически — отдельно
+# вайтлистить каждый док НЕ нужно. Секреты/инвентарь держим вне git НЕ
+# allowlist'ом, а ИМЕНОВАНИЕМ: для реальных значений (ключи, UUID, IP, домены,
+# расположение секретов) используем один из игнорируемых суффиксов ниже.
+#
+# ⚠️ НИКОГДА не клади реальные секреты в обычный трекаемый .md — он уедет в
+# GitHub. Реальные значения → *.private.md / *.local.md / *.secret.md /
+# INFRA_LOCAL.md (ниже игнорируются), либо приватный inventory-репо hosts/.
+*.local.md
+*.private.md
+*.secret.md
+INFRA_LOCAL.md
+INFRA_*.local.md
+# Исключение: SERVER_STATE.local.md — это БЕЗОПАСНЫЙ заполненный пример
+# (RFC 5737 IP, example.com, плейсхолдер-секреты), трекается намеренно.
+# Реальные данные в него класть нельзя.
+!SERVER_STATE.local.md
+
+# === hosts/ инвентарь VPS ===
+# Шаблон и общий README трекаются, но всё содержимое именованных
+# хост-папок (hosts/<hostname>/) — НЕТ. Эти файлы раскрывают порты,
+# домены, владельца, расположение секретов; даже без значений это
+# полезная разведка. Бэкап реальных хост-папок — через rclone (см.
+# RCLONE_VPS.md) или отдельный приватный репозиторий.
+hosts/*/
+!hosts/_template/
+!hosts/_template/**
+
+# .md-файлы шаблона/общие в hosts/ (на случай, если папка попадёт под ignore).
+!hosts/README.md
+!hosts/SNAPSHOT_COLLECT.md
+!hosts/_template/*.md
+
+# brainstorming/спек-документы трекаются.
+!docs/superpowers/specs/*.md
+
+# Метаданные вложенного inventory-репозитория (telegramhelper-hosts).
+# .git/ автоматически игнорируется git'ом везде; INVENTORY.md
+# inventory-репо тоже не должен попадать в основной репозиторий.
+# (Внутренние exclude-правила inventory-репо лежат в hosts/.git/info/exclude,
+# вне worktree, и основной репозиторий их не видит.)
+hosts/INVENTORY.md
+
+# Дизайн-спеки superpowers (docs/superpowers/specs/) — трекаются:
+# это проектные решения без секретов.
+!docs/superpowers/specs/*.md
+!docs/superpowers/plans/*.md

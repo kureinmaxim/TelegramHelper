@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local envs
+venv/
+.env
+.env.*
+CREDENTIALS.txt
+rclone/
+rclone.conf
+app_keys.json
+users.json
+vless_config.json
+naiveproxy_config.json
+hysteria2_config.json
+tuic_config.json
+anytls_config.json
+xhttp_config.json
+mtproto_config.json
+headscale_config.json
+mieru_config.json
+xui_config.json
+conversation_history.json
+
+# VCS
+.git/
+.gitignore
+
+# OS
+.DS_Store
+
+# Logs and runtime artifacts
+*.log
+bot.log
+
+# IDE/editor
+.vscode/
+.idea/
+*.swp
+
+# Project docs (avoid baking internal notes into the image)
+docs/

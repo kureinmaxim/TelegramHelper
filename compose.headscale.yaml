@@ -1,0 +1,23 @@
+# Docker Compose override for Headscale (self-hosted Tailscale)
+#
+# Usage:
+#   docker compose -f compose.yaml -f compose.headscale.yaml up -d
+#
+# Before first start:
+#   1. mkdir -p headscale/config headscale/data
+#   2. Download config: curl -sL https://raw.githubusercontent.com/juanfont/headscale/main/config-example.yaml -o headscale/config/config.yaml
+#   3. Edit headscale/config/config.yaml: set server_url and listen_addr
+#   4. docker compose -f compose.yaml -f compose.headscale.yaml up -d
+#   5. docker exec headscale headscale users create main_user
+
+services:
+  headscale:
+    container_name: headscale
+    image: headscale/headscale:latest
+    command: serve
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./headscale/config:/etc/headscale
+      - ./headscale/data:/var/lib/headscale

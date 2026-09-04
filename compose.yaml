@@ -1,0 +1,185 @@
+services:
+  # TelegramHelper — bot + API + VLESS-Reality / Hysteria2
+  telegram-helper:
+    container_name: telegram-helper-lite
+    image: telegram-helper-lite:latest
+    build: .
+    user: "0:0"
+    pid: host
+    privileged: true
+    env_file:
+      - .env
+    ports:
+      # Bound to 127.0.0.1 only — /health is for the docker healthcheck and dockhand,
+      # no external need. Public 0.0.0.0:8000 attracts internet scanners (/.env, CONNECT).
+      - "127.0.0.1:8000:8000"
+    sysctls:
+      # Workaround for a PMTU black hole on some VPS uplinks:
+      # ICMP "fragmentation needed" is filtered → large TLS responses from
+      # api.telegram.org silently dropped → bot polling fails with
+      # NetworkError: Bad Gateway / TimedOut. tcp_mtu_probing=2 is aggressive
+      # (starts from tcp_base_mss=1024). See DOCKER.md.
+      - net.ipv4.tcp_mtu_probing=2
+      - net.ipv4.tcp_base_mss=1024
+    restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    dns_search:
+      - .
+    volumes:
+      - ./bot.log:/app/bot.log
+      # История SSH CLI-дашборда (cli_dashboard.py). Bind-mount, чтобы
+      # автодополнение/Ctrl+R переживали docker compose --force-recreate.
+      # Должен быть файлом: пре-создаётся в POST_DEPLOY.md §5 (иначе Docker
+      # сделает директорию, и история уйдёт в память — см. cli_prompt.py).
+      - ./.cli_history:/app/.cli_history
+      - ./users.json:/app/users.json
+      - ./.env:/app/.env
+      - ./app_keys.json:/app/app_keys.json
+      - ./vless_config.json:/app/vless_config.json
+      - ./naiveproxy_config.json:/app/naiveproxy_config.json
+      - /usr/local/etc/xray:/usr/local/etc/xray
+      - /etc/caddy-naive:/etc/caddy-naive
+      - /etc/hysteria:/etc/hysteria
+      - ./hysteria2_config.json:/app/hysteria2_config.json
+      - ./tuic_config.json:/app/tuic_config.json
+      - ./anytls_config.json:/app/anytls_config.json
+      - ./xhttp_config.json:/app/xhttp_config.json
+      - ./mtproto_config.json:/app/mtproto_config.json
+      - ./headscale_config.json:/app/headscale_config.json
+      # Gmail API sender for /email_profile. Token is writable because Google
+      # libraries refresh access_token and persist the updated JSON.
+      - ./gmail_oauth_client.json:/app/gmail_oauth_client.json:ro
+      - ./gmail_token.json:/app/gmail_token.json
+      # 3x-ui интеграция: URL/логин панели + зашифрованный (AES-256-GCM,
+      # ключ из ENCRYPTION_KEY/.env) пароль. Без bind-mount креды стирались
+      # бы при каждом docker compose up.
+      - ./xui_config.json:/app/xui_config.json
+      - ./rclone:/rclone:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Healthcheck нужен dockhand'у для condition: service_healthy.
+    # python+urllib есть в slim/любом python-base образе бота.
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'python3 -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(''http://localhost:8000/health'',timeout=2).status==200 else 1)"'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+  # Фильтрующий прокси к Docker Engine API. Dockhand ходит через него,
+  # а не монтирует /var/run/docker.sock напрямую — это сужает blast radius
+  # потенциальной RCE в Streamlit/зависимостях.
+  docker-socket-proxy:
+    container_name: docker-socket-proxy
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      # Разрешаем минимально нужное: list/inspect/logs/stats/restart.
+      CONTAINERS: 1
+      POST: 1
+      # Всё остальное (IMAGES, VOLUMES, NETWORKS, EXEC, BUILD, …) остаётся
+      # запрещённым по умолчанию.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - socket_proxy
+    cap_drop:
+      - ALL
+    cap_add:
+      # HAProxy внутри образа биндит низкий порт и форкает воркеры.
+      - NET_BIND_SERVICE
+      - SETUID
+      - SETGID
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 64m
+    cpus: "0.25"
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # Dockhand — Diagnostics Panel
+  dockhand:
+    container_name: dockhand
+    build:
+      context: ./dockhand
+    ports:
+      - "127.0.0.1:8501:8501"
+    restart: unless-stopped
+    environment:
+      # Обращение к Docker Engine — через proxy, не через /var/run/docker.sock.
+      DOCKER_HOST: "tcp://docker-socket-proxy:2375"
+      DOCKHAND_TARGETS: "${DOCKHAND_TARGETS:-telegram-helper-lite}"
+      DOCKHAND_API_URL: "${DOCKHAND_API_URL:-http://telegram-helper:8000}"
+      DOCKHAND_REFRESH_RATE: "${DOCKHAND_REFRESH_RATE:-5}"
+      DOCKHAND_READONLY: "${DOCKHAND_READONLY:-0}"
+      # Опциональный пароль (defense in depth поверх SSH-туннеля).
+      # Если переменная пуста — auth выключен, поведение как раньше.
+      DOCKHAND_AUTH_PASSWORD: "${DOCKHAND_AUTH_PASSWORD:-}"
+      DOCKHAND_API_KEY: "${DOCKHAND_API_KEY:-}"
+      DOCKHAND_APP_ID: "${DOCKHAND_APP_ID:-apiai-v3}"
+      # Для сайдбара Dockhand: адрес VPS из .env рядом с compose (подстановка при `docker compose up`).
+      DOCKHAND_SSH_HOST: "${DOCKHAND_SSH_HOST:-}"
+      TELEGRAMHELPER_SSH_HOST: "${TELEGRAMHELPER_SSH_HOST:-}"
+      TELEGRAMHELPER_PUBLIC_HOST: "${TELEGRAMHELPER_PUBLIC_HOST:-}"
+      PUBLIC_HOST: "${PUBLIC_HOST:-}"
+      VPS_HOST: "${VPS_HOST:-}"
+    # Доступ к docker.sock больше не требуется, поэтому ужесточаем профиль.
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+      - /home/app/.streamlit:size=8m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    cpus: "0.5"
+    networks:
+      - default        # → telegram-helper:8000 (внутренняя сеть compose)
+      - socket_proxy   # → docker-socket-proxy:2375
+    depends_on:
+      telegram-helper:
+        condition: service_healthy
+      docker-socket-proxy:
+        condition: service_started
+    dns:
+      - 8.8.8.8 # Google DNS
+      - 1.1.1.1 # Cloudflare DNS
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+networks:
+  default:
+    # Pin the default bridge subnet so `compose down` / `up` keeps a stable
+    # gateway. Override COMPOSE_DEFAULT_SUBNET in .env on hosts that already
+    # use another pool (see DEPLOY.md §8.9 and scripts/preflight_subnets.sh).
+    ipam:
+      config:
+        - subnet: ${COMPOSE_DEFAULT_SUBNET:-172.18.0.0/16}
+  # Изолированная сеть для общения dockhand ↔ docker-socket-proxy.
+  # internal: true — нет egress в интернет, нет входов снаружи compose.
+  socket_proxy:
+    internal: true
+    # Подсеть тоже закреплена: порядок создания сетей при `up` не гарантирован,
+    # и если socket_proxy создаётся первой, Docker может динамически выдать ей
+    # как раз пул default — тогда пиннованная default падает с
+    # "Pool overlaps with other one on this address space". На других серверах
+    # переопределите через .env COMPOSE_SOCKET_PROXY_SUBNET = существующую
+    # подсеть этой сети (см. DEPLOY.md §8.9).
+    ipam:
+      config:
+        - subnet: ${COMPOSE_SOCKET_PROXY_SUBNET:-172.28.0.0/24}

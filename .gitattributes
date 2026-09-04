@@ -1,0 +1,4 @@
+# Shell-скрипты всегда LF — иначе на Linux `set -o pipefail` падает
+# с «invalid option name» из‑за CR (\r) в конце строки.
+*.sh text eol=lf
+scripts/**/*.sh text eol=lf

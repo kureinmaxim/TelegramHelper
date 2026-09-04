@@ -1,0 +1,15 @@
+[project]
+name = "telegram-helper"
+version = "3.19.5"
+description = "Telegram bot, REST API, and self-hosted VPN profile manager"
+requires-python = ">=3.11"
+dependencies = [
+    "python-telegram-bot>=22.1",
+    "qrcode[pil]",
+]
+
+# Tool-specific metadata for the project
+[tool.telegramhelper.metadata]
+release_date = "18.08.2026"
+developer = "TelegramHelper contributors"
+last_updated = "2026-08-18"

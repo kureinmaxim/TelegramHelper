@@ -1,0 +1,16 @@
+[reticulum]
+  enable_transport = No
+  share_instance = No
+  panic_on_interface_error = No
+
+[logging]
+  loglevel = 3
+
+[interfaces]
+  # Простой интерфейс (этап 1). Слушает только localhost — доступ через SSH-туннель.
+  # Позже заменить на I2PInterface (этап 3), код моста не меняется.
+  [[TCP Server Interface]]
+    type = TCPServerInterface
+    interface_enabled = yes
+    listen_ip = 127.0.0.1
+    listen_port = 50061

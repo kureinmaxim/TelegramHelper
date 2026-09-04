@@ -1,0 +1,520 @@
+# NAIVEPROXY_GUIDE.md — NaiveProxy in TelegramHelper
+
+Practical reference for NaiveProxy on a VPS with TelegramHelper: what it is,
+how to install the server component, which bot commands are available, how to
+export a profile to Clash Meta/sing-box, how to verify the tunnel, and how to
+safely rotate credentials.
+
+## 0. Key Points
+
+NaiveProxy in this project runs as **Caddy + forwardproxy@naive** on the VPS.
+It is not `sing-box`, not Xray, and not a standalone `naive-server`.
+
+```text
+Application / Clash Meta
+  -> local SOCKS5 of the naive client, typically 127.0.0.1:10808
+  -> HTTPS/H2 CONNECT to the VPS domain
+  -> caddy-naive + forward_proxy
+  -> Internet
+```
+
+What DPI sees:
+
+- ordinary TLS/HTTPS resembling Chromium;
+- HTTP/2 CONNECT;
+- when padding is enabled — blurred characteristic packet sizes;
+- when `probe_resistance` is enabled — active probing receives a non-obvious response.
+
+**Important limitation:** NaiveProxy in TelegramHelper is a **single-credentials**
+model. There is one shared `basic_auth` (username/password) for all clients.
+Therefore `/provision`, `/profiles`, `/my_profile` do not create separate
+NaiveProxy users. VLESS/Hysteria2/MTProto have per-user clients; NaiveProxy
+has a shared URI/profile.
+
+## 1. When to Choose NaiveProxy
+
+Use NaiveProxy if:
+
+- you have a domain with an A record pointing to the VPS;
+- you can keep `443/tcp` under Caddy;
+- Cloudflare for this domain is set to **DNS only** (grey cloud);
+- you need an HTTPS-like transport instead of VLESS-Reality or Hysteria2.
+
+Do not choose NaiveProxy if:
+
+- you have no domain;
+- `443/tcp` is already occupied by VLESS-Reality (`xray.service` or `x-ui.service`);
+- you need a per-user lifecycle via `/provision` and automatic deletion of individual clients;
+- the ISP completely breaks TLS/HTTPS to your domain.
+
+Port compatibility:
+
+| Protocol | Port | Conflict |
+| --- | ---: | --- |
+| VLESS-Reality | `443/tcp` | conflicts with NaiveProxy |
+| NaiveProxy | `443/tcp` | conflicts with VLESS-Reality and plain HTTPS on 443 |
+| Hysteria2 | `443/udp` | no conflict with `443/tcp` |
+| MTProto | `993/tcp` | separate port, no conflict |
+
+## 2. Files and Services
+
+| Item | Path |
+| --- | --- |
+| Bot-side JSON | `/opt/TelegramHelper/naiveproxy_config.json` |
+| Manager code | `naiveproxy_manager.py` |
+| Installer | `scripts/install_naiveproxy.sh` |
+| Caddy binary | `/usr/local/bin/caddy-naive` |
+| Caddyfile | `/etc/caddy-naive/Caddyfile` |
+| systemd service | `caddy-naive.service` |
+| Bot container | `telegram-helper-lite` |
+
+`naiveproxy_config.json` is used by the bot for `/naive_uri`, `/naive_export`,
+`/naive_config`, and Caddyfile generation. The actual server runtime is
+`/etc/caddy-naive/Caddyfile` + `systemctl restart caddy-naive`.
+
+## 3. Fresh Installation
+
+### 3.1 DNS and Cloudflare
+
+DNS record:
+
+```text
+naive.example.com  A  YOUR_VPS_IP
+```
+
+If the domain is in Cloudflare, the record must be **DNS only**. An orange (proxied) cloud breaks the CONNECT tunnel.
+
+Verify from your local machine:
+
+```bash
+dig +short A naive.example.com
+```
+
+The expected output is your VPS IP, not a Cloudflare IP like `104.*` or `172.*`.
+
+### 3.2 Installation via the Telegram Bot
+
+In the admin chat:
+
+```text
+/naive_set_domain naive.example.com
+/naive_set_port 443
+/naive_gen_creds
+/naive_install
+/naive_status
+/naive_uri
+/naive_export
+```
+
+Command reference:
+
+| Command | Purpose |
+| --- | --- |
+| `/naive_set_domain <domain>` | Writes the domain to `naiveproxy_config.json` |
+| `/naive_set_port <port>` | Sets the HTTPS port, usually `443` |
+| `/naive_set_user <username>` | Sets the `basic_auth` username |
+| `/naive_set_password <password>` | Sets the `basic_auth` password |
+| `/naive_set_dpi <param> <value>` | Fine-grained parameters for DPI research |
+| `/naive_gen_creds` | Generates a shared username/password |
+| `/naive_install` | Runs `scripts/install_naiveproxy.sh` |
+| `/naive_apply` | Regenerates the Caddyfile and restarts `caddy-naive` |
+| `/naive_status` | Shows JSON and systemd status |
+| `/naive_uri` | URI in the form `naive+https://user:pass@domain:443#...` |
+| `/naive_export` | URI + client config + Clash Meta profile JSON |
+
+### 3.3 Installation via SSH
+
+If you prefer the manual approach:
+
+```bash
+cd /opt/TelegramHelper
+sudo bash scripts/install_naiveproxy.sh \
+  --domain naive.example.com \
+  --port 443
+```
+
+The script:
+
+- installs dependencies and `xcaddy`;
+- builds `/usr/local/bin/caddy-naive` with `forwardproxy@naive`;
+- writes `/etc/caddy-naive/Caddyfile`;
+- creates `/etc/systemd/system/caddy-naive.service`;
+- starts the service;
+- prints the URI and credentials.
+
+After manual installation, sync the bot's JSON config:
+
+```text
+/naive_set_domain naive.example.com
+/naive_set_port 443
+/naive_set_user <username_from_install_output>
+/naive_set_password <password_from_install_output>
+/naive_status
+```
+
+## 4. Working Caddyfile
+
+The current template generated by `naiveproxy_manager.py`:
+
+```caddyfile
+{
+    email you@example.com
+    order forward_proxy before file_server
+    auto_https disable_redirects
+}
+
+:443, naive.example.com {
+    log {
+        output stdout
+        level INFO
+    }
+    forward_proxy {
+        basic_auth naiveuser STRONG_PASSWORD
+        hide_ip
+        hide_via
+        probe_resistance
+    }
+
+    # Optional masquerade for direct browser visits:
+    # reverse_proxy https://example.com {
+    #     header_up Host {upstream_hostport}
+    #     header_up X-Forwarded-Host {host}
+    # }
+}
+```
+
+Key lines:
+
+- `order forward_proxy before file_server` — required for correct handler ordering;
+- `auto_https disable_redirects` — important if `:80` is occupied by Nginx or another service;
+- `basic_auth user password` — the shared secret for all NaiveProxy clients;
+- `hide_ip` and `hide_via` — fewer proxy headers exposed to the outside;
+- `probe_resistance` — protection against active probing;
+- `reverse_proxy` — optional camouflage for plain HTTPS visits without a NaiveProxy client.
+
+Validate the Caddyfile:
+
+```bash
+/usr/local/bin/caddy-naive validate \
+  --config /etc/caddy-naive/Caddyfile \
+  --adapter caddyfile
+```
+
+## 5. VPS Verification
+
+Service:
+
+```bash
+systemctl status caddy-naive --no-pager -l | head -60
+systemctl is-enabled caddy-naive
+journalctl -u caddy-naive -n 80 --no-pager
+```
+
+Binary and module:
+
+```bash
+/usr/local/bin/caddy-naive version
+/usr/local/bin/caddy-naive list-modules 2>/dev/null | grep -i forward_proxy
+```
+
+Ports:
+
+```bash
+ss -lntp | grep -E ':(80|443)\b'
+```
+
+Certificate:
+
+```bash
+echo | openssl s_client -connect naive.example.com:443 -servername naive.example.com 2>/dev/null \
+  | openssl x509 -noout -subject -issuer -dates
+```
+
+Enable BBR for improved TCP throughput if needed:
+
+```bash
+modprobe tcp_bbr
+sysctl -w net.core.default_qdisc=fq
+sysctl -w net.ipv4.tcp_congestion_control=bbr
+
+cat >/etc/sysctl.d/99-bbr.conf <<'EOF'
+net.core.default_qdisc=fq
+net.ipv4.tcp_congestion_control=bbr
+EOF
+sysctl --system
+sysctl net.ipv4.tcp_congestion_control net.core.default_qdisc
+```
+
+## 6. Client Verification
+
+On the client machine, NaiveProxy starts a local SOCKS5 proxy, typically at:
+
+```text
+127.0.0.1:10808
+```
+
+Minimal client config:
+
+```json
+{
+  "listen": "socks://127.0.0.1:10808",
+  "proxy": "https://naiveuser:STRONG_PASSWORD@naive.example.com:443",
+  "padding": true
+}
+```
+
+Smoke test via SOCKS5:
+
+```bash
+curl -sS --socks5-hostname 127.0.0.1:10808 https://httpbin.org/ip
+```
+
+Expected output: your VPS IP.
+
+Stability test:
+
+```bash
+for i in 1 2 3 4 5; do
+  curl -sS --socks5-hostname 127.0.0.1:10808 --max-time 5 https://httpbin.org/ip
+  echo " <- try $i"
+  sleep 3
+done
+```
+
+Watch the access log on the VPS:
+
+```bash
+journalctl -u caddy-naive -f --no-pager
+```
+
+A working connection shows `CONNECT`, `status: 200`, your user ID, and often padding headers.
+
+**Important:** a direct `curl -x https://user:pass@domain:443 ...` is often **not a valid test** when `probe_resistance` is enabled. Use a real naive client and the local SOCKS5 for smoke tests.
+
+## 7. Export for Clash Meta / sing-box
+
+In Telegram:
+
+```text
+/naive_uri
+/naive_export
+```
+
+`/naive_export` returns:
+
+- URI;
+- `naiveproxy-client.json`;
+- a Clash Meta / sing-box profile JSON.
+
+Profile fields:
+
+```json
+{
+  "protocol_type": "naiveproxy",
+  "naiveproxy": {
+    "enabled": true,
+    "server": "naive.example.com",
+    "port": 443,
+    "username": "naiveuser",
+    "password": "STRONG_PASSWORD",
+    "scheme": "https",
+    "local_socks_port": 10808,
+    "padding": true
+  }
+}
+```
+
+`scheme` is normally `https`. `quic`/HTTP3 is an advanced option — only enable it after a separate test, because UDP is blocked faster than TCP on some networks.
+
+## 8. Fine-Tuning for DPI Research
+
+Command:
+
+```text
+/naive_set_dpi <param> <value>
+```
+
+Supported parameters:
+
+| Parameter | Values | What it changes | Requires `/naive_apply` |
+| --- | --- | --- | --- |
+| `scheme` | `https`, `quic` | Client transport: HTTP/2 over TLS or HTTP/3/QUIC | No, but re-export the client profile |
+| `padding` | `on`, `off` | Enables/disables padding in the client config | No, but re-export the client profile |
+| `local_socks_port` | `1..65535` | Client local SOCKS5 port | No, but re-export the client profile |
+| `probe_resistance` | `on`, `off` | Active probing protection in Caddy | Yes |
+| `hide_ip` | `on`, `off` | Hide proxy headers that reveal the client IP | Yes |
+| `hide_via` | `on`, `off` | Hide `Via` and other proxy headers | Yes |
+| `camouflage_url` | `https://site` or `off` | reverse_proxy for plain HTTPS visits | Yes |
+
+### 8.1 Parameter Glossary
+
+`scheme` — the external transport scheme between the naive client and the server. `https` means HTTP/2 CONNECT over TCP/TLS — the most stable default. `quic` means HTTP/3/QUIC over UDP — sometimes helps where TCP is throttled, but more often breaks on networks that filter UDP first.
+
+`padding` — adds random extra data to client requests. The purpose is not speed but making packet sizes and shapes less recognizable to DPI. Keep `on` for production; temporarily set `off` for a clean A/B comparison.
+
+`local_socks_port` — the local SOCKS5 port on the client device, e.g. `127.0.0.1:10808`. This is not the VPS port or Caddy port. Change it if another local proxy is already using the same port.
+
+`probe_resistance` — active probing protection mode. If an external scanner connects to the domain without a proper NaiveProxy client and padding headers, the server tries not to reveal that there is a forward proxy. Keep `on` for production; `off` is only useful for temporary diagnostics.
+
+`hide_ip` — a Caddy forwardproxy setting that removes or hides headers that could expose the client IP to the target site. Recommended: `on`.
+
+`hide_via` — a Caddy forwardproxy setting that removes the `Via` header and similar proxy indicators. Recommended for masking: `on`.
+
+`camouflage_url` — a plain public website that Caddy reverse-proxies for ordinary HTTPS visits. This makes the domain look like a normal website when opened in a browser without a NaiveProxy client. Do not use private panels, internal addresses, admin interfaces, or domains with sensitive information.
+
+Client parameters (`scheme`, `padding`, `local_socks_port`) change what is included in `/naive_export`. Server parameters (`probe_resistance`, `hide_ip`, `hide_via`, `camouflage_url`) change the Caddyfile and require `/naive_apply`.
+
+Examples:
+
+```text
+/naive_set_dpi scheme https
+/naive_set_dpi padding on
+/naive_set_dpi local_socks_port 10808
+/naive_set_dpi probe_resistance on
+/naive_set_dpi camouflage_url https://www.cloudflare.com
+/naive_apply
+/naive_export
+```
+
+Practical comparison profiles:
+
+```text
+# Stable baseline
+/naive_set_dpi scheme https
+/naive_set_dpi padding on
+/naive_set_dpi probe_resistance on
+/naive_set_dpi camouflage_url off
+/naive_apply
+
+# Browser camouflage enabled
+/naive_set_dpi camouflage_url https://www.cloudflare.com
+/naive_apply
+
+# HTTP/3/QUIC experiment
+/naive_set_dpi scheme quic
+/naive_export
+```
+
+Testing methodology:
+
+1. Change **one parameter at a time**.
+2. For server parameters, run `/naive_apply`.
+3. For client parameters, run `/naive_export` and import the new profile into the client.
+4. Test not only connectivity but also stability:
+
+```bash
+for i in 1 2 3 4 5; do
+  curl -sS --socks5-hostname 127.0.0.1:10808 --max-time 5 https://httpbin.org/ip
+  echo " <- try $i"
+  sleep 3
+done
+```
+
+Notes:
+
+- `padding on` — a safe default for request-size masking.
+- `scheme quic` may help where TCP throttling is more aggressive than UDP, but on some networks UDP is filtered first.
+- `probe_resistance off` is only useful for diagnostics. Return to `on` for production.
+- `camouflage_url` must be a plain public HTTPS site. Do not use private panels, internal addresses, or domains with sensitive information.
+
+## 9. Rotating `basic_auth`
+
+### Option A — Via the Bot
+
+```text
+/naive_gen_creds
+/naive_apply
+/naive_uri
+/naive_export
+```
+
+Downside: the shared credentials change for all clients. Everyone must receive a new URI or profile.
+
+### Option B — Manually via SSH
+
+```bash
+cp /etc/caddy-naive/Caddyfile /etc/caddy-naive/Caddyfile.bak.$(date +%F-%H%M)
+read -rs -p 'New Naive password: ' NEWPWD; echo
+
+sed -i -E "s|^(\s*basic_auth\s+[^[:space:]]+\s+).*$|\1${NEWPWD}|" \
+  /etc/caddy-naive/Caddyfile
+
+/usr/local/bin/caddy-naive validate \
+  --config /etc/caddy-naive/Caddyfile \
+  --adapter caddyfile
+
+systemctl reload caddy-naive
+systemctl status caddy-naive --no-pager -l | head -10
+```
+
+Then sync the bot's JSON:
+
+```text
+/naive_set_password <same_new_password>
+/naive_uri
+```
+
+If the username also changed:
+
+```text
+/naive_set_user <new_username>
+```
+
+Verify they match:
+
+```bash
+grep -E '^\s*basic_auth\s+' /etc/caddy-naive/Caddyfile
+cd /opt/TelegramHelper
+python3 - <<'PY'
+import json
+d = json.load(open("naiveproxy_config.json", encoding="utf-8"))
+print(d.get("username"), d.get("password"))
+PY
+```
+
+Clean up the shell:
+
+```bash
+unset NEWPWD
+history -c
+: > ~/.bash_history
+```
+
+## 10. Common Errors
+
+| Symptom | Likely cause | Action |
+| --- | --- | --- |
+| `caddy-naive` fails to start, `bind :80 address already in use` | `auto_https disable_redirects` missing, port 80 taken by Nginx | Add the directive, `systemctl restart caddy-naive` |
+| `forward_proxy` does not trigger | `order forward_proxy before file_server` missing | Add it to the global block |
+| `dig` returns a Cloudflare IP | Domain is set to proxied | Switch the record to DNS only |
+| `curl -x` to the server directly fails | `probe_resistance` rejects non-naive clients | Test via SOCKS5 |
+| `user_id: ""`, `status: 0` in logs | Wrong credentials or not a naive client | Check URI, username/password, padding |
+| After rotation the client cannot connect | Client profile still has the old password | Run `/naive_export` and import the new profile in Clash Meta |
+| After `/naive_set_dpi` nothing changed on the server | Caddyfile not yet applied | Run `/naive_apply` |
+| After changing `scheme`/`padding` the client is unchanged | Profile not re-exported | Run `/naive_export` and import the new profile |
+| On Windows with proxy enabled, sites do not open | Wrong port or HTTP proxy instead of SOCKS | Must be `socks=127.0.0.1:10808` |
+| VPS already has VLESS on 443 | Conflict over `443/tcp` | Choose one owner of the port: VLESS or NaiveProxy |
+
+## 11. Quick Reference
+
+```text
+/naive_set_domain naive.example.com
+/naive_gen_creds
+/naive_install
+/naive_set_dpi padding on
+/naive_set_dpi probe_resistance on
+/naive_status
+/naive_uri
+/naive_export
+```
+
+```bash
+systemctl status caddy-naive --no-pager -l | head -60
+journalctl -u caddy-naive -f --no-pager
+ss -lntp | grep ':443'
+/usr/local/bin/caddy-naive list-modules 2>/dev/null | grep -i forward_proxy
+```
+
+Core rule: NaiveProxy requires a domain, `443/tcp`, DNS only, and synchronized
+credentials in two places — `/etc/caddy-naive/Caddyfile` and
+`/opt/TelegramHelper/naiveproxy_config.json`.
