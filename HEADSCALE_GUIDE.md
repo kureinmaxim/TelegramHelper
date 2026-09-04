@@ -778,7 +778,7 @@ Configure via bot:
 /nginx_config    # Copy result to /etc/nginx/
 ```
 
-> More details: [NGINX_SNI_ROUTING.md](NGINX_SNI_ROUTING.md)
+Use `/nginx_set_domain`, `/nginx_enable`, and `/nginx_config` so Headscale and VLESS can share 443.
 
 ---
 
@@ -916,8 +916,6 @@ If step 4 returns `(00)` or timeout — verify the panel is actually listening o
 
 ## Related Documents
 
-- [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) — exit node setup for all platforms
-- [NGINX_SNI_ROUTING.md](NGINX_SNI_ROUTING.md) — Nginx SNI routing (how Headscale is accessible externally)
-- [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) — comparison with Tailscale Cloud and management methods
 - [SSHvsTelegramBOT.md](SSHvsTelegramBOT.md) — SSH tunneling (for Headplane / Dockhand access)
-- the `scripts/` directory — all scripts reference
+- `DEPLOY.md` — port 443 and Xray fallback + Nginx stream SNI
+- the `scripts/` directory — installers and `scripts/exit_node.sh`

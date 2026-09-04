@@ -159,7 +159,7 @@ diagnostics, exposed on port 8501 (localhost only).
 The compose file declares `sysctls` for `telegram-helper` because Docker
 containers do not fully inherit host sysctls — both layers are required.
 
-## Safety Rules (from AGENTS.md)
+## Safety Rules
 
 ### Security & Secrets
 

@@ -1831,15 +1831,14 @@ class BotHandlersLite(AITranslateMixin):
             await update.message.reply_text(
                 "📦 Rclone backup (кратко)\n\n"
                 "Если offsite backup ещё не настроен, начните так:\n"
-                "1) Подготовьте rclone config на сервере (см. RCLONE_VPS.md).\n"
+                "1) Подготовьте rclone config на сервере.\n"
                 "2) Добавьте в .env минимум: RCLONE_REMOTE, RCLONE_CONFIG.\n"
                 "3) Пересоздайте контейнер бота: docker compose up -d --force-recreate telegram-helper.\n\n"
                 "Проверка и запуск:\n"
                 "• /backup_status — текущий статус\n"
                 "• /backup_test — проверка remote\n"
                 "• /backup_now — создать backup сейчас\n"
-                "• /backup_list — последние архивы\n\n"
-                "Подробно: SETUP_ENV.md (§5.8) и RCLONE_VPS.md."
+                "• /backup_list — последние архивы."
             )
         except Exception as e:
             logger.error(f"Error in rclone_command: {e}")
@@ -4363,7 +4362,7 @@ class BotHandlersLite(AITranslateMixin):
                         "1) <code>/naive_set_domain ваш_домен</code>\n"
                         "2) <code>/naive_gen_creds</code>\n"
                         "3) <code>/naive_apply</code>\n\n"
-                        "See NAIVEPROXY_GUIDE.md."
+                        "Домен должен смотреть на этот VPS, Cloudflare proxy — OFF."
                     ),
                 }
                 await query.message.reply_text(

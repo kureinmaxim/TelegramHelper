@@ -473,7 +473,7 @@ Legend: ✅ full · 🔶 partial (main operations) · ❌ none ·
 | MTProto proxy | ✅ | ❌ | 🔶 | TG: `/mt_*` · SSH: `install_mtproto.sh`, `mtproto_sync_systemd.py` |
 | Xray (engine) | ✅ | ❌ | ✅ | TG: `/xray_status /xray_restart /xray_logs` · SSH: systemctl, journalctl |
 | Nginx SNI routing | ✅ | ❌ | 🔶 | TG: `/nginx_*` · SSH: `scripts/nginx/` |
-| Backups (rclone, offsite) | ✅ | ✅ | 🔶 | TG/CLI: `/backup_status /backup_test /backup_now /backup_list` · SSH: RCLONE_VPS.md |
+| Backups (rclone, offsite) | ✅ | ✅ | 🔶 | TG/CLI: `/backup_status /backup_test /backup_now /backup_list` · SSH: rclone + `RCLONE_*` in `.env` |
 | API / encryption keys | ✅ | 🔶 | 🔶 | TG: `/api /encryption_key /gen_* /del_*` · CLI: `/api /encryption_key` (masked) · SSH: `show_keys.py` |
 | Users and profiles | ✅ | 🔶 | ❌ | TG: `/list_users /user /special_* /setemail /email_profile /my_profile` · CLI: `/list_users`, `/links [uid]` (no uid = admin), `/qr [uid] <variant>` |
 | AI queries (Anthropic/OpenAI) | ✅ | ❌ | ❌ | TG: regular messages, `/ai_provider /ch_model` |

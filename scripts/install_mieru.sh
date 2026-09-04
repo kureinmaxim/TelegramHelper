@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # install_mieru.sh — установка серверной части Mieru (mita) на VPS.
-# Соответствует plan_Mieru.md §9 и MIERU_GUIDE.md §4.
+# Installer for mita (Mieru).
 #
 # Поведение по умолчанию:
 #   - определяет архитектуру через dpkg --print-architecture

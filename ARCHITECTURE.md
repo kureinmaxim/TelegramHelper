@@ -505,8 +505,7 @@ Operations documentation:
 - `DEPLOY.md` — installation, `.env`, VPS operations;
 - `DOCKER.md` — Docker Compose, volumes, socket proxy;
 - `POST_DEPLOY.md` — post-deploy checklist;
-- `SECURITY.md` — keys, secrets, file permissions;
-- `HYSTERIA2_GUIDE.md`, `VLESS_GUIDE.md`, `NGINX_SNI_ROUTING.md` — transport-specific guides.
+- `SECURITY.md` — keys, secrets, file permissions.
 
 ## What Is Implemented
 

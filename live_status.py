@@ -617,8 +617,8 @@ def _hy2_status() -> ProtocolStatus:
 
 def _naive_status() -> ProtocolStatus:
     """
-    NaiveProxy реализован как Caddy + forwardproxy@naive (см.
-    `Clash Meta/NAIVEPROXY_GUIDE.md`). Бинарь — отдельный
+    NaiveProxy реализован как Caddy + forwardproxy@naive.
+    Бинарь — отдельный
     `/usr/local/bin/caddy-naive`, юнит — `caddy-naive.service`,
     конфиг — `/etc/caddy-naive/Caddyfile`. Каталог `/etc/caddy-naive`
     смонтирован в контейнер бота через `compose.yaml`, поэтому мы
@@ -669,7 +669,7 @@ def _naive_status() -> ProtocolStatus:
             notes.append(
                 f"NaiveProxy сервер не установлен на этом VPS "
                 f"(нет ни {naive_binary}, ни {caddyfile_path}); "
-                f"см. Clash Meta/NAIVEPROXY_GUIDE.md §3.3"
+                f"установите через /naive_* или scripts/install_naiveproxy.sh"
             )
         elif not caddyfile_exists:
             notes.append(
@@ -784,7 +784,7 @@ def _xhttp_status() -> ProtocolStatus:
 def _mieru_status() -> ProtocolStatus:
     """
     Mieru (mita): отдельный TCP/UDP транспорт без TLS-маскировки. Бинарь —
-    `mita`, юнит — `mita.service` (см. MIERU_GUIDE.md §3-4).
+    `mita`, юнит — `mita.service`.
 
     В отличие от VLESS/XHTTP, Mieru слушает СВОЙ порт (по умолчанию 29999/tcp),
     поэтому здесь и порт, и процесс реально проверяются на хосте.

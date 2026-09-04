@@ -202,7 +202,7 @@ Also critical for restoration:
 
 ### 7.2 How Restoration Works
 
-To be able to restore all clients on a new server, you **must** set up an offsite backup via Rclone (see `RCLONE_VPS.md`).
+To be able to restore all clients on a new server, you **must** set up an offsite backup via Rclone (`/backup_status`, `/backup_now`).
 
 Rclone collects all the files listed above (including `.env` and all `*_config.json`) into a single encrypted `.tar.gz` archive and uploads it to cloud storage (S3, iCloud, WebDAV).
 
@@ -216,7 +216,7 @@ Rclone collects all the files listed above (including `.env` and all `*_config.j
 
 Without a recent backup of `.env` and JSON files, restoring old profiles is **impossible**. You will need to generate new keys and re-deliver QR codes to all users.
 
-See `RCLONE_VPS.md` §10 for a detailed step-by-step restoration process (including both the path with `x-ui.db` and the path without it).
+If 3x-ui was in use, restore `x-ui.db` separately when you have a copy; otherwise recreate the inbound and run `/provision_all`.
 
 ---
 
@@ -296,7 +296,6 @@ These commands belong to legacy flows or individual protocol managers. For curre
 
 ## 10. Further Reading
 
-- `VLESS_GUIDE.md` — 3x-ui, bot-managed clients, legacy VLESS, and scenarios A/B/C.
 - `POST_DEPLOY.md` — VPS deployment, Docker, Gmail token, logs.
-- `RCLONE_VPS.md` — offsite backup and step-by-step recovery after failure.
 - `SECURITY.md` — TTL, view limits, secrets, rotation, and the ephemeral-link model.
+- `DEPLOY.md` — rclone env (`RCLONE_REMOTE`, `RCLONE_CONFIG`) and `/provision`.

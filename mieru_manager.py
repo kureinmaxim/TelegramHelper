@@ -339,7 +339,7 @@ def set_logging_level(level: str) -> Tuple[bool, str]:
 
 
 def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
-    """Единая ручка для DPI-исследований: см. plan_Mieru.md §10 / MIERU_GUIDE.md §8."""
+    """Единая ручка для DPI-параметров mita."""
     key = (param or "").strip().lower().replace("-", "_")
     raw = (value or "").strip()
     if key in {"protocol", "transport"}:

@@ -506,7 +506,7 @@ If code or dependencies also changed — run `build --no-cache` first.
 
 ## 7. Gmail API for `/email_profile`
 
-Detailed step-by-step guide: `GMAIL_API_EMAIL.md`.
+Detailed step-by-step guide: `EMAIL.md`.
 
 ### 7.1. Files on VPS
 
@@ -765,11 +765,7 @@ Full guides: HA stack (TCP, destination hash) — [`RETICULUM_GUIDE.md`](RETICUL
 
 - `DEPLOY.md` — initial installation.
 - `DOCKER.md` — operations guide, troubleshooting, PMTU black hole.
-- `GMAIL_API_EMAIL.md` — detailed Gmail API and OAuth setup.
+- `EMAIL.md` — SMTP / Gmail setup.
 - `DOCKHAND_GUIDE.md` — Dockhand setup, SSH tunnel, UI and variables.
 - `HEADSCALE_GUIDE.md` — Headscale + Headplane Web UI, mesh-only 3x-ui and `compose.host.yaml`.
-- `HEADSCALE_GUIDE.md` — comparison with Tailscale Cloud, management methods (CLI / bot / Headplane).
-- `MIERU_GUIDE.md` — Mieru installation and configuration.
-- `RETICULUM_GUIDE.md` — HA stack (stubs): TCP gRPC + Reticulum (RNS bridge), I2P step.
-- `RETICULUM_GUIDE.md` — I2P layer for the RNS bridge (path 2: native i2pd tunnels) + installer.
-- `RCLONE_VPS.md` — offsite backup via rclone and Disaster Recovery.
+- `RETICULUM_GUIDE.md` — HA stack (stubs): TCP gRPC + Reticulum (RNS bridge).

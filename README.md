@@ -140,9 +140,6 @@ Project docs only — no generic tutorials.
 | [SSHvsTelegramBOT.md](SSHvsTelegramBOT.md) | CLI dashboard when Telegram is down |
 | [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) | Headscale / Headplane |
 | [DOCKHAND_GUIDE.md](DOCKHAND_GUIDE.md) | Docker diagnostics UI |
-| [RCLONE_VPS.md](RCLONE_VPS.md) | Offsite backup |
-
-Transports: [VLESS_GUIDE.md](VLESS_GUIDE.md), [HYSTERIA2_GUIDE.md](HYSTERIA2_GUIDE.md), [MTPROTO_CHEATSHEET.md](MTPROTO_CHEATSHEET.md), [NAIVEPROXY_GUIDE.md](NAIVEPROXY_GUIDE.md), [MIERU_GUIDE.md](MIERU_GUIDE.md), [NGINX_SNI_ROUTING.md](NGINX_SNI_ROUTING.md).
 
 ## License
 

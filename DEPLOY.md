@@ -248,9 +248,9 @@ On a single VPS, port `443/TCP` must be held by one primary TLS service.
 | **Mieru / mita** | free | free | separate TCP/UDP port (default `29999`); do not use 443 |
 | **Nginx HTTPS API** | Nginx | none | only if 443 is not taken by Xray/Caddy |
 
-Mieru is a fallback transport: it uses its own port (default `29999/tcp` via `/mieru_set_port 29999 tcp`). It requires no domain and no TLS certificate, so it can safely coexist with any of the options above. See `MIERU_GUIDE.md` for details.
+Mieru is a fallback transport: it uses its own port (default `29999/tcp` via `/mieru_set_port 29999 tcp`). It requires no domain and no TLS certificate, so it can safely coexist with any of the options above.
 
-If you need VLESS on 443 and Headscale/Home Assistant on HTTPS simultaneously, use Xray fallback + Nginx stream SNI routing. See `NGINX_SNI_ROUTING.md`.
+If you need VLESS on 443 and Headscale/Home Assistant on HTTPS simultaneously, use Xray fallback + Nginx stream SNI routing (`/nginx_*`).
 
 ---
 
@@ -301,7 +301,7 @@ ssh -p YOUR_SSH_PORT -L 3000:127.0.0.1:3000 root@YOUR_VPS_IP
 
 Bot commands: `/headscale_status`, `/headscale_list_nodes`, `/headscale_gen`, `/headscale_create_user`, `/headscale_enable`, `/headscale_set_url`; exit node — `/exit_node`, `/exit_node_on`, `/exit_node_off`. Bot config — `headscale_config.json` (`enabled`, `server_url`, `default_user`, `container_name`).
 
-See [`HEADSCALE_GUIDE.md`](HEADSCALE_GUIDE.md) (including exit node and break-glass `scripts/exit_node.sh`), [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md). If Headscale/HA share HTTPS with VLESS on 443 — see `NGINX_SNI_ROUTING.md`.
+See [`HEADSCALE_GUIDE.md`](HEADSCALE_GUIDE.md) (including exit node and break-glass `scripts/exit_node.sh`). If Headscale/HA share HTTPS with VLESS on 443, use `/nginx_set_domain`, `/nginx_enable`, and `/nginx_config`.
 
 ### 6.7. HA Stack (Stubs) — Access via TCP gRPC and Reticulum
 
@@ -493,7 +493,7 @@ RCLONE_BACKUP_PREFIX=telegramhelper
 RCLONE_CONFIG=/rclone/rclone.conf
 ```
 
-See `RCLONE_VPS.md` for details.
+Bot commands: `/backup_status`, `/backup_test`, `/backup_now`, `/backup_list`.
 
 ### 8.8. Applying `.env` Changes
 
@@ -670,7 +670,7 @@ ufw status | grep -E '29999|mieru|mita' || true
 
 ## 10. Gmail API and SMTP for `/email_profile`
 
-Detailed walkthrough: `GMAIL_API_EMAIL.md`.
+Detailed walkthrough: `EMAIL.md`.
 
 ### 10.1. Gmail API
 
@@ -791,7 +791,7 @@ If `/vless_status` shows `Enabled` and `Configured: yes`, proceed with the commo
    /provision <telegram_user_id>
    ```
 
-See `QR_CLIENT_ONBOARDING.md`, `VLESS_GUIDE.md` for details.
+See `QR_CLIENT_ONBOARDING.md` for details.
 
 ### 11.1. sing-box Export
 
@@ -1034,13 +1034,9 @@ When migrating from `TelegramSimple` to `TelegramHelper`, move the directory tre
 - [`SSHvsTelegramBOT.md`](SSHvsTelegramBOT.md) — two control interfaces (Telegram bot vs SSH/CLI dashboard).
 - the `scripts/` directory — all `scripts/` scripts in one list.
 - [`DOCKER.md`](DOCKER.md) — operations guide, troubleshooting, PMTU black hole.
-- [`GMAIL_API_EMAIL.md`](GMAIL_API_EMAIL.md) — Gmail API and token flow.
+- [`EMAIL.md`](EMAIL.md) — SMTP / Gmail and token flow.
 - [`QR_CLIENT_ONBOARDING.md`](QR_CLIENT_ONBOARDING.md) — unified URI/QR/email issuance path.
-- [`VLESS_GUIDE.md`](VLESS_GUIDE.md) — 3x-ui, bot-managed clients, legacy host-Xray.
-- [`HYSTERIA2_GUIDE.md`](HYSTERIA2_GUIDE.md), [`NAIVEPROXY_GUIDE.md`](NAIVEPROXY_GUIDE.md) — respective transports.
-- [`MIERU_GUIDE.md`](MIERU_GUIDE.md) — mita installation, configs, DPI parameters.
-- [`RCLONE_VPS.md`](RCLONE_VPS.md) — offsite backup and Disaster Recovery.
-- [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) — Headscale vs Tailscale Cloud comparison, management methods (CLI / bot / Headplane).
+- [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) — Headscale / Headplane.
 - [`DOCKER.md`](DOCKER.md) — Docker configuration details.
-- [`DOCKHAND_GUIDE.md`](DOCKHAND_GUIDE.md), [DOCKHAND_GUIDE.md](DOCKHAND_GUIDE.md) — Dockhand service.
+- [`DOCKHAND_GUIDE.md`](DOCKHAND_GUIDE.md) — Dockhand service.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — high-level architecture.
