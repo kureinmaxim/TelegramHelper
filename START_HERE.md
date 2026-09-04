@@ -3,6 +3,26 @@
 VPS runtime: Telegram bot, VPN transports, Headscale client/coordinator,
 Reticulum bridge, and (optionally) a path to Home Assistant on a NAS.
 
+This tree is the **public, slightly trimmed** edition. The full private
+operator tree is **TelegramOnly**. Both share the same core **v3.19.5**.
+
+![First hour](docs/images/first-hour.png)
+
+![Two editions](docs/images/editions.png)
+
+| | **TelegramHelper** (this repo) | **TelegramOnly** (private) |
+| --- | --- | --- |
+| Who it is for | GitHub, fork, clean VPS install | The operator's full copy |
+| Core | bot + API + transports + 3x-ui + Headscale + HA stubs | the same core |
+| Version | v3.19.5 | v3.19.5 |
+| Docs | English, project-only | Russian, plus operator runbooks |
+| Trimmed here | host inventory, ApiX / telegram_capsule, trading desk, NovaScale, personal notes | — |
+| Extra here | `/ai`, `/tr`, `/prompt` | — |
+
+Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md).
+
+![Architecture](docs/images/architecture.png)
+
 ## First Steps on a Fresh Debian VPS
 
 1. **SSH + GitHub key** on the VPS → `git clone` into `/opt/TelegramHelper`.
@@ -15,6 +35,17 @@ Reticulum bridge, and (optionally) a path to Home Assistant on a NAS.
 3. Verify the bot is running: send `/ver` in Telegram.
 4. Optional Home Assistant path: bridge hash + TCP
    (`YOUR_VPS_IP:50061` if published, or an SSH tunnel to `127.0.0.1:50062`).
+
+Then issue the first profile: `/special_add` → `/provision` → `/profiles`,
+or let the user fetch `/my_profile`. Details: [QR_CLIENT_ONBOARDING.md](QR_CLIENT_ONBOARDING.md).
+
+![Profile delivery](docs/images/provision-flow.png)
+
+Only one TLS service can own `443/tcp`. Pick the owner before install
+(VLESS, NaiveProxy, or leave 443 free and run Mieru on `29999`).
+Table: [DEPLOY.md](DEPLOY.md).
+
+![Port 443](docs/images/port-443.png)
 
 ## Component Overview
 
@@ -45,3 +76,4 @@ journalctl -u ha-reticulum-bridge -n 30 --no-pager | grep destination
 | Reticulum, SSH vs direct TCP, adapter | [RETICULUM_GUIDE.md](RETICULUM_GUIDE.md) §6 |
 | Headscale (`--user` = numeric ID) | [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) |
 | Scripts reference | the `scripts/` directory |
+| This public landing page | [README.md](README.md) |

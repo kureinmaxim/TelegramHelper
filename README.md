@@ -19,8 +19,24 @@ A FastAPI service exposes AI queries behind API keys, HMAC, and AES-256-GCM.
 - AI chat (`/ai`), translation (`/tr`, `/tr_ai`, `/ru` `/en` `/fr`), and `/prompt`
 - Encrypted REST API compatible with AES-256-GCM desktop clients
 
-This public tree is a sanitized community edition. Keep real VPS inventory,
-tokens, and host-specific runbooks in a private repo.
+## Two editions
+
+This repo is the **public, slightly trimmed** community edition.
+The full private operator tree is **TelegramOnly**. Both are the same
+core **v3.19.5**.
+
+| | TelegramHelper | TelegramOnly |
+| --- | --- | --- |
+| Status | this public GitHub repo | private full copy |
+| Core version | v3.19.5 | v3.19.5 |
+| Docs | English, project-only | Russian, plus operator runbooks |
+| Trimmed here | host inventory, ApiX / telegram_capsule, trading desk, NovaScale, personal notes | — |
+| Extra here | `/ai`, `/tr`, `/prompt` | copy those in if you need them privately |
+
+Keep real VPS inventory, tokens, and host-specific runbooks out of this
+tree. First hour: [START_HERE.md](START_HERE.md).
+
+![Two editions](docs/images/editions.png)
 
 ## Quick start (local)
 
