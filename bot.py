@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Упрощённый Telegram бот с поддержкой VLESS-Reality.
+Lightweight Telegram bot with VLESS-Reality support.
 
-Этот модуль содержит минимальную версию бота с командами:
-- Базовые: start, help, info, clear
-- Админские: ver, dockhand, headscale, управление API ключами, шифрованием, пользователями
-- VLESS-Reality: полное управление VLESS конфигурацией
+This module is the slim bot with commands for:
+- Basics: start, help, info, clear
+- Admin: ver, dockhand, headscale, API keys, encryption, users
+- VLESS-Reality: full VLESS configuration management
 """
 
 import logging
@@ -29,18 +29,18 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramBotLite:
-    """Упрощённый Telegram бот с поддержкой VLESS-Reality."""
+    """Lightweight Telegram bot with VLESS-Reality support."""
     
     def __init__(self, config: Config):
-        """Инициализация бота с конфигурацией."""
+        """Initialize the bot with configuration."""
         self.config = config
         self.handlers = BotHandlersLite(config=self.config)
         self.application = None
     
     async def start(self, blocking: bool = True):
-        """Запуск бота."""
+        """Start the bot."""
         try:
-            # Создаём Application
+            # Build the Application
             self.application = (
                 Application.builder()
                 .token(self.config.bot_token)
@@ -51,16 +51,16 @@ class TelegramBotLite:
                 .build()
             )
             
-            # Регистрируем обработчики
+            # Register handlers
             self._register_handlers()
             
-            # Запускаем бота
+            # Start the bot
             logger.info("Bot Lite is starting...")
             await self.application.initialize()
             await self.application.start()
             await setup_bot_commands(self.application.bot, self.config)
 
-            # Начинаем polling
+            # Start polling
             logger.info("Bot Lite is now polling for updates...")
             await self.application.updater.start_polling(
                 drop_pending_updates=True,
@@ -72,7 +72,7 @@ class TelegramBotLite:
             if not blocking:
                 return
             
-            # Держим бота запущенным до прерывания
+            # Keep the bot running until interrupted
             import signal
             stop_signals = (signal.SIGINT, signal.SIGTERM)
             loop = asyncio.get_running_loop()
@@ -103,7 +103,7 @@ class TelegramBotLite:
                 await self.application.shutdown()
 
     async def start_with_retry(self, blocking: bool = True):
-        """Запускать Telegram bot с retry, не валя весь процесс из-за сети."""
+        """Start the Telegram bot with retry; do not take down the whole process on network errors."""
         attempt = 0
         max_attempts = int(getattr(self.config, "bot_start_max_attempts", 0) or 0)
         retry_interval = max(
@@ -157,21 +157,21 @@ class TelegramBotLite:
         self.application = None
     
     async def stop(self):
-        """Остановка бота."""
+        """Stop the bot."""
         if self.application:
             logger.info("Stopping bot application...")
             await self._cleanup_after_failed_start()
     
     def _register_handlers(self):
-        """Регистрация всех обработчиков команд."""
+        """Register all command handlers."""
         try:
-            # iOS / копипаст: без BOT_COMMAND и с невидимыми символами CommandHandler не срабатывает
+            # iOS / paste: without BOT_COMMAND and with invisible chars, CommandHandler never fires
             self.application.add_handler(
                 MessageHandler(filters.TEXT, normalize_pasted_command_update),
                 group=-1,
             )
 
-            # === БАЗОВЫЕ КОМАНДЫ ===
+            # === BASIC COMMANDS ===
             self.application.add_handler(
                 CommandHandler("start", self.handlers.start_command)
             )
@@ -230,15 +230,15 @@ class TelegramBotLite:
                 CommandHandler("help_prompt", self.handlers.help_prompt_command)
             )
             
-            # === СИСТЕМА И ИНФОРМАЦИЯ (админ) ===
+            # === SYSTEM AND INFO (admin) ===
             self.application.add_handler(
                 CommandHandler("ver", self.handlers.version_command)
             )
             self.application.add_handler(
                 CommandHandler("dockhand", self.handlers.dockhand_command)
             )
-            # Диагностика транспортов на VPS — доступна всем,
-            # без секретов; live-проверки портов/процессов/контейнеров.
+            # VPS transport diagnostics — available to everyone,
+            # no secrets; live checks of ports/processes/containers.
             self.application.add_handler(
                 CommandHandler("diag", self.handlers.diag_command)
             )
@@ -277,7 +277,7 @@ class TelegramBotLite:
             for cmd_name, cmd_handler in backup_commands.items():
                 self.application.add_handler(CommandHandler(cmd_name, cmd_handler))
             
-            # === УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (админ) ===
+            # === USER MANAGEMENT (admin) ===
             self.application.add_handler(
                 CommandHandler("list_users", self.handlers.admin_list_users)
             )
@@ -302,21 +302,21 @@ class TelegramBotLite:
             self.application.add_handler(
                 CommandHandler("special_remove", self.handlers.admin_special_remove)
             )
-            # Журнал first_seen / last_seen (админ + special)
+            # first_seen / last_seen log (admin + special)
             self.application.add_handler(
                 CommandHandler("users_log", self.handlers.users_log_command)
             )
-            # Профили текущего пользователя (админ + special)
+            # Current user's profiles (admin + special)
             self.application.add_handler(
                 CommandHandler("my_profile", self.handlers.my_profile_command)
             )
-            # Карточка пользователя по TG ID: меню профилей всех протоколов
-            # (создание / удаление / ротация / QR). Только для админа.
+            # User card by TG ID: profile menu for all protocols
+            # (create / delete / rotate / QR). Admin only.
             self.application.add_handler(
                 CommandHandler("user", self.handlers.user_card_command)
             )
             
-            # === НАСТРОЙКИ ИИ (админ) ===
+            # === AI SETTINGS (admin) ===
             self.application.add_handler(
                 CommandHandler("ai_provider", self.handlers.ai_set_provider)
             )
@@ -324,7 +324,7 @@ class TelegramBotLite:
                 CommandHandler("ch_model", self.handlers.ch_model_command)
             )
             
-            # === VLESS-REALITY КОМАНДЫ (админ) ===
+            # === VLESS-REALITY COMMANDS (admin) ===
             self.application.add_handler(
                 CommandHandler("vless_status", self.handlers.vless_status)
             )
@@ -386,7 +386,7 @@ class TelegramBotLite:
                 CommandHandler("vless_reset", self.handlers.vless_reset)
             )
             
-            # === XRAY MANAGEMENT COMMANDS (админ) ===
+            # === XRAY MANAGEMENT COMMANDS (admin) ===
             self.application.add_handler(
                 CommandHandler("xray_status", self.handlers.xray_status)
             )
@@ -476,7 +476,7 @@ class TelegramBotLite:
             for cmd_name, handler_func in hy2_commands.items():
                 self.application.add_handler(CommandHandler(cmd_name, handler_func))
 
-            # === RETICULUM / HA-СТЕК COMMANDS ===
+            # === RETICULUM / HA-STACK COMMANDS ===
             reticulum_commands = {
                 "reticulum_status": self.handlers.reticulum_status,
                 "reticulum_restart": self.handlers.reticulum_restart,
@@ -639,13 +639,13 @@ class TelegramBotLite:
             for cmd_name, handler_func in mt_commands.items():
                 self.application.add_handler(CommandHandler(cmd_name, handler_func))
 
-            # === 3X-UI ИНТЕГРАЦИЯ ===
-            # ConversationHandler для пошагового /xui_setup. Регистрируется
-            # ДО общего CallbackQueryHandler — чтобы наши `xui_vfy_*` /
-            # `xui_ib*` callback'и в активном диалоге попали именно сюда,
-            # а не в общий маршрутизатор. PTB пропускает Conversation, если
-            # у пользователя нет активного state'а, так что обычные клики
-            # по /user-карточке не страдают.
+            # === 3X-UI INTEGRATION ===
+            # ConversationHandler for step-by-step /xui_setup. Registered
+            # BEFORE the shared CallbackQueryHandler so our `xui_vfy_*` /
+            # `xui_ib*` callbacks in an active dialog land here,
+            # not in the catch-all router. PTB skips the Conversation if
+            # the user has no active state, so ordinary clicks
+            # on a /user card are unaffected.
             xui_conv = ConversationHandler(
                 entry_points=[
                     CommandHandler("xui_setup", self.handlers.xui_setup_start),
@@ -703,8 +703,8 @@ class TelegramBotLite:
                 self.application.add_handler(CommandHandler(cmd_name, handler_func))
 
             # === Bot-managed provisioning ===
-            # Авто-создание клиентов с канон-именами в bot-managed inbound'ах
-            # для всех включённых протоколов (см. provision_manager.py).
+            # Auto-create clients with canonical names in bot-managed inbounds
+            # for every enabled protocol (see provision_manager.py).
             provision_commands = {
                 "provision": self.handlers.provision_command,
                 "provision_all": self.handlers.provision_all_command,
@@ -717,10 +717,9 @@ class TelegramBotLite:
                 self.application.add_handler(CommandHandler(cmd_name, handler_func))
 
             # === RAW TG ID FROM ADMIN ===
-            # Админ может отправить просто число (TG ID) — это откроет карточку
-            # пользователя. Регистрируем после всех CommandHandler'ов, чтобы
-            # /user остался приоритетным; фильтр на чистые цифры исключает
-            # команды и обычный чат.
+            # An admin can send a bare number (TG ID) — that opens the user
+            # card. Register after all CommandHandlers so /user stays
+            # preferred; the digits-only filter excludes commands and normal chat.
             self.application.add_handler(
                 MessageHandler(
                     filters.TEXT & ~filters.COMMAND & filters.Regex(r"^\d{4,15}$"),
@@ -738,7 +737,7 @@ class TelegramBotLite:
             )
 
             # === Inline-picker callbacks for /provision /profiles /clean_user ===
-            # Регистрируется ПЕРЕД catch-all'ом — pattern точечный.
+            # Registered BEFORE the catch-all — pattern is specific.
             self.application.add_handler(
                 CallbackQueryHandler(
                     self.handlers.provision_picker_callback,

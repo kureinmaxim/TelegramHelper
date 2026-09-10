@@ -27,7 +27,7 @@ if _version_not_supported:
 
 class DeviceControlServiceStub:
     """---------------------------------------------------------------------
-    СЕРВИС УПРАВЛЕНИЯ
+    CONTROL SERVICE
     ---------------------------------------------------------------------
 
     """
@@ -62,34 +62,34 @@ class DeviceControlServiceStub:
 
 class DeviceControlServiceServicer:
     """---------------------------------------------------------------------
-    СЕРВИС УПРАВЛЕНИЯ
+    CONTROL SERVICE
     ---------------------------------------------------------------------
 
     """
 
     def SendCommand(self, request, context):
-        """Отправка команды устройству
+        """Send a command to a device
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetDevices(self, request, context):
-        """Получение списка устройств блока
+        """Get the block's device list
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def GetBlockStatus(self, request, context):
-        """Получение статуса блока
+        """Get block status
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def SubscribeEvents(self, request, context):
-        """Подписка на события остановки процессов (server-side streaming)
+        """Subscribe to process-stop events (server-side streaming)
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -128,7 +128,7 @@ def add_DeviceControlServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class DeviceControlService:
     """---------------------------------------------------------------------
-    СЕРВИС УПРАВЛЕНИЯ
+    CONTROL SERVICE
     ---------------------------------------------------------------------
 
     """

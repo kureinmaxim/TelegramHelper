@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 #
-# bot_cli.sh — запустить CLI-дашборд бота по SSH (без Telegram).
+# bot_cli.sh — run the bot CLI dashboard over SSH (no Telegram).
 #
-# Универсально к способу развёртывания:
-#   • Бот в Docker  → выполняем внутри контейнера (docker exec).
-#   • Бот нативно   → запускаем cli_dashboard.py на хосте через venv проекта.
-# Дашборд гоняет те же команды, что и бот (AdminCLI): статус, exit node,
-# VLESS, бэкапы, reticulum и т. д. Дашборд не зависит от того, поднят ли сам
-# процесс бота — он вызывает менеджеры напрямую.
+# Works with either deployment style:
+#   • Bot in Docker  → run inside the container (docker exec).
+#   • Bot native     → run cli_dashboard.py on the host via the project venv.
+# The dashboard runs the same commands as the bot (AdminCLI): status, exit node,
+# VLESS, backups, reticulum, etc. It does not depend on the bot process itself —
+# it calls the managers directly.
 #
-# Использование (на сервере):
-#   ./scripts/bot_cli.sh                     # интерактивное меню
-#   ./scripts/bot_cli.sh /reticulum_status   # одна команда без меню
+# Usage (on the server):
+#   ./scripts/bot_cli.sh                     # interactive menu
+#   ./scripts/bot_cli.sh /reticulum_status   # one command, no menu
 #   ./scripts/bot_cli.sh /vless_set_port 8443
 #
-# Переменные окружения (необязательные):
-#   BOT_CONTAINER=telegram-helper-lite   # имя контейнера бота (для Docker)
-#   BOT_NATIVE=1                         # форсировать нативный запуск на хосте
-#   BOT_PYTHON=/path/to/python           # явный интерпретатор для нативного пути
+# Environment (optional):
+#   BOT_CONTAINER=telegram-helper-lite   # bot container name (Docker)
+#   BOT_NATIVE=1                         # force native host run
+#   BOT_PYTHON=/path/to/python           # explicit interpreter for the native path
 
 set -uo pipefail
 
@@ -40,15 +40,15 @@ choose_python() {
 
 run_native() {
   local py
-  py="$(choose_python)" || { err "❌ Python не найден (нет $PROJECT_DIR/venv, .venv или python3)."; exit 1; }
+  py="$(choose_python)" || { err "❌ Python not found (no $PROJECT_DIR/venv, .venv, or python3)."; exit 1; }
   if [ ! -f "$PROJECT_DIR/cli_dashboard.py" ]; then
-    err "❌ cli_dashboard.py не найден в $PROJECT_DIR"; exit 1
+    err "❌ cli_dashboard.py not found in $PROJECT_DIR"; exit 1
   fi
   cd "$PROJECT_DIR" || exit 1
   exec "$py" cli_dashboard.py "$@"
 }
 
-# --- Определяем развёртывание ---
+# --- Detect deployment ---
 container_exists=0
 container_running=0
 if command -v docker >/dev/null 2>&1; then
@@ -56,31 +56,31 @@ if command -v docker >/dev/null 2>&1; then
   docker ps    --format '{{.Names}}' 2>/dev/null | grep -qx "$BOT_CONTAINER" && container_running=1
 fi
 
-# Принудительно нативный путь
+# Force native path
 if [ "${BOT_NATIVE:-0}" = 1 ]; then
   run_native "$@"
 fi
 
-# 1) Контейнер бота запущен → внутрь него
+# 1) Bot container is running → go inside it
 if [ "$container_running" = 1 ]; then
   TTY_FLAGS="-i"
   if [ -t 0 ] && [ -t 1 ]; then TTY_FLAGS="-it"; fi
   exec docker exec $TTY_FLAGS "$BOT_CONTAINER" python3 cli_dashboard.py "$@"
 fi
 
-# 2) Контейнер бота есть, но не запущен → это Docker-развёртывание; на хосте
-#    может не быть зависимостей, поэтому ведём поднимать контейнер.
+# 2) Bot container exists but is not running → this is a Docker deployment;
+#    the host may lack deps, so tell the operator to start the container.
 if [ "$container_exists" = 1 ]; then
-  err "❌ Контейнер '$BOT_CONTAINER' есть, но не запущен."
+  err "❌ Container '$BOT_CONTAINER' exists but is not running."
   info ""
-  info "Запущенные контейнеры:"
+  info "Running containers:"
   docker ps --format '  {{.Names}}\t{{.Status}}' || true
   info ""
-  info "Поднять бота:        docker compose up -d --force-recreate telegram-helper"
-  info "Форсировать хост:    BOT_NATIVE=1 ./scripts/bot_cli.sh   (если на хосте есть venv проекта)"
-  info "Exit node без бота:  sudo ./scripts/exit_node.sh status"
+  info "Start the bot:       docker compose up -d --force-recreate telegram-helper"
+  info "Force host path:     BOT_NATIVE=1 ./scripts/bot_cli.sh   (if the host has the project venv)"
+  info "Exit node without bot: sudo ./scripts/exit_node.sh status"
   exit 1
 fi
 
-# 3) Контейнера бота нет → нативное развёртывание, запускаем на хосте
+# 3) No bot container → native deployment, run on the host
 run_native "$@"

@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # ============================================================================
-# install_ha_adapter.sh — реальный HA вместо stub на VPS.
+# install_ha_adapter.sh — real HA instead of the stub on the VPS.
 #
-# Ставит systemd ha-adapter-grpc (:50057) → REST HA по tailnet,
-# опционально переключает ha-reticulum-bridge на --grpc :50057
-# и открывает мост наружу (listen_ip 0.0.0.0) для ApiHA без SSH.
+# Installs systemd ha-adapter-grpc (:50057) → REST HA over the tailnet,
+# optionally switches ha-reticulum-bridge to --grpc :50057
+# and opens the bridge to the internet (listen_ip 0.0.0.0) for ApiHA without SSH.
 #
-# Требования:
-#   - уже установлен HA-стек (bash scripts/install_ha_stack.sh)
-#   - VPS в mesh с NAS (curl http://100.64.0.2:8123/ отвечает)
-#   - Long-Lived Token из профиля HA
+# Requirements:
+#   - HA stack already installed (bash scripts/install_ha_stack.sh)
+#   - VPS on the mesh with the NAS (curl http://100.64.0.2:8123/ responds)
+#   - Long-Lived Token from the HA profile
 #
-# Примеры:
+# Examples:
 #   bash scripts/install_ha_adapter.sh \
 #     --ha-url http://100.64.0.2:8123 --ha-token 'eyJ...' \
 #     --switch-bridge --public-rns
 #
-#   HA_URL=... HA_TOKEN=... bash scripts/install_ha_adapter.sh   # интерактивно доспросит
+#   HA_URL=... HA_TOKEN=... bash scripts/install_ha_adapter.sh   # will prompt for the rest
 # ============================================================================
 set -euo pipefail
 
@@ -44,6 +44,14 @@ usage() {
   exit 0
 }
 
+# Accept Latin Y/y and Cyrillic yes-letter (same layout as the old prompt).
+_yes() {
+  case "$1" in
+    [Yy]|""|$'\u0434'|$'\u0414') return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ha-url) HA_URL="$2"; shift 2 ;;
@@ -53,22 +61,22 @@ while [[ $# -gt 0 ]]; do
     --listen) LISTEN="$2"; shift 2 ;;
     --dry-run) DRY=1; shift ;;
     -h|--help) usage ;;
-    *) echo "Неизвестный аргумент: $1"; usage ;;
+    *) echo "Unknown argument: $1"; usage ;;
   esac
 done
 
 if [[ "$(uname -s)" != "Linux" ]]; then
-  echo "Только Linux VPS."
+  echo "Linux VPS only."
   exit 1
 fi
 
 if [[ ! -f "${ADAPTER_PY}" ]]; then
-  echo "Нет ${ADAPTER_PY} — сделай git pull (файл вендорится из ApiRgRPC)."
+  echo "Missing ${ADAPTER_PY} — git pull (the file is vendored from ApiRgRPC)."
   exit 1
 fi
 
 if [[ ! -x "${PY}" ]]; then
-  echo "Нет venv ${PY}. Сначала: bash scripts/install_ha_stack.sh"
+  echo "No venv ${PY}. First: bash scripts/install_ha_stack.sh"
   exit 1
 fi
 
@@ -78,40 +86,42 @@ fi
 HA_URL="${HA_URL:-http://100.64.0.2:8123}"
 
 if [[ -z "${HA_TOKEN}" && -t 0 ]]; then
-  echo "Long-Lived Token: HA → профиль → «Долгосрочные токены доступа»."
+  echo "Long-Lived Token: HA → profile → Long-lived access tokens."
   read -r -p "HA_TOKEN: " HA_TOKEN || true
 fi
 if [[ -z "${HA_TOKEN}" ]]; then
-  echo "HA_TOKEN обязателен (env HA_TOKEN=... или --ha-token)."
+  echo "HA_TOKEN is required (env HA_TOKEN=... or --ha-token)."
   exit 1
 fi
 
 if [[ -t 0 && "${SWITCH_BRIDGE}" -eq 0 ]]; then
-  read -r -p "Переключить мост на adapter :50057? [Y/n] " ans || true
-  [[ -z "${ans}" || "${ans}" =~ ^[YyдД] ]] && SWITCH_BRIDGE=1
+  read -r -p "Switch the bridge to adapter :50057? [Y/n] " ans || true
+  _yes "${ans}" && SWITCH_BRIDGE=1
 fi
 if [[ -t 0 && "${PUBLIC_RNS}" -eq 0 ]]; then
-  read -r -p "Открыть мост наружу (listen_ip=0.0.0.0) для ApiHA без SSH? [y/N] " ans || true
-  [[ "${ans}" =~ ^[YyдД] ]] && PUBLIC_RNS=1
+  read -r -p "Open the bridge to the internet (listen_ip=0.0.0.0) for ApiHA without SSH? [y/N] " ans || true
+  case "${ans}" in
+    [Yy]|$'\u0434'|$'\u0414') PUBLIC_RNS=1 ;;
+  esac
 fi
 
 echo "=== HA adapter ==="
 echo "  URL:    ${HA_URL}"
 echo "  listen: ${LISTEN}"
-echo "  bridge: $([[ ${SWITCH_BRIDGE} -eq 1 ]] && echo '→ :50057' || echo 'не трогаю')"
-echo "  public: $([[ ${PUBLIC_RNS} -eq 1 ]] && echo '0.0.0.0:50061' || echo 'как было')"
+echo "  bridge: $([[ ${SWITCH_BRIDGE} -eq 1 ]] && echo '→ :50057' || echo 'leave as-is')"
+echo "  public: $([[ ${PUBLIC_RNS} -eq 1 ]] && echo '0.0.0.0:50061' || echo 'unchanged')"
 
 if [[ "${DRY}" -eq 1 ]]; then
-  echo "[dry-run] выход"
+  echo "[dry-run] exit"
   exit 0
 fi
 
-# Проверка доступности HA (не фейлим установку — токен/DNS могут догонять)
+# Check HA reachability (do not fail the install — token/DNS may catch up)
 code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "${HA_URL%/}/" 2>/dev/null || echo 000)"
-echo "  curl ${HA_URL} → HTTP ${code} (ожидаемо 200/401)"
+echo "  curl ${HA_URL} → HTTP ${code} (expected 200/401)"
 if [[ "${code}" == "000" || "${code}" == "000000" ]]; then
-  echo "⚠ HA недоступен с VPS. Сначала: Tailscale client + curl к NAS."
-  echo "  Продолжаю установку юнита — починишь mesh и restart ha-adapter-grpc."
+  echo "⚠ HA is unreachable from the VPS. First: Tailscale client + curl to the NAS."
+  echo "  Continuing unit install — fix the mesh and restart ha-adapter-grpc."
 fi
 
 $SUDO mkdir -p "${ENV_DIR}"
@@ -151,22 +161,22 @@ $SUDO systemctl is-active ha-adapter-grpc.service
 
 if [[ "${SWITCH_BRIDGE}" -eq 1 ]]; then
   if [[ ! -f "${BRIDGE_UNIT}" ]]; then
-    echo "⚠ Нет ${BRIDGE_UNIT} — мост не переключаю."
+    echo "⚠ Missing ${BRIDGE_UNIT} — not switching the bridge."
   else
-    # Заменить --grpc 127.0.0.1:NNNN на :50057
+    # Replace --grpc 127.0.0.1:NNNN with :50057
     if $SUDO grep -qE -- '--grpc[ =]' "${BRIDGE_UNIT}"; then
       $SUDO sed -i -E 's|--grpc[= ][^ ]+|--grpc 127.0.0.1:50057|' "${BRIDGE_UNIT}"
     else
-      echo "⚠ В юните моста нет --grpc — правь вручную."
+      echo "⚠ Bridge unit has no --grpc — edit it by hand."
     fi
-    # After= может ссылаться только на stub — добавим adapter
+    # After= may only mention stub — add adapter
     if ! $SUDO grep -q 'ha-adapter-grpc' "${BRIDGE_UNIT}"; then
       $SUDO sed -i 's/^After=.*/& ha-adapter-grpc.service/' "${BRIDGE_UNIT}"
       $SUDO sed -i 's/^Wants=.*/& ha-adapter-grpc.service/' "${BRIDGE_UNIT}" || true
     fi
     $SUDO systemctl daemon-reload
     $SUDO systemctl restart ha-reticulum-bridge.service
-    echo "✅ Мост → --grpc 127.0.0.1:50057"
+    echo "✅ Bridge → --grpc 127.0.0.1:50057"
   fi
 fi
 
@@ -181,16 +191,16 @@ if [[ "${PUBLIC_RNS}" -eq 1 ]]; then
       $SUDO iptables -C INPUT -p tcp --dport 50061 -j ACCEPT 2>/dev/null \
         || $SUDO iptables -I INPUT -p tcp --dport 50061 -j ACCEPT || true
     fi
-    echo "✅ listen_ip=0.0.0.0 + порт 50061 (ApiHA без SSH)"
+    echo "✅ listen_ip=0.0.0.0 + port 50061 (ApiHA without SSH)"
   fi
 fi
 
 echo ""
-echo "Проверка:"
+echo "Check:"
 echo "  systemctl is-active ha-adapter-grpc ha-reticulum-bridge"
 echo "  ss -tlnp | grep -E '50057|50061'"
 echo "  journalctl -u ha-reticulum-bridge -n 20 --no-pager | grep destination"
 echo ""
-echo "ApiHA / ApiRgRPC: hash из journal, host=<VPS_IP> port=50061 (если --public-rns)"
-echo "  или SSH ha-tunnel → 127.0.0.1:50062"
-echo "Ping должен ответить: HA API alive"
+echo "ApiHA / ApiRgRPC: hash from journal, host=<VPS_IP> port=50061 (if --public-rns)"
+echo "  or SSH ha-tunnel → 127.0.0.1:50062"
+echo "Ping should reply: HA API alive"

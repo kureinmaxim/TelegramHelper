@@ -1,24 +1,24 @@
 """
-email_manager.py — отправка bot-managed VPN-профилей пользователю на email.
+email_manager.py — send bot-managed VPN profiles to a user by email.
 
-Конфигурация — через переменные окружения, читаются один раз на импорт.
-Если не заданы ни SMTP-триплет, ни файл `GMAIL_OAUTH_CREDENTIALS`,
-`is_configured()` вернёт False — handler сообщит об отсутствии настройки почты.
+Configuration comes from environment variables, read once at import.
+If neither the SMTP triplet nor `GMAIL_OAUTH_CREDENTIALS` is set,
+`is_configured()` returns False — the handler reports that mail is not set up.
 
-Зона `.ru` / `.su` (и любые из `SMTP_BLOCKED_TLDS`, через запятую)
-**отвергается на валидации**: исходящий SMTP к .ru-почтам с RF-VPS
-работает нестабильно (sanctions / TLS-фильтры), и пользоваться этим
-каналом без сюрпризов нельзя. Используйте международный SMTP-провайдер
-(Gmail с App Password, ProtonMail Bridge, Outlook, Yandex Mail с
-паролем приложения и т.д.) и адресат на международном TLD.
+The `.ru` / `.su` zone (and any TLD in `SMTP_BLOCKED_TLDS`, comma-separated)
+**is rejected at validation**: outbound SMTP to .ru mailboxes from an RF VPS
+is unreliable (sanctions / TLS filters), so this channel cannot be used
+without surprises. Use an international SMTP provider
+(Gmail with an App Password, ProtonMail Bridge, Outlook, Yandex Mail with
+an app password, etc.) and a recipient on an international TLD.
 
-Альтернатива SMTP — **Gmail API** (OAuth 2.0, тип «Desktop app»):
+SMTP alternative — **Gmail API** (OAuth 2.0, "Desktop app" type):
 
-- В `.env`: `GMAIL_OAUTH_CREDENTIALS=/path/to/client_secret....json`
-- Токен: по умолчанию `gmail_token.json` или `GMAIL_TOKEN_PATH`
+- In `.env`: `GMAIL_OAUTH_CREDENTIALS=/path/to/client_secret....json`
+- Token: `gmail_token.json` by default, or `GMAIL_TOKEN_PATH`
 
-Первый запуск откроет браузер. На сервере без GUI скопируйте `gmail_token.json`
-с машины, где прошла авторизация. JSON с client_secret не коммитить.
+The first run opens a browser. On a server without a GUI, copy `gmail_token.json`
+from the machine where authorization completed. Do not commit the client_secret JSON.
 """
 
 import base64
@@ -71,35 +71,35 @@ def _smtp_from() -> str:
 
 
 def _smtp_use_tls() -> str:
-    """`tls` (SMTPS на :465), `starttls` (default :587), `none`."""
+    """`tls` (SMTPS on :465), `starttls` (default :587), `none`."""
     val = _env("SMTP_USE_TLS", "starttls").lower()
     return val if val in ("tls", "starttls", "none") else "starttls"
 
 
 def _blocked_tlds() -> Tuple[str, ...]:
-    """TLD'ы, на которые отправлять запрещено. Дефолт: `.ru, .su`."""
+    """TLDs that must not be mailed. Default: `.ru, .su`."""
     raw = _env("SMTP_BLOCKED_TLDS", ".ru,.su")
     items = [
         s.strip().lower()
         for s in raw.split(",")
         if s.strip()
     ]
-    # Убедимся, что каждое начинается с точки
+    # Ensure each entry starts with a dot
     return tuple(s if s.startswith(".") else "." + s for s in items)
 
 
 def _expanded_path(rel: str) -> str:
-    """Путь из .env с ~ и переменными окружения."""
+    """Path from .env with ~ and environment variables expanded."""
     return os.path.normpath(os.path.expandvars(os.path.expanduser(rel.strip())))
 
 
 def _gmail_oauth_client_file() -> str:
-    """JSON «OAuth client» (Desktop app) из Google Cloud Console."""
+    """OAuth client JSON (Desktop app) from Google Cloud Console."""
     return _env("GMAIL_OAUTH_CREDENTIALS")
 
 
 def _gmail_token_file() -> str:
-    """Файл с сохранённым refresh/access token."""
+    """File with the saved refresh/access token."""
     return _env("GMAIL_TOKEN_PATH", "gmail_token.json") or "gmail_token.json"
 
 
@@ -113,12 +113,12 @@ def _smtp_fully_configured() -> bool:
 
 
 def is_configured() -> bool:
-    """True, если настроен SMTP (полный триплет) или Gmail OAuth JSON."""
+    """True if SMTP (full triplet) or Gmail OAuth JSON is configured."""
     return is_gmail_oauth_configured() or _smtp_fully_configured()
 
 
 class SMTPConfig(NamedTuple):
-    """Снимок настроек SMTP из окружения (для отправки и будущих провайдеров)."""
+    """Snapshot of SMTP settings from the environment (for sending and future providers)."""
 
     host: str
     port: int
@@ -129,7 +129,7 @@ class SMTPConfig(NamedTuple):
 
 
 def load_smtp_config() -> Optional[SMTPConfig]:
-    """Возвращает конфиг, только если заданы host, user и pass."""
+    """Return the config only if host, user, and pass are all set."""
     if not _smtp_fully_configured():
         return None
     return SMTPConfig(
@@ -143,15 +143,15 @@ def load_smtp_config() -> Optional[SMTPConfig]:
 
 
 def validate_gmail_oauth_env() -> None:
-    """Если задан путь к OAuth JSON — файл должен быть и зависимости установлены."""
+    """If an OAuth JSON path is set, the file must exist and dependencies must be installed."""
     raw = (_gmail_oauth_client_file() or "").strip()
     if not raw:
         return
     path = os.path.abspath(_expanded_path(raw))
     if not os.path.isfile(path):
         raise RuntimeError(
-            f"GMAIL_OAUTH_CREDENTIALS: файл не найден ({path}). "
-            "Укажите путь к JSON для типа Desktop app из Google Cloud Console."
+            f"GMAIL_OAUTH_CREDENTIALS: file not found ({path}). "
+            "Set the path to a Desktop app JSON from Google Cloud Console."
         )
     try:
         from google.oauth2.credentials import Credentials  # noqa: F401
@@ -159,22 +159,22 @@ def validate_gmail_oauth_env() -> None:
         __import__("google_auth_oauthlib.flow")  # InstalledAppFlow
     except ImportError as exc:
         raise RuntimeError(
-            "Включён Gmail API (GMAIL_OAUTH_CREDENTIALS), но нет зависимостей. "
-            "Установите: pip install google-api-python-client "
+            "Gmail API is enabled (GMAIL_OAUTH_CREDENTIALS), but dependencies are missing. "
+            "Install: pip install google-api-python-client "
             "google-auth-httplib2 google-auth-oauthlib"
         ) from exc
     tok = os.path.abspath(_expanded_path(_gmail_token_file()))
     logger.info(
-        "Gmail API: клиентские секреты %s; сохранённый token.json → %s",
+        "Gmail API: client secrets %s; saved token.json → %s",
         path,
         tok,
     )
 
 
 def validate_smtp_env() -> None:
-    """Fail-fast при старте: Gmail OAuth или неполный SMTP в .env; подсказки по Gmail.
+    """Fail-fast at startup: Gmail OAuth or incomplete SMTP in .env; Gmail hints.
 
-    Если ни Gmail JSON, ни SMTP не заданы — молча. При частичном SMTP — ошибка.
+    If neither Gmail JSON nor SMTP is set — stay silent. Partial SMTP raises an error.
     """
     validate_gmail_oauth_env()
 
@@ -188,8 +188,8 @@ def validate_smtp_env() -> None:
 
     if any_set and not all_set:
         raise RuntimeError(
-            "SMTP: укажите все SMTP_HOST, SMTP_USER и SMTP_PASS "
-            "(или оставьте все пустыми — тогда /email_profile недоступен)."
+            "SMTP: set all of SMTP_HOST, SMTP_USER, and SMTP_PASS "
+            "(or leave them all empty — then /email_profile is unavailable)."
         )
 
     if not all_set:
@@ -200,7 +200,7 @@ def validate_smtp_env() -> None:
             int(port_raw)
         except ValueError as exc:
             raise RuntimeError(
-                f"SMTP_PORT должен быть числом, сейчас: {port_raw!r}"
+                f"SMTP_PORT must be a number, currently: {port_raw!r}"
             ) from exc
 
     hl = h.lower()
@@ -209,12 +209,12 @@ def validate_smtp_env() -> None:
         printable = "".join(c for c in cleaned if 32 <= ord(c) < 127)
         if len(printable) < 16:
             logger.warning(
-                "SMTP_PASS короче 16 печатаемых символов — для Gmail обычно "
-                "«Пароль приложения» из 16 символов. Проверьте .env."
+                "SMTP_PASS is shorter than 16 printable characters — Gmail usually "
+                "uses a 16-character App Password. Check .env."
             )
         logger.info(
-            "SMTP: задан Gmail-хост. Лимиты и политика Google для продакшена "
-            "могут быть жёстче — при массовой рассылке смотрите SendGrid/Mailgun."
+            "SMTP: a Gmail host is set. Google production limits and policy "
+            "can be stricter — for bulk mail look at SendGrid/Mailgun."
         )
 
 
@@ -224,20 +224,20 @@ _EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
 
 def validate_email(email: str) -> Tuple[bool, str]:
-    """`(ok, error_message)`. На False сообщает причину."""
+    """`(ok, error_message)`. On False, reports the reason."""
     if not email:
-        return False, "пустой адрес"
+        return False, "empty address"
     addr = email.strip().lower()
     if "@" not in addr:
-        return False, "нет @"
+        return False, "missing @"
     if not _EMAIL_RE.match(addr):
-        return False, "формат не похож на email"
+        return False, "does not look like an email"
     blocked = _blocked_tlds()
     for tld in blocked:
         if addr.endswith(tld):
             return False, (
-                f"домен {tld} запрещён (см. SMTP_BLOCKED_TLDS); "
-                f"используйте международный — gmail/proton/outlook/яндекс"
+                f"domain {tld} is blocked (see SMTP_BLOCKED_TLDS); "
+                f"use an international one — gmail/proton/outlook/yandex"
             )
     return True, ""
 
@@ -247,14 +247,14 @@ def normalize_email(email: str) -> str:
 
 
 def _safe_attachment_segment(name: str) -> str:
-    """Имя файла для вложения: без пробелов и символов, ломающих RFC / Gmail."""
+    """Attachment filename: no spaces or characters that break RFC / Gmail."""
     raw = (name or "client").strip() or "client"
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", raw)
     return (safe[:80] if safe else "client")
 
 
 def _mailbox_only(header_value: str) -> str:
-    """Только адрес e-mail: не-ASCII в display-name (Name <mail>) ломает сериализацию."""
+    """Email address only: non-ASCII in a display-name (Name <mail>) breaks serialization."""
     raw = (header_value or "").strip()
     if not raw:
         return raw
@@ -265,7 +265,7 @@ def _mailbox_only(header_value: str) -> str:
 
 
 def _flatten_rfc822(msg: EmailMessage) -> bytes:
-    """Как smtplib.send_message: shallow copy, без Bcc, CRLF, bytes."""
+    """Like smtplib.send_message: shallow copy, no Bcc, CRLF, bytes."""
     msg_copy = copy.copy(msg)
     for hdr in ("Bcc", "Resent-Bcc"):
         if hdr in msg_copy:
@@ -278,7 +278,7 @@ def _flatten_rfc822(msg: EmailMessage) -> bytes:
 
 
 def _strip_smtp_auth_noise(s: str) -> str:
-    """Убирает типичный мусор из копипаста в .env (BOM, zero-width, NBSP)."""
+    """Strip typical copy-paste junk from .env (BOM, zero-width, NBSP)."""
     if not s:
         return s
     return (
@@ -292,42 +292,42 @@ def _strip_smtp_auth_noise(s: str) -> str:
 
 
 def _smtp_auth_printable_ascii(value: str, label: str) -> Tuple[str, Optional[str]]:
-    """Оставляем символы в диапазоне печатаемого ASCII (как у App Password Google).
+    """Keep characters in the printable ASCII range (same as a Google App Password).
 
-    Убирает невидимый мусор из копипаста; иначе smtplib AUTH PLAIN падает на .encode('ascii').
+    Strips invisible copy-paste junk; otherwise smtplib AUTH PLAIN fails on .encode('ascii').
     """
     raw = _strip_smtp_auth_noise(value or "")
     cleaned = "".join(c for c in raw if 32 <= ord(c) < 127)
     if not cleaned:
         if raw:
             return "", (
-                f"{label}: после очистки не осталось символов — проверьте .env "
-                "(нужен обычный ASCII, без кавычек/пробелов вокруг пароля целиком)."
+                f"{label}: no characters left after cleanup — check .env "
+                "(plain ASCII is required, no quotes/spaces around the whole password)."
             )
-        return "", f"{label}: пусто в .env"
+        return "", f"{label}: empty in .env"
     if cleaned != _strip_smtp_auth_noise(value or ""):
-        logger.warning("%s: удалены непечатаемые/не-ASCII символы (SMTP AUTH)", label)
+        logger.warning("%s: removed non-printable/non-ASCII characters (SMTP AUTH)", label)
     return cleaned, None
 
 
 def _smtp_auth_failure_message(
     exc: smtplib.SMTPAuthenticationError, host: str
 ) -> str:
-    """Подсказка для Telegram: оператор чинит .env без логов."""
+    """Hint for Telegram: the operator can fix .env without reading logs."""
     code = getattr(exc, "smtp_code", None)
     detail = str(exc)
     hl = (host or "").lower()
     if code == 535 and ("gmail" in hl or "google" in hl):
         return (
-            "❌ Gmail не принял логин/пароль (SMTP 535).\n\n"
-            "Проверьте:\n"
-            "1) Используется пароль приложения (не обычный пароль от почты).\n"
-            "   Google → Безопасность → 2FA → Пароли приложений → Почта.\n\n"
-            "2) SMTP_USER совпадает с тем же Gmail, для которого создан пароль.\n\n"
-            "3) Пароль вставлен без пробелов и переносов строк.\n\n"
-            "4) Пароль приложения не устарел (при сомнениях — создайте новый).\n\n"
-            "5) Для Google Workspace SMTP может быть отключён админом.\n\n"
-            f"Ответ сервера: {detail}"
+            "❌ Gmail rejected the login/password (SMTP 535).\n\n"
+            "Check:\n"
+            "1) You are using an App Password (not the regular mailbox password).\n"
+            "   Google → Security → 2FA → App passwords → Mail.\n\n"
+            "2) SMTP_USER matches the same Gmail the App Password was created for.\n\n"
+            "3) The password was pasted without spaces or line breaks.\n\n"
+            "4) The App Password has not expired (if in doubt — create a new one).\n\n"
+            "5) For Google Workspace, SMTP may be disabled by an admin.\n\n"
+            f"Server reply: {detail}"
         )
     return f"SMTP auth error ({code}): {detail}"
 
@@ -339,12 +339,12 @@ def _compose_profile_email_message(
     profiles: Dict[str, Dict],
     qr_images: Optional[Dict[str, bytes]] = None,
 ) -> Tuple[Optional[EmailMessage], str]:
-    """Сборка того же MIME, что отправляется по SMTP или через Gmail API."""
+    """Build the same MIME that is sent over SMTP or via the Gmail API."""
     from_ascii = (_mailbox_only(from_addr) or from_addr.strip()).strip()
     if not from_ascii or "@" not in from_ascii:
         return None, (
-            "Укажите адрес отправителя как простой email (ASCII), "
-            "без локализованного имени в угловых скобках."
+            "Set the sender address as a plain email (ASCII), "
+            "without a localized name in angle brackets."
         )
     qr_images = qr_images or {}
 
@@ -354,21 +354,21 @@ def _compose_profile_email_message(
     msg["From"] = from_ascii
     msg["To"] = normalize_email(to_email)
 
-    profile_word = "профиль" if profile_count == 1 else "профилей"
+    profile_word = "profile" if profile_count == 1 else "profiles"
     body_lines = [
-        "Здравствуйте!",
+        "Hello!",
         "",
-        f"Для Telegram-ID {user_id} подготовлено {profile_count} VPN-{profile_word}.",
+        f"{profile_count} VPN {profile_word} prepared for Telegram-ID {user_id}.",
         "",
-        "Что внутри письма:",
-        "- ниже указаны URI/ссылки для ручного импорта;",
-        "- QR-коды приложены отдельными PNG-файлами;",
-        "- каждый QR соответствует одноимённому профилю.",
+        "What is in this email:",
+        "- URI/links below for manual import;",
+        "- QR codes attached as separate PNG files;",
+        "- each QR matches the profile of the same name.",
         "",
-        "ВАЖНО: эти ссылки и QR дают доступ к VPN. Не пересылайте письмо "
-        "посторонним и не публикуйте QR в открытых чатах.",
+        "IMPORTANT: these links and QRs grant VPN access. Do not forward this email "
+        "to strangers and do not post QRs in public chats.",
         "",
-        "Профили:",
+        "Profiles:",
     ]
     for proto, p in profiles.items():
         name = p.get("client_name", "")
@@ -378,21 +378,21 @@ def _compose_profile_email_message(
             title += f" / {name}"
         body_lines.append("")
         body_lines.append(f"--- {title} ---")
-        body_lines.append(uri or "(URI не сгенерирован)")
+        body_lines.append(uri or "(URI was not generated)")
         body_lines.append("")
     body_lines.extend(
         [
-            "Как подключиться:",
-            "1. Откройте VPN-клиент (Clash Meta / sing-box / v2rayN / "
-            "Streisand / NekoBox / v2box или совместимый клиент).",
-            "2. Импортируйте URI из текста письма или отсканируйте QR из вложения.",
-            "3. Сохраните профиль и подключитесь.",
+            "How to connect:",
+            "1. Open a VPN client (Clash Meta / sing-box / v2rayN / "
+            "Streisand / NekoBox / v2box or a compatible client).",
+            "2. Import the URI from the email text or scan the QR from the attachment.",
+            "3. Save the profile and connect.",
             "",
-            "Если QR не сканируется, скопируйте URI вручную целиком, без пробелов "
-            "и переносов.",
+            "If the QR will not scan, copy the URI by hand in full, with no spaces "
+            "or line breaks.",
             "",
-            "Это письмо — резервная копия. Сообщения с профилями в Telegram могут "
-            "автоудаляться по TTL.",
+            "This email is a backup copy. Telegram messages with profiles may "
+            "auto-delete by TTL.",
         ]
     )
     msg.set_content("\n".join(body_lines), charset="utf-8", cte="base64")
@@ -452,11 +452,11 @@ def _gmail_token_diagnostic(client_secrets_path: str, token_path: str) -> list[s
 
 
 def _ensure_gmail_credentials(client_secrets_path: str, token_path: str) -> Tuple[Optional[object], str]:
-    """Загрузить токен с диска и при необходимости refresh.
+    """Load the token from disk and refresh if needed.
 
-    Первичный OAuth через браузер **на сервере/Docker по умолчанию отключён** (нет GUI).
-    Задайте ``GMAIL_OAUTH_ALLOW_LOCAL_SERVER=1`` только на машине с браузером при отладке.
-    В проде: получите ``gmail_token.json`` на ПК и скопируйте на VPS.
+    Browser-based first-time OAuth **is disabled by default on server/Docker** (no GUI).
+    Set ``GMAIL_OAUTH_ALLOW_LOCAL_SERVER=1`` only on a machine with a browser during debugging.
+    In production: obtain ``gmail_token.json`` on a PC and copy it to the VPS.
     """
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
@@ -501,18 +501,18 @@ def _ensure_gmail_credentials(client_secrets_path: str, token_path: str) -> Tupl
     open_br = _env("GMAIL_OAUTH_OPEN_BROWSER", "").lower() in ("1", "true", "yes")
     if not allow:
         return None, (
-            "Gmail API: нет действующего токена (gmail_token.json отсутствует, пустой или "
-            "не удалось обновить). На сервере без браузера выполните вход на ПК с тем же "
-            "OAuth JSON, затем скопируйте gmail_token.json на VPS в каталог с compose "
-            "(см. POST_DEPLOY §11). Интерактивный OAuth на сервере выключён.\n"
-            f"Диагностика токена: {'; '.join(token_diag)}"
+            "Gmail API: no valid token (gmail_token.json is missing, empty, or "
+            "could not be refreshed). On a server without a browser, sign in on a PC with the same "
+            "OAuth JSON, then copy gmail_token.json to the VPS into the compose directory "
+            "(see POST_DEPLOY §11). Interactive OAuth on the server is disabled.\n"
+            f"Token diagnostics: {'; '.join(token_diag)}"
         )
     if open_br and (Path("/.dockerenv").exists() or _env("DOCKER_CONTAINER")):
         return None, (
-            "Gmail API: включён GMAIL_OAUTH_OPEN_BROWSER=1, но бот запущен в Docker, "
-            "где нет браузера. Уберите GMAIL_OAUTH_ALLOW_LOCAL_SERVER/"
-            "GMAIL_OAUTH_OPEN_BROWSER из .env на VPS и скопируйте готовый "
-            "gmail_token.json, полученный на ПК (см. POST_DEPLOY §11.2)."
+            "Gmail API: GMAIL_OAUTH_OPEN_BROWSER=1 is set, but the bot is running in Docker, "
+            "where there is no browser. Remove GMAIL_OAUTH_ALLOW_LOCAL_SERVER/"
+            "GMAIL_OAUTH_OPEN_BROWSER from .env on the VPS and copy a ready "
+            "gmail_token.json obtained on a PC (see POST_DEPLOY §11.2)."
         )
 
     flow = InstalledAppFlow.from_client_secrets_file(secret_s, scopes)
@@ -528,15 +528,15 @@ def _ensure_gmail_credentials(client_secrets_path: str, token_path: str) -> Tupl
         logger.exception("gmail OAuth run_local_server failed")
         if "browser" in str(exc).lower():
             return None, (
-                "Gmail API: не найден браузер для OAuth. На VPS/Docker не запускайте "
-                "интерактивный вход: получите gmail_token.json на ПК и скопируйте его "
-                "на сервер в путь из GMAIL_TOKEN_PATH (см. POST_DEPLOY §11.2). "
-                "Также удалите GMAIL_OAUTH_ALLOW_LOCAL_SERVER=1 и "
-                "GMAIL_OAUTH_OPEN_BROWSER=1 из серверного .env."
+                "Gmail API: no browser found for OAuth. On VPS/Docker do not run "
+                "interactive sign-in: obtain gmail_token.json on a PC and copy it "
+                "to the server at the path in GMAIL_TOKEN_PATH (see POST_DEPLOY §11.2). "
+                "Also remove GMAIL_OAUTH_ALLOW_LOCAL_SERVER=1 and "
+                "GMAIL_OAUTH_OPEN_BROWSER=1 from the server .env."
             )
         return None, (
-            f"OAuth не удался ({exc}). На VPS положите готовый gmail_token.json с ПК. "
-            "Для ПК без автооткрытия браузера: GMAIL_OAUTH_OPEN_BROWSER=0 и откройте URL из логов."
+            f"OAuth failed ({exc}). Put a ready gmail_token.json from a PC onto the VPS. "
+            "On a PC without auto-opening a browser: GMAIL_OAUTH_OPEN_BROWSER=0 and open the URL from the logs."
         )
 
     token_file.parent.mkdir(parents=True, exist_ok=True)
@@ -555,7 +555,7 @@ def _send_profile_via_gmail_api(
         from googleapiclient.errors import HttpError
     except ImportError:
         return False, (
-            "Нет пакета google-api-python-client. Установите зависимости из requirements.txt."
+            "Package google-api-python-client is missing. Install dependencies from requirements.txt."
         )
 
     client_path = os.path.abspath(_expanded_path(_gmail_oauth_client_file()))
@@ -565,17 +565,17 @@ def _send_profile_via_gmail_api(
     try:
         creds, gerr = _ensure_gmail_credentials(client_path, token_path)
         if creds is None:
-            return False, gerr or "Gmail API: нет учётных данных."
+            return False, gerr or "Gmail API: no credentials."
         service = build("gmail", "v1", credentials=creds, cache_discovery=False)
-        # Токен выдаётся только со scope gmail.send. users.getProfile требует
-        # более широких scope и вернёт 403 insufficientPermissions, поэтому
-        # отправителя явно задаём через GMAIL_FROM.
+        # The token is issued only with the gmail.send scope. users.getProfile needs
+        # a broader scope and would return 403 insufficientPermissions, so
+        # the sender is set explicitly via GMAIL_FROM.
         from_addr = (_env("GMAIL_FROM")).strip().lower()
         if not from_addr or "@" not in from_addr:
             return False, (
-                "Gmail API: задайте GMAIL_FROM в .env (например "
+                "Gmail API: set GMAIL_FROM in .env (for example "
                 "GMAIL_FROM=you@example.com). The gmail.send token does not allow "
-                "автоматически читать профиль аккаунта."
+                "reading the account profile automatically."
             )
 
         msg, cerr = _compose_profile_email_message(
@@ -603,7 +603,7 @@ def _send_profile_via_gmail_api(
         return True, "ok"
     except UnicodeDecodeError as exc:
         logger.error("Gmail raw MIME not ascii: %s", exc)
-        return False, f"сериализация письма для Gmail API: {exc}"
+        return False, f"email serialization for Gmail API: {exc}"
     except HttpError as exc:
         logger.error("Gmail API send failed: %s", exc)
         status = getattr(getattr(exc, "resp", None), "status", "")
@@ -631,25 +631,25 @@ def send_profile_email(
     profiles: Dict[str, Dict],
     qr_images: Optional[Dict[str, bytes]] = None,
 ) -> Tuple[bool, str]:
-    """Отправить пользователю письмо с его VPN-профилями.
+    """Send the user an email with their VPN profiles.
 
-    Если задан ``GMAIL_OAUTH_CREDENTIALS``, используется Gmail API иначе SMTP.
+    If ``GMAIL_OAUTH_CREDENTIALS`` is set, use the Gmail API; otherwise SMTP.
 
     Args:
-        to_email: адрес получателя (валидируется здесь)
-        user_id: Telegram-ID получателя — попадёт в Subject и тело
-        profiles: dict вида `{protocol: {"client_name": str, "uri": str}}`
-        qr_images: опционально dict `{protocol: png_bytes}` — будут
-                   приложены к письму как `qr-<protocol>-<client>.png`
+        to_email: recipient address (validated here)
+        user_id: recipient Telegram ID — goes into Subject and body
+        profiles: dict of the form `{protocol: {"client_name": str, "uri": str}}`
+        qr_images: optional dict `{protocol: png_bytes}` — attached
+                   to the email as `qr-<protocol>-<client>.png`
 
-    Возвращает (ok, message). `message` — `"ok"` или человеческое
-    описание ошибки.
+    Returns (ok, message). `message` is `"ok"` or a human-readable
+    error description.
     """
     ok, err = validate_email(to_email)
     if not ok:
         return False, f"email invalid: {err}"
     if not profiles:
-        return False, "пустой список профилей — нечего отправлять"
+        return False, "empty profile list — nothing to send"
 
     if is_gmail_oauth_configured():
         return _send_profile_via_gmail_api(to_email, user_id, profiles, qr_images)
@@ -657,8 +657,8 @@ def send_profile_email(
     cfg = load_smtp_config()
     if cfg is None:
         return False, (
-            "Почта не настроена: задайте GMAIL_OAUTH_CREDENTIALS "
-            "(JSON OAuth Desktop из Google Cloud) или SMTP_HOST/SMTP_USER/SMTP_PASS."
+            "Mail is not configured: set GMAIL_OAUTH_CREDENTIALS "
+            "(OAuth Desktop JSON from Google Cloud) or SMTP_HOST/SMTP_USER/SMTP_PASS."
         )
 
     from_addr = _mailbox_only(cfg.mail_from_raw) or _mailbox_only(cfg.user_raw)
@@ -668,8 +668,8 @@ def send_profile_email(
     )
     if msg is None:
         return False, cerr or (
-            "Укажите SMTP_USER (и при необходимости SMTP_FROM) как e-mail, "
-            "без локализованного имени в угловых скобках."
+            "Set SMTP_USER (and SMTP_FROM if needed) as an e-mail, "
+            "without a localized name in angle brackets."
         )
 
     host, port, use_tls = cfg.host, cfg.port, cfg.use_tls
@@ -687,7 +687,7 @@ def send_profile_email(
     try:
         def _send_bytes(smtp: smtplib.SMTP) -> None:
             payload = _flatten_rfc822(msg)
-            # Должен быть 7-bit по проводам при base64-теле и ASCII-заголовках.
+            # Must be 7-bit on the wire with a base64 body and ASCII headers.
             payload.decode("ascii")
             refused = smtp.sendmail(from_addr, [normalize_email(to_email)], payload)
             if refused:
@@ -711,10 +711,10 @@ def send_profile_email(
         return False, _smtp_auth_failure_message(exc, host)
     except UnicodeEncodeError as exc:
         logger.error("send_profile_email encoding failed: %s", exc)
-        return False, "Ошибка кодировки письма или SMTP AUTH (нужен печатаемый ASCII в .env)."
+        return False, "Email or SMTP AUTH encoding error (printable ASCII is required in .env)."
     except UnicodeDecodeError as exc:
         logger.error("send_profile_email wire not ascii: %s", exc)
-        return False, f"сериализация письма: {exc}"
+        return False, f"email serialization: {exc}"
     except (smtplib.SMTPException, OSError) as exc:
         logger.error("send_profile_email transport failed: %s", exc)
         return False, f"{type(exc).__name__}: {exc}"
@@ -727,8 +727,8 @@ def send_profile_email(
 
 
 def render_qr_png(text: str) -> Optional[bytes]:
-    """Сгенерировать PNG QR-кода для строки. Возвращает байты или None
-    при ошибке. Использует уже существующую зависимость `qrcode[pil]`."""
+    """Generate a PNG QR code for a string. Returns bytes or None
+    on error. Uses the existing `qrcode[pil]` dependency."""
     try:
         import qrcode  # type: ignore
         from io import BytesIO

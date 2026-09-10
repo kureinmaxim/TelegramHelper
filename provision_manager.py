@@ -1,12 +1,12 @@
 """
-provision_manager.py — единая точка авто-провизионинга клиентов
-для особых пользователей бота во всех включённых протоколах.
+provision_manager.py — single auto-provisioning entry point for
+special bot users across all enabled protocols.
 
 Naming convention:
     <Prefix>_ID<first2>_<last2>
-где first2/last2 — первые/последние 2 цифры Telegram user-ID.
+where first2/last2 are the first/last 2 digits of the Telegram user ID.
 
-Пример: TG-ID 8288584609 + протокол vless → "Vless_ID82_09".
+Example: TG-ID 8288584609 + protocol vless → "Vless_ID82_09".
 
 PROTOCOL_PREFIX:
     vless     → Vless
@@ -17,14 +17,14 @@ PROTOCOL_PREFIX:
     xhttp     → Xh
     mieru     → Mieru
 
-NaiveProxy в провизионинг не входит — single-credentials модель,
-per-user разделение требует серьёзного refactor Caddyfile и не
-решается одним add_client.
+NaiveProxy is not part of provisioning — it is a single-credentials model;
+per-user isolation would need a serious Caddyfile refactor and is not
+solved by a single add_client.
 
-VLESS-Reality поддерживает два источника:
-    1. 3x-ui API, если `/xui_setup` включён.
+VLESS-Reality supports two sources:
+    1. 3x-ui API, if `/xui_setup` is enabled.
     2. Legacy host-Xray (`vless_config.json` + `/usr/local/etc/xray/config.json`),
-       если 3x-ui не настроена, но VLESS включён в `vless_manager`.
+       if 3x-ui is not configured but VLESS is enabled in `vless_manager`.
 """
 
 from typing import Dict, List, Optional
@@ -50,8 +50,8 @@ PROTOCOL_PREFIX: Dict[str, str] = {
     "mieru": "Mieru",
 }
 
-# Менеджеры с уже-готовым add_client/remove_client/get_client/list_clients API.
-# VLESS обрабатывается отдельно: сначала 3x-ui, затем legacy host-Xray.
+# Managers that already expose add_client/remove_client/get_client/list_clients.
+# VLESS is handled separately: 3x-ui first, then legacy host-Xray.
 _SIMPLE_MANAGERS = {
     "hysteria2": hysteria2_manager,
     "mtproto": mtproto_manager,
@@ -63,7 +63,7 @@ _SIMPLE_MANAGERS = {
 
 
 def _xui_enabled() -> bool:
-    """True, если VLESS должен провижениться через 3x-ui REST API."""
+    """True if VLESS should be provisioned via the 3x-ui REST API."""
     try:
         import xui_manager
         return bool(xui_manager.is_enabled())
@@ -73,7 +73,7 @@ def _xui_enabled() -> bool:
 
 
 def _legacy_vless_enabled() -> bool:
-    """True, если VLESS доступен через legacy `vless_manager`/host-Xray."""
+    """True if VLESS is available via legacy `vless_manager`/host-Xray."""
     try:
         return bool(vless_manager.is_vless_enabled())
     except Exception as exc:
@@ -85,7 +85,7 @@ def _legacy_vless_enabled() -> bool:
 
 
 def make_client_name(protocol: str, telegram_id: int) -> str:
-    """Канонизированное имя клиента: <Prefix>_ID<first2>_<last2>."""
+    """Canonical client name: <Prefix>_ID<first2>_<last2>."""
     prefix = PROTOCOL_PREFIX.get(protocol)
     if not prefix:
         raise ValueError(f"unknown protocol for naming: {protocol}")
@@ -96,9 +96,9 @@ def make_client_name(protocol: str, telegram_id: int) -> str:
 
 
 def legacy_client_name(protocol: str, telegram_id: int) -> str:
-    """Старое имя /user-flow: ``Vless52...49``, ``Hysteria252...49``.
+    """Old /user-flow name: ``Vless52...49``, ``Hysteria252...49``.
 
-    В имени действительно три точки — так исторически строил handlers.
+    The name really does contain three dots — that is how handlers built it historically.
     """
     legacy_prefix = {
         "vless": "Vless",
@@ -117,7 +117,7 @@ def legacy_client_name(protocol: str, telegram_id: int) -> str:
 
 
 def client_name_candidates(protocol: str, telegram_id: int) -> List[str]:
-    """Канон + legacy (+ full-id варианты) для поиска уже выданных клиентов."""
+    """Canonical + legacy (+ full-id variants) for finding already issued clients."""
     names: List[str] = []
     try:
         names.append(make_client_name(protocol, telegram_id))
@@ -129,7 +129,7 @@ def client_name_candidates(protocol: str, telegram_id: int) -> List[str]:
             names.append(legacy)
     except ValueError:
         pass
-    # Иногда клиент заводили с полным TG-ID в хвосте.
+    # Sometimes the client was created with the full TG-ID as a suffix.
     s = str(int(telegram_id))
     full_prefix = {
         "vless": "Vless",
@@ -148,15 +148,15 @@ def client_name_candidates(protocol: str, telegram_id: int) -> List[str]:
 
 
 def list_enabled_protocols() -> List[str]:
-    """Список ключей протоколов, у которых is_enabled() == True.
+    """Protocol keys whose is_enabled() is True.
 
-    Порядок: vless, hysteria2, mtproto, tuic, anytls, xhttp, mieru.
+    Order: vless, hysteria2, mtproto, tuic, anytls, xhttp, mieru.
     """
     enabled: List[str] = []
-    # VLESS: сначала 3x-ui, иначе legacy host-Xray.
+    # VLESS: 3x-ui first, otherwise legacy host-Xray.
     if _xui_enabled() or _legacy_vless_enabled():
         enabled.append("vless")
-    # Простые менеджеры
+    # Simple managers
     for proto in ("hysteria2", "mtproto", "tuic", "anytls", "xhttp", "mieru"):
         mgr = _SIMPLE_MANAGERS.get(proto)
         if not mgr:
@@ -172,7 +172,7 @@ def list_enabled_protocols() -> List[str]:
 
 
 def _gen_uri(protocol: str, client_name: str, client_dict: Dict) -> str:
-    """Сгенерировать URI/ссылку для клиента, если у менеджера есть метод."""
+    """Generate a URI/link for the client if the manager has a method for it."""
     try:
         if protocol == "vless":
             ok, _msg, uri = vless_manager.generate_client_link(client_name)
@@ -217,7 +217,7 @@ def _apply_legacy_vless_runtime(message: str) -> tuple[bool, str]:
 
 
 def _legacy_vless_provision(client_name: str) -> Dict:
-    """Идемпотентно создать/найти VLESS-клиента в legacy host-Xray."""
+    """Idempotently create/find a VLESS client in legacy host-Xray."""
     existing = None
     try:
         existing = vless_manager.get_client(client_name)
@@ -264,7 +264,7 @@ def _legacy_vless_provision(client_name: str) -> Dict:
 
 
 def _legacy_vless_profile(client_name: str) -> Dict:
-    """Read-only lookup VLESS-клиента в legacy host-Xray."""
+    """Read-only lookup of a VLESS client in legacy host-Xray."""
     existing = None
     try:
         existing = vless_manager.get_client(client_name)
@@ -283,7 +283,7 @@ def _legacy_vless_profile(client_name: str) -> Dict:
 
 
 def _legacy_vless_clean(client_name: str) -> Dict:
-    """Удалить canonical VLESS-клиента из legacy host-Xray и применить конфиг."""
+    """Remove the canonical VLESS client from legacy host-Xray and apply the config."""
     try:
         existing = vless_manager.get_client(client_name)
     except Exception:
@@ -318,12 +318,12 @@ def provision_user(
     telegram_id: int,
     enabled_protocols: Optional[List[str]] = None,
 ) -> Dict[str, Dict]:
-    """Провизионит клиентов для одного TG-ID во всех включённых протоколах.
+    """Provision clients for one TG-ID across all enabled protocols.
 
-    Идемпотентно: если клиент с таким канон-именем уже есть, не дублирует
-    и возвращает существующий.
+    Idempotent: if a client with this canonical name already exists, do not
+    duplicate it and return the existing one.
 
-    Возвращает {protocol: {ok, message, client_name, uri, existed}}.
+    Returns {protocol: {ok, message, client_name, uri, existed}}.
     """
     out: Dict[str, Dict] = {}
     protocols = list(enabled_protocols) if enabled_protocols is not None else list_enabled_protocols()
@@ -350,7 +350,7 @@ def provision_user(
                 out[proto] = _legacy_vless_provision(client_name)
             continue
         mgr = _SIMPLE_MANAGERS[proto]
-        # сначала проверим, есть ли уже
+        # check first whether it already exists
         existing = None
         try:
             existing = mgr.get_client(client_name)
@@ -378,7 +378,7 @@ def provision_user(
                 "existed": True,
             }
             continue
-        # создаём нового
+        # create a new one
         try:
             ok, msg, client = mgr.add_client(name=client_name)
         except Exception as exc:
@@ -401,13 +401,13 @@ def provision_user(
 
 
 def profiles_for_user(telegram_id: int) -> Dict[str, Dict]:
-    """Read-only вариант provision_user — только показать что есть.
+    """Read-only variant of provision_user — only show what already exists.
 
-    Возвращает {protocol: {exists, client_name, uri}}.
+    Returns {protocol: {exists, client_name, uri}}.
 
-    Ищет не только канон ``Vless_ID52_49`` / ``Hys_ID52_49``, но и legacy
-    имена, под которыми ссылки могли работать раньше — иначе `/profiles`
-    врёт «нет», хотя клиент жив.
+    Looks up not only canonical ``Vless_ID52_49`` / ``Hys_ID52_49`` but also
+    legacy names that older links used — otherwise `/profiles` reports
+    "none" while the client is still alive.
     """
     out: Dict[str, Dict] = {}
     for proto in list_enabled_protocols():
@@ -433,7 +433,7 @@ def profiles_for_user(telegram_id: int) -> Dict[str, Dict]:
                     "source": "xui",
                 }
             else:
-                # legacy host-Xray: первое найденное имя из кандидатов
+                # legacy host-Xray: first matching name among candidates
                 found_profile = None
                 for name in candidates:
                     found_profile = _legacy_vless_profile(name)
@@ -472,12 +472,12 @@ def profiles_for_user(telegram_id: int) -> Dict[str, Dict]:
 
 
 def clean_user(telegram_id: int) -> Dict[str, Dict]:
-    """Удалить bot-managed клиентов с канон-именами для этого TG-ID.
+    """Remove bot-managed clients with canonical names for this TG-ID.
 
-    Безопасно: ищет по точному канон-имени, ручные клиенты с другими
-    именами не трогаются.
+    Safe: looks up the exact canonical name; manual clients with other
+    names are left untouched.
 
-    Возвращает {protocol: {ok, message, client_name, removed}}.
+    Returns {protocol: {ok, message, client_name, removed}}.
     """
     out: Dict[str, Dict] = {}
     for proto in list_enabled_protocols():
@@ -486,7 +486,7 @@ def clean_user(telegram_id: int) -> Dict[str, Dict]:
             if _xui_enabled():
                 try:
                     import xui_manager
-                    # Сначала проверим существование, чтобы знать removed=True/False
+                    # Check existence first so we know removed=True/False
                     exists, _msg, _uri = xui_manager.find_named_client_uri(client_name)
                     if not exists:
                         out[proto] = {

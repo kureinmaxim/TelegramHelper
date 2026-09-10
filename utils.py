@@ -2,9 +2,9 @@
 Utility functions for the Telegram bot (Lite version).
 """
 
-# Аннотации не вычисляются при импорте: без этого `-> Optional[OpenAI]`
-# роняет import utils на машинах без пакета openai (NameError), хотя
-# graceful degradation через OPENAI_AVAILABLE предусмотрен.
+# Annotations are not evaluated at import: without this, `-> Optional[OpenAI]`
+# raises NameError on machines without the openai package, even though
+# graceful degradation via OPENAI_AVAILABLE is in place.
 from __future__ import annotations
 
 import os
@@ -202,42 +202,42 @@ def clean_text(text: str, max_length: int = 4096) -> str:
 
 _DEFAULT_PROMPT_TEMPLATES: Dict[str, Dict[str, str]] = {
     "science": {
-        "title": "Научный запрос",
+        "title": "Scientific query",
         "template": (
-            "Ты выступаешь как научный ассистент. Сформулируй структурированный ответ на запрос.\n"
-            "Запрос: {input}\n"
-            "Требования: кратко, по разделам (Вводные, Ключевые факты, Источники/направления для проверки)."
+            "You are a scientific assistant. Write a structured answer to the query.\n"
+            "Query: {input}\n"
+            "Requirements: concise, by sections (Background, Key facts, Sources/leads to verify)."
         ),
     },
     "fiction": {
-        "title": "Художественная литература",
+        "title": "Fiction",
         "template": (
-            "Ты литературный автор. Напиши фрагмент в выбранном жанре.\n"
-            "Тема/завязка: {input}\n"
-            "Пожелания: образность, выразительный язык, хук в конце."
+            "You are a literary author. Write a fragment in the chosen genre.\n"
+            "Theme/setup: {input}\n"
+            "Preferences: imagery, expressive language, a hook at the end."
         ),
     },
     "programming": {
-        "title": "Программирование",
+        "title": "Programming",
         "template": (
-            "Ты опытный разработчик. Объясни и/или предложи решение.\n"
-            "Задача/контекст: {input}\n"
-            "Требования: четкие шаги, примеры кода, тесты."
+            "You are an experienced developer. Explain and/or propose a solution.\n"
+            "Task/context: {input}\n"
+            "Requirements: clear steps, code examples, tests."
         ),
     },
     "creativity": {
-        "title": "Творчество/Brainstorm",
+        "title": "Creativity/Brainstorm",
         "template": (
-            "Сгенерируй 10 идей по теме: {input}\n"
-            "Добавь краткие пояснения и возможные первые шаги."
+            "Generate 10 ideas on the topic: {input}\n"
+            "Add brief notes and possible first steps."
         ),
     },
     "debunk": {
-        "title": "Разоблачение фейков",
+        "title": "Debunking fakes",
         "template": (
-            "Структурируй проверку утверждения.\n"
-            "Утверждение: {input}\n"
-            "Структура: Claim → Факты/источники → Контраргументы → Вывод."
+            "Structure a fact-check of the claim.\n"
+            "Claim: {input}\n"
+            "Structure: Claim → Facts/sources → Counterarguments → Conclusion."
         ),
     },
 }
@@ -336,7 +336,7 @@ _MODEL_CACHE = {}
 _MODEL_CACHE_TTL = 3600  # 1 hour in seconds
 
 def _read_model_from_env_file(key: str, default: str) -> str:
-    """Читает модель напрямую из .env файла (для синхронизации между контейнерами)."""
+    """Read the model name directly from the .env file (container sync)."""
     try:
         env_path = ".env"
         if os.path.exists(env_path):
@@ -352,10 +352,10 @@ def _read_model_from_env_file(key: str, default: str) -> str:
 def get_current_model(provider: str) -> str:
     """Get the currently selected model for a provider.
     
-    Приоритет:
-    1. Переменная в памяти (установленная через /ch_model)
-    2. Модель из .env файла (для синхронизации между контейнерами)
-    3. Значение по умолчанию
+    Priority:
+    1. In-memory variable (set via /ch_model)
+    2. Model from .env (container sync)
+    3. Default value
     """
     if provider == "openai":
         if _CURRENT_OPENAI_MODEL:
@@ -381,14 +381,14 @@ def set_current_model(provider: str, model: str) -> bool:
     else:
         return False
     
-    # Сохраняем в .env для синхронизации между контейнерами
+    # Persist to .env so containers stay in sync
     try:
         env_path = ".env"
         if os.path.exists(env_path):
             with open(env_path, 'r', encoding='utf-8') as f:
                 lines = f.readlines()
             
-            # Ищем и обновляем или добавляем
+            # Update or append
             found = False
             new_lines = []
             for line in lines:
@@ -404,13 +404,13 @@ def set_current_model(provider: str, model: str) -> bool:
             with open(env_path, 'w', encoding='utf-8') as f:
                 f.writelines(new_lines)
             
-            # Также обновляем переменную окружения текущего процесса
+            # Also update the current process environment
             os.environ[env_key] = model
             logger.info(f"Model {model} saved to .env for {provider}")
     except Exception as e:
         logger.warning(f"Could not save model to .env: {e}")
     
-    return True  # Успешно установили модель
+    return True  # Model set successfully
 
 def get_available_models(provider: str) -> List[str]:
     """Get list of available models for a provider with caching and filtering."""
@@ -488,9 +488,9 @@ def get_openai_completion(
     Get completion from OpenAI API.
     
     Args:
-        prompt: Текст запроса
-        max_tokens: Максимальное количество токенов в ответе
-        conversation_history: История беседы в формате [{"role": "user|assistant", "content": "..."}]
+        prompt: Prompt text
+        max_tokens: Max tokens in the response
+        conversation_history: History as [{"role": "user|assistant", "content": "..."}]
     """
     client = get_openai_client()
     if not client:
@@ -498,16 +498,16 @@ def get_openai_completion(
     
     model = get_current_model("openai")
     
-    # Формируем список сообщений
+    # Build message list
     messages = [
-        {"role": "system", "content": "Ты полезный ассистент. Отвечай кратко и по существу."}
+        {"role": "system", "content": "You are a helpful assistant. Answer concisely and to the point."}
     ]
     
-    # Добавляем историю беседы, если есть
+    # Append conversation history if present
     if conversation_history:
         messages.extend(conversation_history)
     
-    # Добавляем текущий запрос
+    # Append the current prompt
     messages.append({"role": "user", "content": prompt})
     
     try:
@@ -567,34 +567,34 @@ def get_anthropic_completion(
     Get completion from Anthropic Claude via Messages API.
     
     Args:
-        prompt: Текст запроса
-        max_tokens: Максимальное количество токенов в ответе
-        conversation_history: История беседы в формате [{"role": "user|assistant", "content": "..."}]
+        prompt: Prompt text
+        max_tokens: Max tokens in the response
+        conversation_history: History as [{"role": "user|assistant", "content": "..."}]
     """
     if not ANTHROPIC_AVAILABLE:
         logger.error("Anthropic package not available")
-        return "Ошибка: библиотека Anthropic не установлена"
+        return "Error: Anthropic library is not installed"
 
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         logger.warning("ANTHROPIC_API_KEY not set")
-        return "Ошибка: API ключ Anthropic не настроен"
+        return "Error: Anthropic API key is not configured"
 
     model = get_current_model("anthropic")
     logger.info(f"Using Anthropic model: {model}")
 
     client = get_anthropic_client()
     if client is None:
-        return "Ошибка при инициализации клиента Anthropic. Проверьте настройки."
+        return "Error initializing Anthropic client. Check settings."
 
-    # Формируем список сообщений
+    # Build message list
     messages = []
     
-    # Добавляем историю беседы, если есть
+    # Append conversation history if present
     if conversation_history:
         messages.extend(conversation_history)
     
-    # Добавляем текущий запрос
+    # Append the current prompt
     messages.append({"role": "user", "content": prompt})
 
     try:
@@ -615,17 +615,17 @@ def get_anthropic_completion(
         if isinstance(content, str) and content.strip():
             return content
 
-        return "Не удалось извлечь текст из ответа Anthropic"
+        return "Could not extract text from Anthropic response"
     except Exception as e:
         err_text = str(e)
         logger.error(f"Anthropic API error: {err_text}")
         # Helpful hint for common httpx 0.28+ incompatibility
         if "unexpected keyword argument 'proxies'" in err_text:
             return (
-                "Ошибка Anthropic: несовместимость версий httpx/anthropic. "
-                "Закрепите httpx<0.28 (например, 0.27.2) и переустановите зависимости."
+                "Anthropic error: httpx/anthropic version mismatch. "
+                "Pin httpx<0.28 (e.g. 0.27.2) and reinstall dependencies."
             )
-        return f"Ошибка при использовании API Anthropic: {err_text}"
+        return f"Error using Anthropic API: {err_text}"
 
 def get_app_version() -> Dict[str, str]:
     """
@@ -646,12 +646,12 @@ def get_app_version() -> Dict[str, str]:
             except ImportError:
                 logger.warning("tomllib/tomli not available, cannot read pyproject.toml")
             return {
-                "version": "Неизвестно",
+                "version": "Unknown",
                 "name": "TelegramHelper",
                 "description": "",
-                "release_date": "Неизвестно",
-                "developer": "Неизвестно",
-                "last_updated": "Неизвестно",
+                "release_date": "Unknown",
+                "developer": "Unknown",
+                "last_updated": "Unknown",
             }
     
     try:
@@ -668,12 +668,12 @@ def get_app_version() -> Dict[str, str]:
             else:
                 logger.warning("pyproject.toml not found")
                 return {
-                    "version": "Неизвестно",
+                    "version": "Unknown",
                     "name": "TelegramHelper",
                     "description": "",
-                    "release_date": "Неизвестно",
-                    "developer": "Неизвестно",
-                    "last_updated": "Неизвестно",
+                    "release_date": "Unknown",
+                    "developer": "Unknown",
+                    "last_updated": "Unknown",
                 }
         
         with open(pyproject_path, "rb") as f:
@@ -683,23 +683,23 @@ def get_app_version() -> Dict[str, str]:
         metadata = data.get("tool", {}).get("telegramhelper", {}).get("metadata", {})
         
         return {
-            "version": project_data.get("version", "Неизвестно"),
+            "version": project_data.get("version", "Unknown"),
             "name": project_data.get("name", "TelegramHelper"),
             "description": project_data.get("description", ""),
-            "release_date": metadata.get("release_date", "Неизвестно"),
-            "developer": metadata.get("developer", "Неизвестно"),
-            "last_updated": metadata.get("last_updated", "Неизвестно"),
+            "release_date": metadata.get("release_date", "Unknown"),
+            "developer": metadata.get("developer", "Unknown"),
+            "last_updated": metadata.get("last_updated", "Unknown"),
         }
         
     except Exception as e:
         logger.error(f"Error reading pyproject.toml: {e}")
         return {
-            "version": "Ошибка чтения",
+            "version": "Read error",
             "name": "TelegramHelper",
             "description": "",
-            "release_date": "Ошибка чтения",
-            "developer": "Ошибка чтения",
-            "last_updated": "Ошибка чтения",
+            "release_date": "Read error",
+            "developer": "Read error",
+            "last_updated": "Read error",
         }
 
 def split_long_text(text: str, max_length: int = 4000) -> List[str]:
@@ -710,26 +710,26 @@ def split_long_text(text: str, max_length: int = 4000) -> List[str]:
     chunks = []
     current_chunk = ""
     
-    # Разбиваем по строкам, чтобы не обрывать вопросы на полуслове
+    # Split by lines so questions are not cut mid-word
     lines = text.split('\n')
     
     for line in lines:
-        # Если добавление этой строки превысит лимит
+        # Adding this line would exceed the limit
         if len(current_chunk) + len(line) + 1 > max_length:
             if current_chunk:
                 chunks.append(current_chunk.strip())
                 current_chunk = line
             else:
-                # Если одна строка слишком длинная, разбиваем её
+                # Single line too long: split it
                 if len(line) > max_length:
-                    # Ищем хорошее место для разрыва (точка, запятая, двоеточие)
+                    # Prefer a break at punctuation (. , : ; ! ?)
                     for i in range(max_length, max(0, max_length - 100), -1):
                         if line[i] in '.!?:;':
                             chunks.append(line[:i+1])
                             current_chunk = line[i+1:]
                             break
                     else:
-                        # Если не нашли хорошее место, разбиваем по словам
+                        # No good break: split on words
                         words = line.split()
                         temp_chunk = ""
                         for word in words:
@@ -738,7 +738,7 @@ def split_long_text(text: str, max_length: int = 4000) -> List[str]:
                                     chunks.append(temp_chunk.strip())
                                     temp_chunk = word
                                 else:
-                                    # Если одно слово слишком длинное, разбиваем по символам
+                                    # One word too long: split by characters
                                     chunks.append(word[:max_length])
                                     temp_chunk = word[max_length:]
                             else:
@@ -750,7 +750,7 @@ def split_long_text(text: str, max_length: int = 4000) -> List[str]:
         else:
             current_chunk += "\n" + line if current_chunk else line
     
-    # Добавляем последний чанк
+    # Append the last chunk
     if current_chunk:
         chunks.append(current_chunk.strip())
     
@@ -854,7 +854,7 @@ def detect_language(text: str) -> str:
                 return code
         except Exception:
             pass
-    cyrillic = sum(1 for ch in text.lower() if "а" <= ch <= "я" or ch == "ё")
+    cyrillic = sum(1 for ch in text.lower() if "\u0430" <= ch <= "\u044f" or ch == "\u0451")
     if cyrillic >= max(3, len(text) // 8):
         return "ru"
     return "en"

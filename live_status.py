@@ -1,27 +1,27 @@
 # -*- coding: utf-8 -*-
 """
-Лайв-проверки статуса транспорт-протоколов и Docker-контейнеров.
+Live status checks for transport protocols and Docker containers.
 
-Этот модуль собирает реальный статус сервисов (xray, hysteria-server,
-caddy-naive, mtproto-proxy, sing-box, dockhand-контейнер) на хосте
-TelegramHelper — независимо от флагов `enabled` в JSON-конфигах транспорт-
-менеджеров. Используется в `/start` и админских командах диагностики,
-чтобы было видно реальное состояние, а не только запись в JSON.
+This module collects the real status of services (xray, hysteria-server,
+caddy-naive, mtproto-proxy, sing-box, the dockhand container) on the
+TelegramHelper host — independently of `enabled` flags in the transport
+managers' JSON configs. Used by `/start` and admin diagnostic commands
+so operators see the real state, not only what is written in JSON.
 
-Архитектура:
+Architecture:
 
-* Бот живёт в Docker-контейнере `telegram-helper-lite`. В `compose.yaml`
-  у него `pid: host` и `privileged: true`, поэтому из контейнера видны
-  все хост-процессы по `/proc`.
-* Сетевой namespace у контейнера свой (нет `network_mode: host`), но мы
-  читаем `/proc/1/net/{tcp,tcp6,udp,udp6}` — это netns хост-init'а,
-  то есть реальный сетевой стек VPS. С `privileged: true` это работает.
-* Контейнер `dockhand` опрашиваем через смонтированный `/var/run/docker.sock`
-  без сторонних зависимостей.
-* Никаких внешних бинарников (`ss`, `pgrep`, `docker`) не требуется.
+* The bot runs in the `telegram-helper-lite` Docker container. In `compose.yaml`
+  it has `pid: host` and `privileged: true`, so host processes are visible
+  from the container via `/proc`.
+* The container has its own network namespace (no `network_mode: host`), but we
+  read `/proc/1/net/{tcp,tcp6,udp,udp6}` — that is the host-init netns,
+  i.e. the real VPS network stack. With `privileged: true` this works.
+* The `dockhand` container is queried via the mounted `/var/run/docker.sock`
+  with no third-party dependencies.
+* No external binaries (`ss`, `pgrep`, `docker`) are required.
 
-Все функции рассчитаны на использование из event-loop'а телеграм-бота —
-блокирующий I/O минимален (read /proc файлов, короткий unix-socket запрос).
+All functions are meant to be used from the Telegram bot event loop —
+blocking I/O is minimal (read /proc files, a short unix-socket request).
 """
 
 from __future__ import annotations
@@ -38,14 +38,14 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 logger = logging.getLogger(__name__)
 
 
-# === Кеш ===
-# Лёгкий TTL-кеш — чтобы /start не дёргал /proc и docker.sock на каждый клик.
+# === Cache ===
+# Light TTL cache — so /start does not hit /proc and docker.sock on every tap.
 _CACHE: Dict[str, Tuple[float, object]] = {}
 _DEFAULT_TTL = float(os.getenv("TELEGRAMHELPER_LIVE_TTL", "3.0"))
 
 
 def _cached(key: str, ttl: float, fn):
-    """Простой in-process TTL-кеш."""
+    """Simple in-process TTL cache."""
     now = time.monotonic()
     entry = _CACHE.get(key)
     if entry is not None:
@@ -57,27 +57,27 @@ def _cached(key: str, ttl: float, fn):
     return value
 
 
-# === Низкоуровневые проверки ===
+# === Low-level checks ===
 
 def _proc_path(*parts: str) -> str:
-    """Путь внутри /proc, переопределяемый через PROC_PATH (для тестов)."""
+    """Path inside /proc, overridable via PROC_PATH (for tests)."""
     base = os.getenv("PROC_PATH", "/proc")
     return os.path.join(base, *parts)
 
 
-# /proc/net/tcp использует поле st = состояние сокета.
-# 0A (= 10 dec) — TCP_LISTEN. Для UDP всё, что в /proc/net/udp с локальным
-# адресом, считаем «слушает» — у UDP нет состояния LISTEN.
+# /proc/net/tcp uses field st = socket state.
+# 0A (= 10 dec) — TCP_LISTEN. For UDP, anything in /proc/net/udp with a local
+# address is treated as "listening" — UDP has no LISTEN state.
 _TCP_LISTEN_STATE = "0A"
 
 
 def _parse_listen_ports(net_file: str, is_tcp: bool) -> Set[int]:
     """
-    Распарсить /proc/net/{tcp,tcp6,udp,udp6} и вернуть множество слушающих портов.
+    Parse /proc/net/{tcp,tcp6,udp,udp6} and return the set of listening ports.
 
-    Формат строки (man 5 proc):
+    Line format (man 5 proc):
         sl  local_address rem_address   st tx_queue:rx_queue ...
-    local_address — это `IP:PORT` в HEX, port — последние 4 hex-символа.
+    local_address is `IP:PORT` in HEX; port is the last 4 hex characters.
     """
     ports: Set[int] = set()
     try:
@@ -91,7 +91,7 @@ def _parse_listen_ports(net_file: str, is_tcp: bool) -> Set[int]:
                 state = parts[3]
                 if is_tcp and state != _TCP_LISTEN_STATE:
                     continue
-                # local_addr вида "0100007F:1F40" → port = 0x1F40 = 8000
+                # local_addr like "0100007F:1F40" → port = 0x1F40 = 8000
                 _, _, hex_port = local_addr.rpartition(":")
                 if not hex_port:
                     continue
@@ -111,12 +111,12 @@ def _parse_listen_ports(net_file: str, is_tcp: bool) -> Set[int]:
 
 def _host_listen_ports() -> Dict[str, Set[int]]:
     """
-    Собрать слушающие порты в host-netns.
+    Collect listening ports in the host netns.
 
-    Сначала пробуем netns хост-init'а через /proc/1/net/* (контейнер
-    с pid=host видит хост-PID 1). Если по каким-то причинам файлы
-    недоступны — fallback на /proc/net/* (это netns текущего контейнера,
-    бесполезен для VPS, но даёт хоть какой-то ответ при локальной разработке).
+    First try the host-init netns via /proc/1/net/* (a pid=host container
+    sees host PID 1). If those files are unavailable for any reason —
+    fall back to /proc/net/* (the current container netns; useless on a VPS,
+    but gives some answer during local development).
     """
     candidates: List[Tuple[str, str, str, str]] = [
         (
@@ -142,12 +142,12 @@ def _host_listen_ports() -> Dict[str, Set[int]]:
 
 
 def host_listen_ports(ttl: float = _DEFAULT_TTL) -> Dict[str, Set[int]]:
-    """Кешированная обёртка над _host_listen_ports()."""
+    """Cached wrapper around _host_listen_ports()."""
     return _cached("listen_ports", ttl, _host_listen_ports)
 
 
 def is_port_listening(port: int, proto: str = "tcp", ttl: float = _DEFAULT_TTL) -> bool:
-    """Слушает ли указанный порт хоть какой-то процесс на хосте?"""
+    """Is the given port listened on by any process on the host?"""
     if not isinstance(port, int) or port <= 0:
         return False
     proto = proto.lower()
@@ -156,7 +156,7 @@ def is_port_listening(port: int, proto: str = "tcp", ttl: float = _DEFAULT_TTL) 
     return port in host_listen_ports(ttl).get(proto, set())
 
 
-# === Поиск процессов ===
+# === Process lookup ===
 
 @dataclass(frozen=True)
 class ProcInfo:
@@ -176,7 +176,7 @@ def _read_first_line(path: str) -> str:
 
 
 def _read_cmdline(pid_str: str) -> str:
-    """Прочитать полный cmdline процесса (NUL → пробел)."""
+    """Read the full process cmdline (NUL → space)."""
     try:
         with open(_proc_path(pid_str, "cmdline"), "rb") as f:
             raw = f.read()
@@ -189,11 +189,11 @@ def _read_cmdline(pid_str: str) -> str:
 
 def _read_proc_exe(pid: int) -> str:
     """
-    Вернуть путь к исполняемому файлу процесса через `/proc/<pid>/exe`.
+    Return the process executable path via `/proc/<pid>/exe`.
 
-    Полезно, чтобы отличить, например, `/usr/local/bin/caddy-naive` от
-    обычного `/usr/bin/caddy`, если cmdline это не однозначно определяет.
-    Возвращает пустую строку при любой ошибке.
+    Useful to tell `/usr/local/bin/caddy-naive` from a regular
+    `/usr/bin/caddy` when cmdline is ambiguous.
+    Returns an empty string on any error.
     """
     try:
         return os.readlink(_proc_path(str(pid), "exe"))
@@ -202,7 +202,7 @@ def _read_proc_exe(pid: int) -> str:
 
 
 def _file_exists_and_readable(path: str) -> bool:
-    """Без побочных эффектов: проверить, что файл существует и доступен на чтение."""
+    """Side-effect free: check that the file exists and is readable."""
     try:
         return os.path.isfile(path) and os.access(path, os.R_OK)
     except OSError:
@@ -211,10 +211,10 @@ def _file_exists_and_readable(path: str) -> bool:
 
 def _file_contains(path: str, needle: str, max_bytes: int = 65536) -> bool:
     """
-    Дешёвая проверка: содержит ли первые `max_bytes` файла подстроку.
+    Cheap check: whether the first `max_bytes` of the file contain a substring.
 
-    Используется для подтверждения, что Caddyfile — именно NaiveProxy
-    (содержит `forward_proxy`), а не обычный Caddy-вебсервер.
+    Used to confirm the Caddyfile is NaiveProxy
+    (contains `forward_proxy`), not a regular Caddy web server.
     """
     try:
         with open(path, "rb") as f:
@@ -225,7 +225,7 @@ def _file_contains(path: str, needle: str, max_bytes: int = 65536) -> bool:
 
 
 def _iter_processes() -> Iterable[ProcInfo]:
-    """Перебрать все процессы в host-PID-namespace (контейнер с pid=host)."""
+    """Iterate all processes in the host PID namespace (pid=host container)."""
     base = _proc_path()
     try:
         entries = os.listdir(base)
@@ -236,7 +236,7 @@ def _iter_processes() -> Iterable[ProcInfo]:
             continue
         cmdline = _read_cmdline(entry)
         if not cmdline:
-            # ядерные/zombie-процессы — пропускаем
+            # kernel/zombie processes — skip
             continue
         comm = _read_first_line(_proc_path(entry, "comm"))
         try:
@@ -250,16 +250,16 @@ def _scan_processes() -> List[ProcInfo]:
 
 
 def all_processes(ttl: float = _DEFAULT_TTL) -> List[ProcInfo]:
-    """Кешированная выгрузка всех процессов хоста."""
+    """Cached dump of all host processes."""
     return _cached("processes", ttl, _scan_processes)
 
 
 def find_processes(*needles: str, ttl: float = _DEFAULT_TTL) -> List[ProcInfo]:
     """
-    Найти процессы, чей cmdline или comm содержат любой из needle (case-insensitive).
+    Find processes whose cmdline or comm contains any needle (case-insensitive).
 
-    Используем подстрочный поиск, чтобы покрыть варианты бинарника
-    (например, `xray` vs `xray-linux-amd64`, `hysteria` vs `hysteria-amd64`).
+    Substring search so binary name variants are covered
+    (e.g. `xray` vs `xray-linux-amd64`, `hysteria` vs `hysteria-amd64`).
     """
     if not needles:
         return []
@@ -277,7 +277,7 @@ def is_process_running(*needles: str, ttl: float = _DEFAULT_TTL) -> bool:
     return bool(find_processes(*needles, ttl=ttl))
 
 
-# === Docker через unix-socket ===
+# === Docker via unix-socket ===
 
 _DOCKER_SOCKET_CANDIDATES = (
     "/var/run/docker.sock",
@@ -286,7 +286,7 @@ _DOCKER_SOCKET_CANDIDATES = (
 
 
 class _UnixHTTPConnection(http.client.HTTPConnection):
-    """HTTPConnection поверх AF_UNIX. Без сторонних зависимостей."""
+    """HTTPConnection over AF_UNIX. No third-party dependencies."""
 
     def __init__(self, unix_path: str, timeout: float = 2.0):
         super().__init__("localhost", timeout=timeout)
@@ -311,11 +311,11 @@ def _docker_socket_path() -> Optional[str]:
 
 def _docker_request(path: str, timeout: float = 2.0) -> Optional[Dict]:
     """
-    Сделать GET-запрос к Docker Engine API.
+    Issue a GET request to the Docker Engine API.
 
-    Возвращает распарсенный JSON или None при любой ошибке (отсутствует
-    сокет, нет прав, контейнер с таким именем не найден). Никогда не
-    бросает исключения наверх — диагностика не должна валить /start.
+    Returns parsed JSON or None on any error (missing socket, no
+    permissions, container with that name not found). Never raises
+    to the caller — diagnostics must not take down /start.
     """
     sock_path = _docker_socket_path()
     if not sock_path:
@@ -346,14 +346,14 @@ def _docker_request(path: str, timeout: float = 2.0) -> Optional[Dict]:
 
 def _container_status_uncached(name: str) -> Dict:
     """
-    Спросить у Docker состояние контейнера по имени.
+    Ask Docker for container state by name.
 
-    Возвращает словарь с ключами:
-        available  — bool, удалось ли вообще достучаться до Docker API
-        found      — bool, существует ли контейнер с таким именем
-        running    — bool, запущен ли он сейчас
-        state      — короткое строковое состояние (running/exited/...)
-        health     — статус healthcheck (healthy/starting/unhealthy/none)
+    Returns a dict with keys:
+        available  — bool, whether the Docker API was reachable at all
+        found      — bool, whether a container with that name exists
+        running    — bool, whether it is running now
+        state      — short string state (running/exited/...)
+        health     — healthcheck status (healthy/starting/unhealthy/none)
     """
     info = {
         "available": _docker_socket_path() is not None,
@@ -380,22 +380,22 @@ def _container_status_uncached(name: str) -> Dict:
 
 
 def container_status(name: str, ttl: float = _DEFAULT_TTL) -> Dict:
-    """Кешированный container_status."""
+    """Cached container_status."""
     return _cached(f"container:{name}", ttl, lambda: _container_status_uncached(name))
 
 
-# === Snapshot протоколов ===
+# === Protocol snapshot ===
 
 @dataclass
 class ProtocolStatus:
     """
-    Унифицированное представление статуса транспорт-протокола.
+    Unified representation of a transport protocol's status.
 
-    `flag_enabled`  — что записано в JSON-конфиге менеджера (`enabled`).
-    `process_alive` — есть ли реально живой хост-процесс под этот протокол.
-    `port_listening`— слушает ли сервер ожидаемый порт.
-    `live`          — финальная агрегированная оценка.
-    `implemented`   — есть ли в боте серверная автоматизация для протокола.
+    `flag_enabled`  — what is stored in the manager JSON config (`enabled`).
+    `process_alive` — whether a live host process for this protocol exists.
+    `port_listening`— whether the server is listening on the expected port.
+    `live`          — final aggregated assessment.
+    `implemented`   — whether the bot has server-side automation for the protocol.
     """
 
     key: str
@@ -416,27 +416,25 @@ class ProtocolStatus:
     @property
     def live(self) -> Optional[bool]:
         """
-        Реально работает ли протокол прямо сейчас.
+        Whether the protocol is actually running right now.
 
-        Логика устроена так, чтобы избегать ложно-положительных, когда
-        несколько транспортов конкурируют за один порт (VLESS-Reality
-        через xray и NaiveProxy через caddy-naive оба смотрят на
-        :443/tcp). Поэтому:
+        The logic avoids false positives when several transports compete
+        for one port (VLESS-Reality via xray and NaiveProxy via caddy-naive
+        both look at :443/tcp). Therefore:
 
-        * слушающий порт сам по себе НЕ доказывает, что работает именно
-          этот протокол — он может принадлежать соседу;
-        * единственный надёжный сигнал — наличие СВОЕГО хост-процесса
-          (xray для VLESS, caddy-naive для NaiveProxy, hysteria для Hy2,
-          mtproto-proxy/mtg для MTProto).
+        * a listening port alone does NOT prove this protocol is the one
+          running — it may belong to a neighbor;
+        * the only reliable signal is the presence of THIS protocol's
+          host process (xray for VLESS, caddy-naive for NaiveProxy,
+          hysteria for Hy2, mtproto-proxy/mtg for MTProto).
 
-        Решающее правило:
-            process_alive=True  → 🟢 работает (порт уже не важен)
-            process_alive=False → 🔴 выключен (даже если порт чем-то занят)
-            process_alive=None  → мы не умеем искать процесс этого протокола.
-                                  В этом случае откатываемся на флаг JSON
-                                  и не доверяем порту.
-        Для не-реализованных в боте протоколов (TUIC/AnyTLS/XHTTP)
-        отдельно зашит результат False, см. ниже.
+        Decision rule:
+            process_alive=True  → 🟢 running (port no longer matters)
+            process_alive=False → 🔴 off (even if something occupies the port)
+            process_alive=None  → we cannot look up this protocol's process.
+                                  Fall back to the JSON flag and do not trust the port.
+        For protocols not implemented in the bot (TUIC/AnyTLS/XHTTP)
+        the result is hardcoded to False, see below.
         """
         if not self.implemented:
             return False
@@ -444,8 +442,8 @@ class ProtocolStatus:
             return True
         if self.process_alive is False:
             return False
-        # process_alive is None — диагностика недоступна (нет /proc, нет прав).
-        # Порт сознательно НЕ используем — слишком ненадёжно при конкуренции.
+        # process_alive is None — diagnostics unavailable (no /proc, no permissions).
+        # Port is deliberately unused — too unreliable under competition.
         if self.flag_enabled is False:
             return False
         return None
@@ -456,21 +454,21 @@ class ProtocolStatus:
             return "🟢"
         if live is False:
             return "🔴"
-        return "⚪"  # неопределённо (нет данных)
+        return "⚪"  # unknown (no data)
 
     def short_label(self) -> str:
         if not self.implemented:
-            return "не реализовано в боте"
+            return "not implemented in the bot"
         live = self.live
         if live is True:
-            return "работает"
+            return "running"
         if live is False:
-            return "выключен"
-        return "состояние неизвестно"
+            return "off"
+        return "state unknown"
 
 
 def _safe(fn, default):
-    """Вызвать fn() и проглотить любую ошибку — диагностика не должна падать."""
+    """Call fn() and swallow any error — diagnostics must not crash."""
     try:
         return fn()
     except Exception as exc:
@@ -487,12 +485,12 @@ def _vless_status() -> ProtocolStatus:
     port = int(raw.get("port", 443) or 443)
     listening = is_port_listening(port, "tcp")
 
-    # Серверный конфиг xray смонтирован в контейнер как /usr/local/etc/xray
-    # (см. compose.yaml). Это позволяет диагностике подсказать оператору,
-    # установлен ли xray на хосте, даже если процесса сейчас нет.
+    # The xray server config is mounted into the container as /usr/local/etc/xray
+    # (see compose.yaml). That lets diagnostics tell the operator whether
+    # xray is installed on the host even if no process is running now.
     notes: List[str] = []
     xray_config = os.getenv("XRAY_SERVER_CONFIG", "/usr/local/etc/xray/config.json")
-    display = "VLESS-Reality (бот → host Xray)"
+    display = "VLESS-Reality (bot → host Xray)"
     flag_enabled = bool(raw.get("enabled", False))
     configured = bool(raw.get("configured", False))
 
@@ -510,16 +508,16 @@ def _vless_status() -> ProtocolStatus:
             cfg = xui_manager.load_config()
             inbound_id = int(cfg.get("default_inbound_id") or 0)
             if not inbound_id:
-                return "3x-ui подключена к боту, но default_inbound_id не задан — выполните /xui_setup"
+                return "3x-ui is connected to the bot, but default_inbound_id is not set — run /xui_setup"
             xclient = xui_manager.make_client_for_config(cfg)
             if xclient is None:
-                return "3x-ui подключена к боту, но клиент панели не восстановился — проверьте /xui_status"
+                return "3x-ui is connected to the bot, but the panel client did not restore — check /xui_status"
             ok_login, login_msg = xclient.login()
             if not ok_login:
-                return f"3x-ui подключена к боту, но login не прошёл: {login_msg}"
+                return f"3x-ui is connected to the bot, but login failed: {login_msg}"
             ok_inbound, msg, inbound = xclient.get_inbound(inbound_id)
             if not ok_inbound or not inbound:
-                return f"3x-ui inbound #{inbound_id} недоступен: {msg}"
+                return f"3x-ui inbound #{inbound_id} is unavailable: {msg}"
             settings_raw = inbound.get("settings") or "{}"
             settings = json.loads(settings_raw) if isinstance(settings_raw, str) else settings_raw
             clients = settings.get("clients") or []
@@ -533,14 +531,14 @@ def _vless_status() -> ProtocolStatus:
             manual_count = max(0, len(clients) - bot_count)
             remark = str(inbound.get("remark") or "VLESS")
             inbound_port = int(inbound.get("port") or port)
-            display = "VLESS-Reality (один 3x-ui inbound)"
+            display = "VLESS-Reality (one 3x-ui inbound)"
             flag_enabled = True
             configured = True
             port = inbound_port
             return (
-                f"один VLESS endpoint: inbound #{inbound_id} «{remark}» на {inbound_port}/TCP; "
-                f"клиентов всего: {len(clients)}, bot-managed: {bot_count}, ручных: {manual_count}; "
-                "детально: /vless_list_clients"
+                f"one VLESS endpoint: inbound #{inbound_id} «{remark}» on {inbound_port}/TCP; "
+                f"clients total: {len(clients)}, bot-managed: {bot_count}, manual: {manual_count}; "
+                "details: /vless_list_clients"
             )
         except Exception as exc:
             logger.debug("live_status: xui VLESS client count failed: %s", exc)
@@ -550,21 +548,21 @@ def _vless_status() -> ProtocolStatus:
     if xui_note:
         notes.append(xui_note)
     else:
-        # Явно отделяем от «веб-панелей»: это legacy inbound на host-Xray,
-        # которым управляет бот через vless_config.json.
+        # Explicitly separate from "web panels": this is a legacy inbound on host Xray,
+        # managed by the bot via vless_config.json.
         count = _legacy_client_count()
         notes.append(
-            f"один legacy VLESS endpoint на {port}/TCP; "
-            f"клиентов в vless_config.json: {count}; "
-            f"конфиг Xray: {xray_config}; детально: /vless_list_clients"
+            f"one legacy VLESS endpoint on {port}/TCP; "
+            f"clients in vless_config.json: {count}; "
+            f"Xray config: {xray_config}; details: /vless_list_clients"
         )
         if xui_procs:
             notes.append(
-                "на хосте также найдена 3x-ui панель; это панель управления, "
-                "а не второй VLESS endpoint в /diag. Для работы через панель настройте /xui_setup"
+                "a 3x-ui panel was also found on the host; that is a management panel, "
+                "not a second VLESS endpoint in /diag. To use the panel, configure /xui_setup"
             )
     if not procs and not _file_exists_and_readable(xray_config):
-        notes.append(f"серверный конфиг {xray_config} не найден — xray на VPS не установлен?")
+        notes.append(f"server config {xray_config} not found — is xray installed on the VPS?")
 
     return ProtocolStatus(
         key="vless_reality",
@@ -590,14 +588,14 @@ def _hy2_status() -> ProtocolStatus:
     port = int(raw.get("port", 443) or 443)
     listening = is_port_listening(port, "udp")
 
-    # Каталог /etc/hysteria смонтирован в контейнер; проверим серверный конфиг.
+    # /etc/hysteria is mounted into the container; check the server config.
     notes: List[str] = []
     hy2_server_config = os.getenv("HYSTERIA_SERVER_CONFIG", "/etc/hysteria/config.yaml")
     if not procs:
         if _file_exists_and_readable(hy2_server_config):
-            notes.append(f"конфиг {hy2_server_config} есть, но процесс hysteria не запущен")
+            notes.append(f"config {hy2_server_config} exists, but the hysteria process is not running")
         else:
-            notes.append(f"серверный конфиг {hy2_server_config} не найден — hysteria на VPS не установлен?")
+            notes.append(f"server config {hy2_server_config} not found — is hysteria installed on the VPS?")
 
     return ProtocolStatus(
         key="hysteria2",
@@ -617,20 +615,20 @@ def _hy2_status() -> ProtocolStatus:
 
 def _naive_status() -> ProtocolStatus:
     """
-    NaiveProxy реализован как Caddy + forwardproxy@naive.
-    Бинарь — отдельный
-    `/usr/local/bin/caddy-naive`, юнит — `caddy-naive.service`,
-    конфиг — `/etc/caddy-naive/Caddyfile`. Каталог `/etc/caddy-naive`
-    смонтирован в контейнер бота через `compose.yaml`, поэтому мы
-    можем читать Caddyfile прямо из бота и убедиться, что это
-    именно NaiveProxy, а не штатный Caddy-вебсервер.
+    NaiveProxy is implemented as Caddy + forwardproxy@naive.
+    Binary is a separate
+    `/usr/local/bin/caddy-naive`, unit is `caddy-naive.service`,
+    config is `/etc/caddy-naive/Caddyfile`. `/etc/caddy-naive`
+    is mounted into the bot container via `compose.yaml`, so we
+    can read the Caddyfile from the bot and confirm it is
+    NaiveProxy, not a stock Caddy web server.
     """
     import naiveproxy_manager
 
     raw = _safe(naiveproxy_manager.get_status, {})
     service_name = (raw.get("service_name") or "caddy-naive").strip()
-    # Сознательно НЕ ищем общий "caddy": штатный Caddy-вебсервер
-    # ≠ NaiveProxy-сервер. Бинарь NaiveProxy всегда называется специфично.
+    # Deliberately do NOT search for generic "caddy": a stock Caddy web server
+    # ≠ a NaiveProxy server. The NaiveProxy binary always has a specific name.
     needles = [service_name, "caddy-naive", "xcaddy-naive"]
     seen = set()
     needles = [n for n in needles if n and not (n in seen or seen.add(n))]
@@ -652,43 +650,43 @@ def _naive_status() -> ProtocolStatus:
     process_names = [p.comm or p.cmdline.split()[0] for p in procs]
 
     if procs:
-        # Подтверждаем, что найденный процесс — это именно caddy-naive,
-        # а не общий caddy, который случайно совпал по подстроке.
+        # Confirm the found process is actually caddy-naive,
+        # not a generic caddy that happened to match the substring.
         for p in procs:
             exe = _read_proc_exe(p.pid)
             if exe and "caddy-naive" not in os.path.basename(exe).lower():
                 notes.append(
-                    f"⚠️ найден процесс с PID {p.pid} ({exe or p.comm}), "
-                    f"но это не похоже на caddy-naive — проверьте вручную"
+                    f"⚠️ found process PID {p.pid} ({exe or p.comm}), "
+                    f"but it does not look like caddy-naive — check manually"
                 )
         if raw.get("systemd_active") is True:
             notes.append(f"systemd: {service_name} active")
     else:
-        # Процесса нет: дадим оператору понятную причину.
+        # No process: give the operator a clear reason.
         if not binary_exists and not caddyfile_exists:
             notes.append(
-                f"NaiveProxy сервер не установлен на этом VPS "
-                f"(нет ни {naive_binary}, ни {caddyfile_path}); "
-                f"установите через /naive_* или scripts/install_naiveproxy.sh"
+                f"NaiveProxy server is not installed on this VPS "
+                f"(neither {naive_binary} nor {caddyfile_path}); "
+                f"install via /naive_* or scripts/install_naiveproxy.sh"
             )
         elif not caddyfile_exists:
             notes.append(
-                f"бинарь {naive_binary} есть, но конфиг {caddyfile_path} "
-                f"отсутствует — Caddyfile не сгенерирован"
+                f"binary {naive_binary} exists, but config {caddyfile_path} "
+                f"is missing — Caddyfile was not generated"
             )
         elif not has_forward_proxy:
             notes.append(
-                f"{caddyfile_path} существует, но не содержит директиву "
-                f"forward_proxy — это похоже на обычный Caddy, не NaiveProxy"
+                f"{caddyfile_path} exists but has no "
+                f"forward_proxy directive — looks like regular Caddy, not NaiveProxy"
             )
         elif not binary_exists:
             notes.append(
-                f"Caddyfile с forward_proxy есть, но бинарь {naive_binary} "
-                f"не найден — соберите caddy-naive (xcaddy)"
+                f"Caddyfile with forward_proxy exists, but binary {naive_binary} "
+                f"was not found — build caddy-naive (xcaddy)"
             )
         else:
             notes.append(
-                f"всё на месте, но caddy-naive не запущен; попробуйте: "
+                f"everything is in place, but caddy-naive is not running; try: "
                 f"systemctl status {service_name}"
             )
 
@@ -709,11 +707,11 @@ def _naive_status() -> ProtocolStatus:
 
 
 def _tuic_status() -> ProtocolStatus:
-    """TUIC: серверная автоматизация в боте не реализована (см. /help роадмап).
+    """TUIC: server-side automation is not implemented in the bot (see /help roadmap).
 
-    Сознательно НЕ привязываем «sing-box на хосте» к TUIC: этот же бинарь
-    может обслуживать AnyTLS, ad-hoc VLESS и т.д. Без чтения конфигурации
-    sing-box мы не можем сказать, какой именно протокол он отдаёт.
+    Deliberately do NOT bind "sing-box on the host" to TUIC: the same binary
+    may serve AnyTLS, ad-hoc VLESS, etc. Without reading the sing-box
+    config we cannot tell which protocol it is serving.
     """
     import tuic_manager
 
@@ -731,12 +729,12 @@ def _tuic_status() -> ProtocolStatus:
         process_alive=None,
         port_listening=None,
         implemented=False,
-        notes=["серверная автоматизация в боте пока не реализована"],
+        notes=["server-side automation is not implemented in the bot yet"],
     )
 
 
 def _anytls_status() -> ProtocolStatus:
-    """AnyTLS: см. комментарий в `_tuic_status` — sing-box не привязываем."""
+    """AnyTLS: see the comment in `_tuic_status` — we do not bind sing-box."""
     import anytls_manager
 
     raw = _safe(anytls_manager.get_status, {})
@@ -753,14 +751,14 @@ def _anytls_status() -> ProtocolStatus:
         process_alive=None,
         port_listening=None,
         implemented=False,
-        notes=["серверная автоматизация в боте пока не реализована"],
+        notes=["server-side automation is not implemented in the bot yet"],
     )
 
 
 def _xhttp_status() -> ProtocolStatus:
-    """XHTTP: серверная сторона разделяется с xray-процессом VLESS-Reality,
-    поэтому отдельного процесса нет, а порт совпадает с VLESS — судить
-    о XHTTP по слушающему `:443/tcp` нельзя (это будет тот же xray)."""
+    """XHTTP: the server side is shared with the VLESS-Reality xray process,
+    so there is no separate process and the port matches VLESS — you cannot
+    infer XHTTP from a listening `:443/tcp` (that would be the same xray)."""
     import xhttp_manager
 
     raw = _safe(xhttp_manager.get_status, {})
@@ -777,19 +775,19 @@ def _xhttp_status() -> ProtocolStatus:
         process_alive=None,
         port_listening=None,
         implemented=False,
-        notes=["серверная автоматизация в боте пока не реализована"],
+        notes=["server-side automation is not implemented in the bot yet"],
     )
 
 
 def _mieru_status() -> ProtocolStatus:
     """
-    Mieru (mita): отдельный TCP/UDP транспорт без TLS-маскировки. Бинарь —
-    `mita`, юнит — `mita.service`.
+    Mieru (mita): a separate TCP/UDP transport without TLS camouflage. Binary
+    is `mita`, unit is `mita.service`.
 
-    В отличие от VLESS/XHTTP, Mieru слушает СВОЙ порт (по умолчанию 29999/tcp),
-    поэтому здесь и порт, и процесс реально проверяются на хосте.
-    Для Mieru критично синхронное системное время (ключ зависит от него) —
-    подсказку про NTP добавляем как note, чтобы оператор не забыл.
+    Unlike VLESS/XHTTP, Mieru listens on ITS OWN port (default 29999/tcp),
+    so both the port and the process are actually checked on the host.
+    Mieru needs synchronized system time (the key depends on it) —
+    an NTP hint is added as a note so the operator does not forget.
     """
     import mieru_manager
 
@@ -811,13 +809,13 @@ def _mieru_status() -> ProtocolStatus:
     notes: List[str] = []
     if port in (443,):
         notes.append(
-            f"порт {port}/{transport} конфликтует с VLESS/Hysteria2/NaiveProxy — "
-            "выберите отдельный порт через /mieru_set_port"
+            f"port {port}/{transport} conflicts with VLESS/Hysteria2/NaiveProxy — "
+            "pick a dedicated port via /mieru_set_port"
         )
     if bool(raw.get("configured")) and not procs:
-        notes.append("config есть, но mita не запущен — попробуйте /mieru_start")
+        notes.append("config exists, but mita is not running — try /mieru_start")
     if procs:
-        notes.append("Mieru требует синхронное время на VPS — проверьте `timedatectl status`")
+        notes.append("Mieru needs synchronized time on the VPS — check `timedatectl status`")
 
     return ProtocolStatus(
         key="mieru",
@@ -839,8 +837,8 @@ def _mtproto_status() -> ProtocolStatus:
     import mtproto_manager
 
     raw = _safe(mtproto_manager.get_status, {})
-    # MTProto-прокси Telegram'а: поддерживаем варианты бинарника
-    # mtproto-proxy / mtg / py-tg-proxy. По умолчанию слушает 993 (TCP).
+    # Telegram MTProto proxy: support binary name variants
+    # mtproto-proxy / mtg / py-tg-proxy. Default listen port is 993 (TCP).
     procs = find_processes("mtproto-proxy", "mtg", "py-tg-proxy", "tg-proxy")
     port = int(raw.get("port", 993) or 993)
     listening = is_port_listening(port, "tcp")
@@ -861,24 +859,24 @@ def _mtproto_status() -> ProtocolStatus:
 
 def _xui_panel_status() -> ProtocolStatus:
     """
-    3x-ui (Sanaei) — внешняя web-панель управления Xray. На VPS может
-    стоять нативно (`x-ui.service` + бинарь `/usr/local/x-ui/x-ui`) или
-    в Docker-контейнере (типичные имена: `3x-ui`, `x-ui`, `3xui`).
+    3x-ui (Sanaei) is an external Xray web panel. On the VPS it may run
+    natively (`x-ui.service` + binary `/usr/local/x-ui/x-ui`) or
+    in a Docker container (typical names: `3x-ui`, `x-ui`, `3xui`).
 
-    ВАЖНО: 3x-ui управляет СВОИМ Xray (`/usr/local/x-ui/bin/xray-*`) и
-    собственной БД клиентов в `/etc/x-ui/x-ui.db`. Бот же пишет в
-    свой Xray (`/usr/local/etc/xray`, `xray.service`) — это два
-    независимых стека. Поэтому здесь нам важно лишь сообщить оператору,
-    что такая панель присутствует на VPS, чтобы он не путал «свой»
-    Xray с «панельным» и понимал, что клиенты, созданные ботом, в
-    панели не появятся (и наоборот).
+    IMPORTANT: 3x-ui manages ITS OWN Xray (`/usr/local/x-ui/bin/xray-*`) and
+    its own client DB in `/etc/x-ui/x-ui.db`. The bot writes to
+    its Xray (`/usr/local/etc/xray`, `xray.service`) — two
+    independent stacks. Here we only tell the operator that such a
+    panel is present on the VPS, so they do not confuse "their"
+    Xray with the "panel" one and understand that clients created by
+    the bot will not appear in the panel (and vice versa).
 
-    Без креденшелов панели мы НЕ ходим в её API — сейчас только
-    бесплатные сигналы: host-процесс, бинарь, systemd-юнит, Docker.
+    Without panel credentials we do NOT call its API — only
+    free signals: host process, binary, systemd unit, Docker.
     """
     notes: List[str] = []
 
-    # 1) Нативный процесс / бинарь / systemd unit
+    # 1) Native process / binary / systemd unit
     binary_path = "/usr/local/x-ui/x-ui"
     systemd_unit = "/etc/systemd/system/x-ui.service"
     db_path = "/etc/x-ui/x-ui.db"
@@ -887,9 +885,9 @@ def _xui_panel_status() -> ProtocolStatus:
     db_exists = _file_exists_and_readable(db_path)
 
     procs = find_processes("x-ui")
-    # Отсекаем шумные совпадения (например, `xui_panel_status`) —
-    # принимаем только процессы, у которых cmdline / comm / exe реально
-    # указывают на 3x-ui.
+    # Drop noisy matches (e.g. `xui_panel_status`) —
+    # accept only processes whose cmdline / comm / exe actually
+    # point at 3x-ui.
     native_procs = []
     for p in procs:
         cmd = p.cmdline.lower()
@@ -904,9 +902,9 @@ def _xui_panel_status() -> ProtocolStatus:
         if exe.endswith("/x-ui") or "/x-ui/" in exe:
             native_procs.append(p)
 
-    # 2) Docker-контейнер. Перебираем типичные имена; первое найденное
-    # «running» считается победителем; если ни один не running, но что-то
-    # найдено — записываем как found-but-stopped.
+    # 2) Docker container. Try typical names; the first
+    # "running" wins; if none is running but something was
+    # found — record as found-but-stopped.
     container_candidates = ("3x-ui", "x-ui", "3xui")
     container_info: Dict = {"available": False}
     container_name_used = ""
@@ -927,42 +925,42 @@ def _xui_panel_status() -> ProtocolStatus:
 
     process_alive = bool(native_procs) or running_any
 
-    # Сначала — однозначный «тип развёртывания», чтобы не путать с VLESS-транспортом бота и Dockhand.
+    # First — a clear "deployment type" so it is not confused with the bot VLESS transport and Dockhand.
     if native_procs and running_any:
         notes.append(
-            "развёртывание 3x-ui: одновременно процесс на хосте и Docker — "
-            f"нетипично; проверьте инстанс (Docker: контейнер `{container_name_used}`)"
+            "3x-ui deployment: host process and Docker at the same time — "
+            f"unusual; check the instance (Docker: container `{container_name_used}`)"
         )
     elif native_procs:
         notes.append(
-            "развёртывание 3x-ui: нативно на хосте (процесс x-ui), не Docker-контейнер панели"
+            "3x-ui deployment: native on the host (x-ui process), not a panel Docker container"
         )
     elif running_any:
         notes.append(
-            f"развёртывание 3x-ui: Docker (контейнер `{container_name_used}`, running)"
+            f"3x-ui deployment: Docker (container `{container_name_used}`, running)"
         )
     elif found_any:
         notes.append(
-            f"развёртывание 3x-ui: Docker (контейнер `{container_name_used}`, не running)"
+            f"3x-ui deployment: Docker (container `{container_name_used}`, not running)"
         )
     elif binary_exists or unit_exists:
         notes.append(
-            "развёртывание 3x-ui: признаки нативной установки (бинарь/unit), процесс не запущен"
+            "3x-ui deployment: signs of a native install (binary/unit), process not running"
         )
 
     if native_procs:
-        notes.append("процесс панели на хосте активен")
+        notes.append("panel process is active on the host")
     elif binary_exists and not native_procs:
-        notes.append(f"бинарь {binary_path} найден, но процесс не запущен")
+        notes.append(f"binary {binary_path} found, but the process is not running")
     if unit_exists and not native_procs and not running_any:
-        notes.append(f"systemd unit `{systemd_unit}` присутствует, юнит не активен")
+        notes.append(f"systemd unit `{systemd_unit}` is present, unit is not active")
     if not (native_procs or binary_exists or unit_exists or found_any):
-        # Ничего не нашли — просто помечаем как «отсутствует» без шума в /diag.
-        notes.append("3x-ui на этом VPS не обнаружен")
+        # Nothing found — mark as "absent" without noise in /diag.
+        notes.append("3x-ui was not found on this VPS")
     if db_exists and (native_procs or running_any):
         notes.append(
-            "клиенты панели хранятся в /etc/x-ui/x-ui.db; 3x-ui — это "
-            "панель управления тем же Xray/VLESS, не отдельный второй VPN"
+            "panel clients are stored in /etc/x-ui/x-ui.db; 3x-ui is "
+            "a management panel for the same Xray/VLESS, not a second VPN"
         )
 
     proc_names = [p.comm or (p.cmdline.split() or ["x-ui"])[0] for p in native_procs]
@@ -971,20 +969,20 @@ def _xui_panel_status() -> ProtocolStatus:
 
     return ProtocolStatus(
         key="xui_panel",
-        display="3x-ui (сторонняя веб-панель)",
+        display="3x-ui (third-party web panel)",
         icon="🛠",
         flag_enabled=None,
         configured=binary_exists or found_any or unit_exists,
         server="",
-        port=None,  # порт у панели настраиваемый, читать его из x-ui.db без зависимостей не будем
+        port=None,  # panel port is configurable; we will not read it from x-ui.db without extra deps
         transport="tcp",
         process_alive=process_alive if (native_procs or found_any) else None,
         process_names=proc_names,
         port_listening=None,
         container_status=container_info if container_info.get("available") else None,
-        # 3x-ui — внешний по отношению к боту инструмент. Поэтому
-        # `implemented=True` означает только то, что мы умеем его
-        # обнаружить, а не то, что бот им управляет.
+        # 3x-ui is external to the bot. So
+        # `implemented=True` only means we can detect it,
+        # not that the bot manages it.
         implemented=True,
         notes=notes,
     )
@@ -992,10 +990,10 @@ def _xui_panel_status() -> ProtocolStatus:
 
 def _dockhand_status() -> ProtocolStatus:
     """
-    Dockhand — Streamlit-панель в отдельном Docker-контейнере.
+    Dockhand is a Streamlit panel in a separate Docker container.
 
-    Идентифицируем по имени контейнера (`dockhand` по умолчанию,
-    переопределяется через DOCKHAND_CONTAINER_NAME).
+    Identified by container name (`dockhand` by default,
+    overridable via DOCKHAND_CONTAINER_NAME).
     """
     container_name = os.getenv("DOCKHAND_CONTAINER_NAME", "dockhand")
     info = container_status(container_name)
@@ -1006,24 +1004,24 @@ def _dockhand_status() -> ProtocolStatus:
     health = info.get("health") or ""
 
     if not available:
-        notes.append("docker.sock недоступен — статус контейнера не проверен")
+        notes.append("docker.sock is unavailable — container status was not checked")
     elif not found:
-        notes.append(f"контейнер `{container_name}` не найден на этом хосте")
+        notes.append(f"container `{container_name}` was not found on this host")
     elif not running:
-        notes.append(f"контейнер найден, состояние: {info.get('state') or 'unknown'}")
+        notes.append(f"container found, state: {info.get('state') or 'unknown'}")
     elif health and health not in {"healthy", ""}:
         notes.append(f"healthcheck: {health}")
 
     notes.insert(
         0,
-        "Dockhand — Streamlit в Docker (диагностика бота); не Xray-транспорт и не 3x-ui",
+        "Dockhand — Streamlit in Docker (bot diagnostics); not an Xray transport and not 3x-ui",
     )
 
-    # Порт 8501 у dockhand биндится только на 127.0.0.1 (см. compose.yaml),
-    # поэтому к VPS снаружи он недоступен — используем чисто docker-запрос.
+    # Dockhand port 8501 is bound only to 127.0.0.1 (see compose.yaml),
+    # so it is not reachable from outside the VPS — use a Docker query only.
     return ProtocolStatus(
         key="dockhand",
-        display="Dockhand панель (Docker)",
+        display="Dockhand panel (Docker)",
         icon="🛠",
         flag_enabled=None,
         configured=None,
@@ -1051,7 +1049,7 @@ _PROTOCOL_BUILDERS = (
 
 
 def gather_protocols() -> List[ProtocolStatus]:
-    """Вернуть статусы всех известных боту протоколов."""
+    """Return statuses of all protocols known to the bot."""
     out: List[ProtocolStatus] = []
     for builder in _PROTOCOL_BUILDERS:
         try:
@@ -1062,19 +1060,19 @@ def gather_protocols() -> List[ProtocolStatus]:
 
 
 def gather_full_snapshot() -> Dict:
-    """Полный снимок состояния: протоколы + панели + сводка по портам."""
+    """Full state snapshot: protocols + panels + port summary."""
     protocols = gather_protocols()
     snapshot = {
         "protocols": protocols,
         "dockhand": _safe(_dockhand_status, ProtocolStatus(
-            key="dockhand", display="Dockhand панель (Docker)", icon="🛠",
-            notes=["dockhand: ошибка диагностики"],
+            key="dockhand", display="Dockhand panel (Docker)", icon="🛠",
+            notes=["dockhand: diagnostics error"],
         )),
-        # Внешняя панель управления Xray (если установлена). Бот ею не
-        # управляет — только детектирует и предупреждает оператора.
+        # External Xray management panel (if installed). The bot does not
+        # manage it — only detects it and warns the operator.
         "xui_panel": _safe(_xui_panel_status, ProtocolStatus(
-            key="xui_panel", display="3x-ui (сторонняя веб-панель)", icon="🛠",
-            notes=["xui_panel: ошибка диагностики"],
+            key="xui_panel", display="3x-ui (third-party web panel)", icon="🛠",
+            notes=["xui_panel: diagnostics error"],
         )),
         "host_ports": host_listen_ports(),
     }
@@ -1082,5 +1080,5 @@ def gather_full_snapshot() -> Dict:
 
 
 def reset_cache() -> None:
-    """Очистить кеш — для тестов и принудительного обновления."""
+    """Clear the cache — for tests and a forced refresh."""
     _CACHE.clear()

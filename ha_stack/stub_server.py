@@ -1,17 +1,17 @@
-"""HA stub gRPC server — имитирует «сервер HA» с подключёнными устройствами
-Mi-Home (БЕЗ реальной Home Assistant). Реализует DeviceControlService.SendCommand
-детерминированными заглушками устройств:
+"""HA stub gRPC server — simulates an "HA server" with connected Mi-Home
+devices (NO real Home Assistant). Implements DeviceControlService.SendCommand
+with deterministic device stubs:
 
-  mi_bulb       — умная лампочка (LED): WRITE on/off, READ состояние
-  mi_th_sensor  — датчик температуры/влажности: READ
-  mi_vibration  — датчик вибрации: READ
-  __ping__      — health-check (кнопка Ping в ApiRgRPC), как у ha-adapter
-  __list__      — JSON-список устройств в read_data (dropdown в ApiRgRPC)
+  mi_bulb       — smart bulb (LED): WRITE on/off, READ state
+  mi_th_sensor  — temperature/humidity sensor: READ
+  mi_vibration  — vibration sensor: READ
+  __ping__      — health-check (Ping button in ApiRgRPC), same as ha-adapter
+  __list__      — JSON device list in read_data (dropdown in ApiRgRPC)
 
-Показания кладутся в существующие поля CommandResponse (message + device_state),
-прото НЕ меняется. Слушает только 127.0.0.1 (доступ — через SSH-туннель).
+Readings go into existing CommandResponse fields (message + device_state);
+the proto is NOT changed. Listens on 127.0.0.1 only (access via SSH tunnel).
 
-Запуск:  python stub_server.py --listen 127.0.0.1:50055
+Run:  python stub_server.py --listen 127.0.0.1:50055
 """
 import argparse
 import json
@@ -22,21 +22,21 @@ from concurrent import futures
 
 import grpc
 
-# Делаем пакет proto/ импортируемым (bundle-локально).
+# Make the proto/ package importable (bundle-local).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from proto import device_control_pb2 as pb            # noqa: E402
 from proto import device_control_pb2_grpc as pbg      # noqa: E402
 
-# Спец-id как в ApiRgRPC ha_adapter (GUI Ping / список устройств).
+# Special IDs matching ApiRgRPC ha_adapter (GUI Ping / device list).
 PING_DEVICE_ID = "__ping__"
 LIST_DEVICE_ID = "__list__"
 
-# Минимальное in-memory состояние, чтобы WRITE on/off отражался в последующем READ.
+# Minimal in-memory state so WRITE on/off is visible in the next READ.
 _BULB = {"is_on": False, "brightness": 80}
 
 
 class HaStubService(pbg.DeviceControlServiceServicer):
-    """Заглушка DeviceControlService: маршрутизирует по device_id на Mi-Home устройства."""
+    """DeviceControlService stub: routes by device_id to Mi-Home devices."""
 
     def SendCommand(self, request, context):
         device = request.device_id
@@ -59,7 +59,7 @@ class HaStubService(pbg.DeviceControlServiceServicer):
         )
 
     def _list_devices(self):
-        """Формат как у ha-adapter: {"backend","devices":[{id,entity,state,name,writable}]}."""
+        """Same format as ha-adapter: {"backend","devices":[{id,entity,state,name,writable}]}."""
         power = "on" if _BULB["is_on"] else "off"
         items = [
             {
@@ -92,7 +92,7 @@ class HaStubService(pbg.DeviceControlServiceServicer):
         ).encode("utf-8")
         return pb.CommandResponse(
             status=pb.CommandResponse.SUCCESS,
-            message=f"stub: {len(items)} устройств(а)",
+            message=f"stub: {len(items)} device(s)",
             read_data=payload,
         )
 
@@ -133,7 +133,7 @@ class HaStubService(pbg.DeviceControlServiceServicer):
         )
 
     def SubscribeEvents(self, request, context):
-        """Стрим заглушки (этап 2): 5 периодических событий mi_th_sensor."""
+        """Stub stream (stage 2): 5 periodic mi_th_sensor events."""
         for i in range(5):
             temp = 23.5 + i * 0.1
             yield pb.DeviceEvent(
@@ -149,7 +149,7 @@ class HaStubService(pbg.DeviceControlServiceServicer):
 def main():
     parser = argparse.ArgumentParser(description="HA stub gRPC server (Mi-Home device stubs)")
     parser.add_argument("--listen", default="127.0.0.1:50055",
-                        help="адрес прослушивания gRPC (по умолчанию только localhost)")
+                        help="gRPC listen address (localhost only by default)")
     args = parser.parse_args()
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=4))

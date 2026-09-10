@@ -19,7 +19,7 @@ RUN chown -R app:app /app
 
 USER app
 
-# python-only healthcheck: в slim-образе нет curl
+# python-only healthcheck: slim image has no curl
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8501/_stcore/health',timeout=2).status==200 else 1)"
 

@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для управления AnyTLS конфигурацией.
+Module for managing AnyTLS configuration.
 
-AnyTLS — протокол, маскирующий VPN-трафик под обычные TLS-сессии.
-Каждый клиент идентифицируется паролем (password).
-Сервер (sing-box inbound) хранит массив users: [{password, name}].
+AnyTLS is a protocol that disguises VPN traffic as ordinary TLS sessions.
+Each client is identified by a password.
+The server (sing-box inbound) stores an array of users: [{password, name}].
 
-Структура конфигурации:
+Configuration structure:
 {
     "enabled": false,
-    "server": "IP или домен VPS",
+    "server": "VPS IP or domain",
     "port": 443,
     "sni": "",
     "insecure": false,
@@ -106,22 +106,22 @@ def is_enabled() -> bool:
 def enable() -> Tuple[bool, str]:
     config = _load_config()
     if not config.get("server"):
-        return False, "❌ Не настроен сервер"
+        return False, "❌ Server is not configured"
     if not config.get("clients"):
-        return False, "❌ Нет клиентов. Сначала: /anytls_add <имя>"
+        return False, "❌ No clients. First: /anytls_add <name>"
 
     config["enabled"] = True
     if _save_config(config):
-        return True, "✅ AnyTLS включён"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ AnyTLS enabled"
+    return False, "❌ Failed to save"
 
 
 def disable() -> Tuple[bool, str]:
     config = _load_config()
     config["enabled"] = False
     if _save_config(config):
-        return True, "🔴 AnyTLS выключен"
-    return False, "❌ Ошибка при сохранении"
+        return True, "🔴 AnyTLS disabled"
+    return False, "❌ Failed to save"
 
 
 def get_status() -> Dict:
@@ -192,45 +192,45 @@ def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
             server = detected_ip
             auto_detected = True
         else:
-            return False, "❌ Не удалось определить IP. Укажите: /anytls_set_server <IP>"
+            return False, "❌ Could not determine IP. Specify: /anytls_set_server <IP>"
     else:
         auto_detected = False
 
     config = _load_config()
     config["server"] = server.strip()
     if _save_config(config):
-        prefix = "автоматически: " if auto_detected else ""
-        return True, f"✅ Сервер установлен {prefix}{server}"
-    return False, "❌ Ошибка при сохранении"
+        prefix = "automatically: " if auto_detected else ""
+        return True, f"✅ Server set {prefix}{server}"
+    return False, "❌ Failed to save"
 
 
 def set_port(port: int) -> Tuple[bool, str]:
     if not isinstance(port, int) or port < 1 or port > 65535:
-        return False, "❌ Порт должен быть числом от 1 до 65535"
+        return False, "❌ Port must be a number from 1 to 65535"
 
     config = _load_config()
     config["port"] = port
     recommended = "⭐" if port in RECOMMENDED_PORTS else ""
     if _save_config(config):
-        return True, f"✅ Порт: {port} {recommended}\n⚠️ Откройте TCP порт: `ufw allow {port}/tcp`"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Port: {port} {recommended}\n⚠️ Open the TCP port: `ufw allow {port}/tcp`"
+    return False, "❌ Failed to save"
 
 
 def set_sni(sni: str) -> Tuple[bool, str]:
     config = _load_config()
     config["sni"] = sni.strip() if sni else ""
     if _save_config(config):
-        return True, f"✅ SNI: {config['sni'] or '(пусто)'}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ SNI: {config['sni'] or '(empty)'}"
+    return False, "❌ Failed to save"
 
 
 def set_insecure(insecure: bool) -> Tuple[bool, str]:
     config = _load_config()
     config["insecure"] = insecure
     if _save_config(config):
-        status = "включён ⚠️" if insecure else "выключен ✅"
+        status = "enabled ⚠️" if insecure else "disabled ✅"
         return True, f"✅ Insecure mode: {status}"
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 # === TLS ===
@@ -245,7 +245,7 @@ def generate_self_signed_cert(
     try:
         os.makedirs(cert_dir, exist_ok=True)
     except Exception as e:
-        return False, f"❌ Не удалось создать директорию: {e}"
+        return False, f"❌ Failed to create directory: {e}"
 
     try:
         cmd = [
@@ -263,7 +263,7 @@ def generate_self_signed_cert(
             config["tls_cert_path"] = cert_path
             config["tls_key_path"] = key_path
             _save_config(config)
-            return True, f"✅ Сертификат сгенерирован\n📄 `{cert_path}`\n🔑 `{key_path}`"
+            return True, f"✅ Certificate generated\n📄 `{cert_path}`\n🔑 `{key_path}`"
     except FileNotFoundError:
         pass
     except Exception as e:
@@ -304,11 +304,11 @@ def generate_self_signed_cert(
         config["tls_cert_path"] = cert_path
         config["tls_key_path"] = key_path
         _save_config(config)
-        return True, f"✅ Сертификат сгенерирован (Python)\n📄 `{cert_path}`\n🔑 `{key_path}`"
+        return True, f"✅ Certificate generated (Python)\n📄 `{cert_path}`\n🔑 `{key_path}`"
     except ImportError:
-        return False, "❌ Установите openssl или: `pip install cryptography`"
+        return False, "❌ Install openssl or: `pip install cryptography`"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def generate_all() -> Tuple[bool, Dict, str]:
@@ -342,14 +342,14 @@ def list_clients() -> List[Dict]:
 
 def add_client(name: str, client_password: Optional[str] = None) -> Tuple[bool, str, Dict]:
     if not name or not name.strip():
-        return False, "❌ Имя клиента не может быть пустым", {}
+        return False, "❌ Client name cannot be empty", {}
 
     name = name.strip()
     config = _load_config()
 
     for client in config.get("clients", []):
         if client.get("name") == name:
-            return False, f"❌ Клиент {name} уже существует", {}
+            return False, f"❌ Client {name} already exists", {}
 
     if not client_password:
         client_password = _generate_password()
@@ -362,13 +362,13 @@ def add_client(name: str, client_password: Optional[str] = None) -> Tuple[bool, 
 
     config.setdefault("clients", []).append(client)
     if _save_config(config):
-        return True, f"✅ Клиент добавлен: {name}", client
-    return False, "❌ Ошибка при сохранении", {}
+        return True, f"✅ Client added: {name}", client
+    return False, "❌ Failed to save", {}
 
 
 def remove_client(name: str) -> Tuple[bool, str]:
     if not name or not name.strip():
-        return False, "❌ Укажите имя клиента"
+        return False, "❌ Specify a client name"
 
     name = name.strip()
     config = _load_config()
@@ -376,12 +376,12 @@ def remove_client(name: str) -> Tuple[bool, str]:
     new_clients = [c for c in clients if c.get("name") != name]
 
     if len(new_clients) == len(clients):
-        return False, "❌ Клиент не найден"
+        return False, "❌ Client not found"
 
     config["clients"] = new_clients
     if _save_config(config):
-        return True, f"✅ Клиент {name} удалён"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Client {name} removed"
+    return False, "❌ Failed to save"
 
 
 def get_client(name: str) -> Optional[Dict]:
@@ -401,7 +401,7 @@ def generate_anytls_uri(
     comment: str = "AnyTLS",
 ) -> str:
     """
-    URI формат: anytls://password@server:port?sni=xxx&insecure=1#comment
+    URI format: anytls://password@server:port?sni=xxx&insecure=1#comment
     """
     config = _load_config()
     server = config.get("server", "")
@@ -432,30 +432,30 @@ def generate_anytls_uri(
 def generate_client_uri(name: str) -> Tuple[bool, str, str]:
     client = get_client(name)
     if not client:
-        return False, "❌ Клиент не найден", ""
+        return False, "❌ Client not found", ""
 
     client_password = client.get("password", "")
     if not client_password:
-        return False, f"❌ У клиента {name} нет пароля", ""
+        return False, f"❌ Client {name} has no password", ""
 
     uri = generate_anytls_uri(
         client_password,
         visible_profile_name("AnyTLS", _load_config().get("server", ""), name),
     )
     if not uri:
-        return False, "❌ Не удалось сгенерировать URI. Проверьте настройки сервера", ""
+        return False, "❌ Failed to generate URI. Check server settings", ""
 
-    return True, f"✅ URI для клиента {name} готов", uri
+    return True, f"✅ URI for client {name} is ready", uri
 
 
 def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
     if not content or not content.strip():
-        return False, None, "❌ Нечего кодировать в QR"
+        return False, None, "❌ Nothing to encode in QR"
 
     try:
         import qrcode
     except ImportError:
-        return False, None, "❌ Библиотека qrcode не установлена"
+        return False, None, "❌ qrcode library is not installed"
 
     try:
         qr = qrcode.QRCode(
@@ -471,16 +471,16 @@ def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-        return True, buffer, "✅ QR-код сгенерирован"
+        return True, buffer, "✅ QR code generated"
     except Exception as e:
         logger.error(f"Failed to generate AnyTLS QR: {e}")
-        return False, None, f"❌ Ошибка: {e}"
+        return False, None, f"❌ Error: {e}"
 
 
 def build_client_qr_payload(name: str) -> Tuple[bool, str, Dict]:
     client = get_client(name)
     if not client:
-        return False, "❌ Клиент не найден", {}
+        return False, "❌ Client not found", {}
 
     success, message, uri = generate_client_uri(name)
     if not success:
@@ -496,14 +496,14 @@ def build_client_qr_payload(name: str) -> Tuple[bool, str, Dict]:
         "uri": uri,
         "qr_buffer": qr_buffer,
     }
-    return True, "✅ QR-пакет для AnyTLS подготовлен", payload
+    return True, "✅ QR pack for AnyTLS is ready", payload
 
 
 # === Export Configurations ===
 
 def export_server_config() -> Dict:
     """
-    Серверная конфигурация sing-box inbound для AnyTLS.
+    Server sing-box inbound configuration for AnyTLS.
     """
     config = _load_config()
     clients = config.get("clients", [])
@@ -547,7 +547,7 @@ def export_server_config_json() -> str:
 
 def export_singbox_config(client_name: Optional[str] = None) -> Dict:
     """
-    Клиентская конфигурация sing-box с AnyTLS outbound.
+    Client sing-box configuration with an AnyTLS outbound.
     """
     config = _load_config()
 
@@ -591,7 +591,7 @@ def export_singbox_config(client_name: Optional[str] = None) -> Dict:
 
 def export_clash_meta_config(client_name: Optional[str] = None) -> str:
     """
-    Клиентская конфигурация Clash Meta (YAML).
+    Client Clash Meta configuration (YAML).
     """
     config = _load_config()
     server = config.get("server", "")
@@ -691,19 +691,19 @@ def apply_config(config_path: str = "/etc/anytls/config.json") -> Tuple[bool, st
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode == 0:
-            return True, f"✅ Конфиг применён и сервис перезапущен\n📄 `{config_path}`"
+            return True, f"✅ Config applied and service restarted\n📄 `{config_path}`"
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"⚠️ Конфиг записан, но сервис не перезапустился:\n`{error}`"
+            return False, f"⚠️ Config written, but the service did not restart:\n`{error}`"
     except PermissionError:
-        return False, f"❌ Нет прав на запись. Запустите с sudo."
+        return False, f"❌ No write permission. Run with sudo."
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def service_control(action: str) -> Tuple[bool, str]:
     if action not in ("start", "stop", "restart", "status"):
-        return False, f"❌ Неизвестное действие: {action}"
+        return False, f"❌ Unknown action: {action}"
 
     try:
         result = _host_run(
@@ -714,18 +714,18 @@ def service_control(action: str) -> Tuple[bool, str]:
             output = result.stdout.strip() or result.stderr.strip()
             is_active = "active (running)" in output
             emoji = "🟢" if is_active else "🔴"
-            return True, f"{emoji} AnyTLS сервис:\n```\n{output[:500]}\n```"
+            return True, f"{emoji} AnyTLS service:\n```\n{output[:500]}\n```"
 
         if result.returncode == 0:
-            labels = {"start": "запущен", "stop": "остановлен", "restart": "перезапущен"}
+            labels = {"start": "started", "stop": "stopped", "restart": "restarted"}
             return True, f"✅ AnyTLS {labels.get(action, action)}"
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"❌ Ошибка: {error[:300]}"
+            return False, f"❌ Error: {error[:300]}"
     except FileNotFoundError:
-        return False, "❌ systemctl не найден"
+        return False, "❌ systemctl not found"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def get_logs(lines: int = 30) -> Tuple[bool, str]:
@@ -734,11 +734,11 @@ def get_logs(lines: int = 30) -> Tuple[bool, str]:
             ["journalctl", "-u", "anytls-server", "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )
-        output = result.stdout.strip() or result.stderr.strip() or "(пусто)"
+        output = result.stdout.strip() or result.stderr.strip() or "(empty)"
         if len(output) > 3500:
             output = output[-3500:]
         return True, output
     except FileNotFoundError:
-        return False, "❌ journalctl не найден"
+        return False, "❌ journalctl not found"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"

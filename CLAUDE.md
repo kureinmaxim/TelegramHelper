@@ -7,8 +7,8 @@ code in this repository.
 
 **TelegramHelper** — a Python Telegram bot + REST API for managing AI queries
 (Anthropic/OpenAI), API keys, AES-256-GCM encryption, VLESS-Reality, Hysteria2,
-and MTProto proxy VPN protocols. The project is bilingual (Russian UI/comments,
-English code identifiers). It is a cleaner, publicly shareable evolution of the
+and MTProto proxy VPN protocols. Code identifiers, comments, and user-facing
+text are in English. It is a cleaner, publicly shareable evolution of the
 private ancestor project `TelegramOnly`.
 
 ## Commands

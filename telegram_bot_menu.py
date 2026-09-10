@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Telegram Bot Command Menu — регистрация команд через setMyCommands.
+Telegram Bot Command Menu — register commands via setMyCommands.
 
-Лимит Telegram API: не более 100 команд на область (scope).
-Область по умолчанию — базовые команды для всех.
-Для каждого ADMIN_USER_IDS — расширенное меню (до 100 команд).
+Telegram API limit: at most 100 commands per scope.
+The default scope is the base menu for everyone.
+Each ADMIN_USER_IDS entry gets an expanded menu (up to 100 commands).
 
-При добавлении новой команды в bot.py добавьте её имя в ALL_REGISTERED_COMMAND_NAMES.
+When you add a command in bot.py, add its name to ALL_REGISTERED_COMMAND_NAMES.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from typing import List, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Полный набор имён команд, синхронизируйте с регистрацией CommandHandler в bot.py.
+# Full set of command names; keep in sync with CommandHandler registration in bot.py.
 ALL_REGISTERED_COMMAND_NAMES: frozenset[str] = frozenset(
     {
         "ai",
@@ -278,9 +278,9 @@ ALL_REGISTERED_COMMAND_NAMES: frozenset[str] = frozenset(
     }
 )
 
-MAX_MENU_COMMANDS = 100  # лимит Bot API на число команд в одном scope
+MAX_MENU_COMMANDS = 100  # Bot API limit on commands in one scope
 
-# Команды, видимые всем пользователям (остальные по-прежнему отсекаются в handlers для не-админов).
+# Commands visible to every user (handlers still gate the rest for non-admins).
 PUBLIC_COMMAND_NAMES: Tuple[str, ...] = (
     "start",
     "help",
@@ -310,15 +310,15 @@ SPECIAL_MENU_COMMAND_NAMES: Tuple[str, ...] = (
     "dockhand",
 )
 
-# Компактное нижнее меню администратора.
+# Compact admin bottom menu.
 #
-# Telegram не поддерживает папки в setMyCommands, поэтому порядок = единственная
-# «навигация». Группируем по смыслу сверху вниз (ежедневное → транспорты →
-# mesh/HA → админка). Редкие команды остаются в bot.py и доступны вручную
-# или через /help.
+# Telegram has no folders in setMyCommands, so order is the only
+# navigation. Group by meaning top to bottom (daily → transports →
+# mesh/HA → admin). Rare commands stay in bot.py and are available
+# by typing them or via /help.
 ADMIN_MENU_PRIORITY: Tuple[str, ...] = (
-    # --- обзор (users_log сразу после help — частый вход, как кнопка
-    # «📒 Журнал» в /list_users; Telegram не даёт дублировать одну команду) ---
+    # --- overview (users_log right after help — a frequent entry, like the
+    # "📒 Log" button in /list_users; Telegram cannot duplicate one command) ---
     "start",
     "ver",
     "help",
@@ -329,7 +329,7 @@ ADMIN_MENU_PRIORITY: Tuple[str, ...] = (
     "diag",
     "info",
     "my_profile",
-    # --- пользователи и выдача профилей ---
+    # --- users and profile delivery ---
     "special_add",
     "special_remove",
     "provision",
@@ -350,7 +350,7 @@ ADMIN_MENU_PRIORITY: Tuple[str, ...] = (
     "vless_set_shortid",
     "xray_apply",
     # --- Hysteria2 ---
-    # /hy2 — хаб в автодополнении (клиенты часто не фильтруют hy2_* по префиксу /hy2)
+    # /hy2 — autocomplete hub (clients often do not filter hy2_* by the /hy2 prefix)
     "hy2",
     "hy2_status",
     "hy2_install",
@@ -359,14 +359,14 @@ ADMIN_MENU_PRIORITY: Tuple[str, ...] = (
     "hy2_on",
     "hy2_apply",
     "hy2_start",
-    # --- прочие транспорты ---
+    # --- other transports ---
     "naive_status",
     "mt_status",
     "mieru_status",
     "tuic_status",
     "anytls_status",
     "xhttp_status",
-    # --- mesh / exit / панели ---
+    # --- mesh / exit / panels ---
     "headscale",
     "headscale_status",
     "headscale_list_nodes",
@@ -380,7 +380,7 @@ ADMIN_MENU_PRIORITY: Tuple[str, ...] = (
     "reticulum_hash",
     "reticulum_i2p",
     "reticulum_restart",
-    # --- админка / бэкап / ключи ---
+    # --- admin / backup / keys ---
     "admin_list",
     "admin_add",
     "admin_remove",
@@ -408,84 +408,84 @@ _DESCRIPTIONS_EXPLICIT: dict[str, str] = {
     "help_prompt": "How to use /prompt",
     "kb_on": "Show the RU/EN/FR translation keyboard",
     "kb_off": "Hide the translation keyboard",
-    "info": "Информация о пользователе и сервере",
-    "clear": "Очистить историю диалога",
-    "ver": "Версия бота и адрес VPS",
-    "diag": "Диагностика: кратко всем, полный отчёт — у админа",
-    "dockhand": "Подсказка SSH-туннеля к панели Dockhand",
-    "settings": "Настройки оформления бота (тема, компактный режим)",
-    "rclone": "Краткая справка по offsite backup (rclone)",
-    "api": "Показать (маскированный) API-ключ приложения",
-    "reticulum_status": "Reticulum/HA-стек: статус сервисов, bridge hash и I2P",
-    "reticulum_restart": "Перезапустить HA-стек (bridge + stub gRPC/UDP)",
-    "reticulum_hash": "Показать bridge destination hash (для клиентов)",
-    "reticulum_i2p": "I2P-путь (путь 2): статус i2pd и b32 моста",
-    "admin_list": "Список администраторов (первичные защищены)",
-    "admin_add": "Назначить пользователя админом: /admin_add <id>",
-    "admin_remove": "Снять админа (кроме первичного): /admin_remove <id>",
-    "backup_status": "Статус offsite-бэкапа (rclone)",
-    "backup_test": "Проверить remote rclone",
-    "backup_now": "Создать архив и отправить в облако",
-    "backup_list": "Список последних архивов на remote",
-    "encryption_key": "Ключи шифрования по приложениям",
-    "gen_api_key": "Сгенерировать API-ключ",
-    "del_api_key": "Удалить API-ключ",
-    "gen_encryption_key": "Сгенерировать ключ шифрования",
-    "del_encryption_key": "Удалить ключ шифрования",
-    "gen_chacha_key": "Сгенерировать ChaCha20 ключ",
-    "gen_pqc_key": "Сгенерировать постквантовый ключ",
-    "list_users": "Список: admin / special / обычные (+ кнопки журнала)",
-    "user": "Карточка пользователя по TG ID (профили, QR, ротация)",
-    "users_log": "📒 Журнал: первое и последнее обращение пользователей",
-    "my_profile": "Мои URL и QR профили (special/admin)",
-    "setcity": "Задать город пользователю",
-    "setgreeting": "Задать приветствие",
-    "special_add": "Добавить в особый список",
-    "special_remove": "Убрать из особого списка",
-    "ai_provider": "Провайдер ИИ по умолчанию",
-    "ch_model": "Выбор модели ИИ",
-    "headscale": "Headscale / Tailscale на этом хосте",
-    "exit_node": "Выход в интернет через VPS: статус и как включить на устройстве",
-    "exit_node_on": "Сделать VPS-координатор exit node'ом (только админ)",
-    "exit_node_off": "Выключить exit node на VPS (только админ)",
-    "headscale_status": "Headscale: статус, ноды, Web UI Headplane",
-    "headscale_list_nodes": "Headscale: список нод mesh",
-    "headscale_gen": "Headscale: Pre-Auth ключ ([user] [срок], напр. 720h)",
-    "headscale_revoke": "Headscale: отозвать Pre-Auth ключ (только админ)",
-    "xui_setup": "Настроить интеграцию с панелью 3x-ui (URL/логин/пароль)",
-    "xui_status": "Состояние интеграции 3x-ui",
-    "xui_list": "Список inbound'ов в 3x-ui",
-    "provision": "Создать клиентов в bot-managed inbound'ах для TG-ID",
-    "provision_all": "Провизионинг: все admin + special пакетно",
-    "profiles": "Профили admin/special по TG-ID (обычных нет — /special_add)",
-    "clean_user": "Удалить bot-managed клиентов пользователя (нужно YES)",
-    "vless_list_clients": "Список VLESS-клиентов (legacy или bot-managed)",
-    "setemail": "Привязать email к TG-ID (для /email_profile)",
-    "email_profile": "Отправить bot-managed профили на email пользователя",
-    "xui_set_inbound": "Выбрать inbound по умолчанию для 3x-ui",
-    "xui_enable": "Включить интеграцию 3x-ui",
-    "xui_disable": "Выключить интеграцию 3x-ui (креды сохраняются)",
-    "xui_clear": "Стереть креды 3x-ui (требует YES)",
-    "xui_cancel": "Отменить пошаговую настройку 3x-ui",
-    "naive_set_dpi": "NaiveProxy: тонкие параметры DPI-исследований",
-    "mieru_set_dpi": "Mieru: тонкие параметры DPI-исследований (port/MTU/mux/handshake)",
-    "mieru_status": "Mieru: статус mita, порты, число клиентов",
-    "mieru_export": "Mieru: client config, mierus:// URI, Clash блок",
-    "hy2": "Hysteria2: меню (статус, SNI, on, apply…)",
-    "hy2_install": "Hysteria2: установить/починить бинарник и systemd unit",
-    "hy2_gen_all": "Hysteria2: пароль + сертификат + публичный IP",
-    "hy2_apply": "Hysteria2: применить config.yaml + перезапустить сервис",
-    "hy2_start": "Hysteria2: запустить systemd-сервис",
-    "hy2_status": "Hysteria2: статус профиля, сервиса и бинарника",
-    "hy2_set_sni": "Hysteria2: сменить TLS SNI — без аргумента кнопки выбора",
-    "hy2_on": "Hysteria2: включить в /provision и /my_profile",
-    "vless_gen_keys": "VLESS: сгенерировать UUID/Reality-ключи (legacy host-Xray)",
-    "vless_set_server": "VLESS: задать публичный IP/домен сервера",
-    "vless_set_port": "VLESS: сменить TCP-порт (потом restart xray + firewall)",
-    "vless_set_sni": "VLESS: сменить Reality SNI — /vless_set_sni без домена даёт кнопки выбора",
-    "vless_set_fingerprint": "VLESS: сменить uTLS fingerprint (chrome/ios/…)",
-    "vless_set_shortid": "VLESS: сменить Reality short_id (sid)",
-    "xray_apply": "VLESS: записать конфиг host-Xray (потом /xray_restart или systemctl)",
+    "info": "User and server information",
+    "clear": "Clear conversation history",
+    "ver": "Bot version and VPS address",
+    "diag": "Diagnostics: short for everyone, full report for admins",
+    "dockhand": "SSH tunnel hint for the Dockhand panel",
+    "settings": "Bot UI settings (theme, compact mode)",
+    "rclone": "Short help for offsite backup (rclone)",
+    "api": "Show the (masked) application API key",
+    "reticulum_status": "Reticulum/HA stack: service status, bridge hash, and I2P",
+    "reticulum_restart": "Restart the HA stack (bridge + stub gRPC/UDP)",
+    "reticulum_hash": "Show the bridge destination hash (for clients)",
+    "reticulum_i2p": "I2P path (path 2): i2pd status and bridge b32",
+    "admin_list": "Administrator list (primary admins are protected)",
+    "admin_add": "Make a user an admin: /admin_add <id>",
+    "admin_remove": "Remove an admin (except primary): /admin_remove <id>",
+    "backup_status": "Offsite backup status (rclone)",
+    "backup_test": "Test the rclone remote",
+    "backup_now": "Create an archive and upload it to the cloud",
+    "backup_list": "List recent archives on the remote",
+    "encryption_key": "Per-app encryption keys",
+    "gen_api_key": "Generate an API key",
+    "del_api_key": "Delete an API key",
+    "gen_encryption_key": "Generate an encryption key",
+    "del_encryption_key": "Delete an encryption key",
+    "gen_chacha_key": "Generate a ChaCha20 key",
+    "gen_pqc_key": "Generate a post-quantum key",
+    "list_users": "List: admin / special / regular (+ log buttons)",
+    "user": "User card by TG ID (profiles, QR, rotation)",
+    "users_log": "📒 Log: users' first and last contact",
+    "my_profile": "My profile URLs and QR codes (special/admin)",
+    "setcity": "Set a user's city",
+    "setgreeting": "Set a greeting",
+    "special_add": "Add to the special list",
+    "special_remove": "Remove from the special list",
+    "ai_provider": "Default AI provider",
+    "ch_model": "Choose an AI model",
+    "headscale": "Headscale / Tailscale on this host",
+    "exit_node": "Internet exit via this VPS: status and how to enable it on a device",
+    "exit_node_on": "Make the VPS coordinator an exit node (admin only)",
+    "exit_node_off": "Disable the exit node on the VPS (admin only)",
+    "headscale_status": "Headscale: status, nodes, Headplane web UI",
+    "headscale_list_nodes": "Headscale: mesh node list",
+    "headscale_gen": "Headscale: pre-auth key ([user] [ttl], e.g. 720h)",
+    "headscale_revoke": "Headscale: revoke a pre-auth key (admin only)",
+    "xui_setup": "Configure 3x-ui panel integration (URL/login/password)",
+    "xui_status": "3x-ui integration status",
+    "xui_list": "List inbounds in 3x-ui",
+    "provision": "Create clients in bot-managed inbounds for a TG ID",
+    "provision_all": "Provision all admin + special users in batch",
+    "profiles": "admin/special profiles by TG ID (regular users need /special_add)",
+    "clean_user": "Delete a user's bot-managed clients (requires YES)",
+    "vless_list_clients": "List VLESS clients (legacy or bot-managed)",
+    "setemail": "Bind an email to a TG ID (for /email_profile)",
+    "email_profile": "Send bot-managed profiles to the user's email",
+    "xui_set_inbound": "Choose the default 3x-ui inbound",
+    "xui_enable": "Enable 3x-ui integration",
+    "xui_disable": "Disable 3x-ui integration (credentials are kept)",
+    "xui_clear": "Erase 3x-ui credentials (requires YES)",
+    "xui_cancel": "Cancel the 3x-ui setup wizard",
+    "naive_set_dpi": "NaiveProxy: fine-grained DPI research settings",
+    "mieru_set_dpi": "Mieru: fine-grained DPI research settings (port/MTU/mux/handshake)",
+    "mieru_status": "Mieru: mita status, ports, client count",
+    "mieru_export": "Mieru: client config, mierus:// URI, Clash block",
+    "hy2": "Hysteria2: menu (status, SNI, on, apply…)",
+    "hy2_install": "Hysteria2: install/repair the binary and systemd unit",
+    "hy2_gen_all": "Hysteria2: password + certificate + public IP",
+    "hy2_apply": "Hysteria2: apply config.yaml and restart the service",
+    "hy2_start": "Hysteria2: start the systemd service",
+    "hy2_status": "Hysteria2: profile, service, and binary status",
+    "hy2_set_sni": "Hysteria2: change TLS SNI — no argument shows choice buttons",
+    "hy2_on": "Hysteria2: include in /provision and /my_profile",
+    "vless_gen_keys": "VLESS: generate UUID/Reality keys (legacy host Xray)",
+    "vless_set_server": "VLESS: set the public server IP/domain",
+    "vless_set_port": "VLESS: change the TCP port (then restart xray + firewall)",
+    "vless_set_sni": "VLESS: change Reality SNI — /vless_set_sni with no domain shows buttons",
+    "vless_set_fingerprint": "VLESS: change the uTLS fingerprint (chrome/ios/…)",
+    "vless_set_shortid": "VLESS: change the Reality short_id (sid)",
+    "xray_apply": "VLESS: write the host Xray config (then /xray_restart or systemctl)",
 }
 
 
@@ -501,12 +501,12 @@ _PREFIX_LABELS: Tuple[Tuple[str, str], ...] = (
     ("xray_", "Xray"),
     ("nginx_", "Nginx"),
     ("headscale_", "Headscale"),
-    ("backup_", "Бэкап"),
+    ("backup_", "Backup"),
 )
 
 
 def _infer_description(command: str) -> str:
-    """Краткое описание для команд без явной строки в _DESCRIPTIONS_EXPLICIT."""
+    """Short description for commands without an explicit _DESCRIPTIONS_EXPLICIT entry."""
     for prefix, label in _PREFIX_LABELS:
         if command.startswith(prefix):
             tail = command[len(prefix) :].replace("_", " ").strip()
@@ -515,7 +515,7 @@ def _infer_description(command: str) -> str:
 
 
 def command_description(command: str) -> str:
-    """Текст подсказки для меню Telegram (до 256 символов)."""
+    """Hint text for the Telegram menu (up to 256 characters)."""
     if command in _DESCRIPTIONS_EXPLICIT:
         text = _DESCRIPTIONS_EXPLICIT[command]
     else:
@@ -530,7 +530,7 @@ def build_public_bot_commands() -> List["BotCommand"]:
     for name in PUBLIC_COMMAND_NAMES:
         if name not in ALL_REGISTERED_COMMAND_NAMES:
             logger.warning(
-                "PUBLIC_COMMAND_NAMES ссылается на неизвестную команду %r — пропуск",
+                "PUBLIC_COMMAND_NAMES refers to unknown command %r — skipping",
                 name,
             )
             continue
@@ -539,14 +539,14 @@ def build_public_bot_commands() -> List["BotCommand"]:
 
 
 def build_admin_menu_command_names() -> Tuple[str, ...]:
-    """Компактное admin-меню: только ежедневные entrypoints из ADMIN_MENU_PRIORITY."""
+    """Compact admin menu: daily entry points from ADMIN_MENU_PRIORITY only."""
     ordered: List[str] = []
     seen: set[str] = set()
 
     for name in ADMIN_MENU_PRIORITY:
         if name not in ALL_REGISTERED_COMMAND_NAMES:
             logger.warning(
-                "ADMIN_MENU_PRIORITY: команда %r отсутствует в ALL_REGISTERED_COMMAND_NAMES — проверьте bot.py",
+                "ADMIN_MENU_PRIORITY: command %r is missing from ALL_REGISTERED_COMMAND_NAMES — check bot.py",
                 name,
             )
             continue
@@ -559,8 +559,8 @@ def build_admin_menu_command_names() -> Tuple[str, ...]:
     hidden = max(0, total - len(result))
     if hidden:
         logger.info(
-            "Меню администратора: компактный список %s команд. "
-            "Ещё %s команд доступны через /help или ввод вручную.",
+            "Admin menu: compact list of %s commands. "
+            "Another %s commands are available via /help or by typing them.",
             len(result),
             hidden,
         )
@@ -589,8 +589,8 @@ def build_special_bot_commands() -> List["BotCommand"]:
 
 async def setup_bot_commands(bot, config) -> None:
     """
-    Вызывать после Application.initialize().
-    Регистрирует команды по умолчанию и расширенное меню для каждого ADMIN_USER_IDS.
+    Call after Application.initialize().
+    Registers default commands and an expanded menu for each ADMIN_USER_IDS entry.
     """
     from telegram import BotCommandScopeChat, BotCommandScopeDefault
     from telegram.error import TelegramError
@@ -602,25 +602,25 @@ async def setup_bot_commands(bot, config) -> None:
     try:
         await bot.set_my_commands(public, scope=BotCommandScopeDefault())
         logger.info(
-            "Меню команд: зарегистрированы базовые команды (%s шт.)", len(public)
+            "Command menu: registered base commands (%s)", len(public)
         )
     except TelegramError as exc:
-        logger.warning("Не удалось установить меню команд по умолчанию: %s", exc)
+        logger.warning("Failed to set the default command menu: %s", exc)
 
     try:
         from telegram import MenuButtonCommands
 
         await bot.set_chat_menu_button(menu_button=MenuButtonCommands())
-        logger.info("Кнопка меню чата: MenuButtonCommands (default scope)")
+        logger.info("Chat menu button: MenuButtonCommands (default scope)")
     except TelegramError as exc:
-        logger.warning("Не удалось установить кнопку меню чата: %s", exc)
+        logger.warning("Failed to set the chat menu button: %s", exc)
 
     try:
         from storage import list_users as storage_list_users
 
         special_ids, _users = storage_list_users()
     except Exception as exc:
-        logger.warning("Не удалось прочитать special_user_ids для меню команд: %s", exc)
+        logger.warning("Failed to read special_user_ids for the command menu: %s", exc)
         special_ids = []
 
     admin_ids = {
@@ -640,42 +640,42 @@ async def setup_bot_commands(bot, config) -> None:
                 special_cmds, scope=BotCommandScopeChat(chat_id=chat_id)
             )
             logger.info(
-                "Меню команд special зарегистрировано для chat_id=%s (%s команд)",
+                "Special command menu registered for chat_id=%s (%s commands)",
                 chat_id,
                 len(special_cmds),
             )
         except TelegramError as exc:
             logger.warning(
-                "Не удалось установить меню команд для special %s: %s", chat_id, exc
+                "Failed to set the command menu for special %s: %s", chat_id, exc
             )
 
     if not getattr(config, "admin_user_ids", None):
-        logger.info("ADMIN_USER_IDS пуст — расширенное меню администратора не задано")
+        logger.info("ADMIN_USER_IDS is empty — expanded admin menu not set")
         return
 
     for raw_id in config.admin_user_ids:
         try:
             chat_id = int(raw_id)
         except (TypeError, ValueError):
-            logger.warning("Некорректный ADMIN_USER_IDS элемент %r — пропуск", raw_id)
+            logger.warning("Invalid ADMIN_USER_IDS entry %r — skipping", raw_id)
             continue
         try:
             await bot.set_my_commands(
                 admin_cmds, scope=BotCommandScopeChat(chat_id=chat_id)
             )
             logger.info(
-                "Меню команд администратора зарегистрировано для chat_id=%s (%s команд)",
+                "Admin command menu registered for chat_id=%s (%s commands)",
                 chat_id,
                 len(admin_cmds),
             )
         except TelegramError as exc:
             logger.warning(
-                "Не удалось установить меню команд для админа %s: %s", chat_id, exc
+                "Failed to set the command menu for admin %s: %s", chat_id, exc
             )
 
 
 async def set_special_bot_menu(bot, chat_id: int) -> None:
-    """Назначить special-меню одному пользователю сразу после /special_add."""
+    """Assign the special menu to one user right after /special_add."""
     from telegram import BotCommandScopeChat
 
     await bot.set_my_commands(
@@ -685,7 +685,7 @@ async def set_special_bot_menu(bot, chat_id: int) -> None:
 
 
 async def clear_chat_bot_menu(bot, chat_id: int) -> None:
-    """Сбросить персональное меню; пользователь увидит default commands."""
+    """Clear the per-chat menu; the user will see the default commands."""
     from telegram import BotCommandScopeChat
 
     await bot.delete_my_commands(scope=BotCommandScopeChat(chat_id=int(chat_id)))

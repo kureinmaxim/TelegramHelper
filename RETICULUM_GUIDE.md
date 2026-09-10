@@ -2,6 +2,19 @@
 
 Practical reference for the **Reticulum** stack on a VPS running `TelegramHelper`: what it is, how to install it, how it works over TCP and over **I2P** (path 2 — native i2pd tunnels, e2e ✅, §8). Reticulum here is the **HA stack (stubs)** for e2e testing of the client from `UDP_gRPC_COM_Lite`, not a VPN transport like VLESS/Hysteria2/NaiveProxy.
 
+## Who starts it
+
+The Telegram bot **does not** install or start this stack. `python main.py` and Docker Compose only run the bot + API. VLESS/Hysteria2 profile delivery does not need it.
+
+The HA/Reticulum units are an **optional host sidecar**:
+
+1. `bash scripts/vps_setup.sh` — prompt *HA server + Reticulum (Mi-Home stubs, for tests)?*
+2. or `bash scripts/install_ha_stack.sh` on the VPS
+
+After the units exist, the bot can **inspect and restart** them (`/reticulum_status`, `/reticulum_restart`, `/reticulum_hash`, `/reticulum_i2p`). If they are missing, those commands say the stack is not installed.
+
+This is not Home Assistant. The stubs simulate Mi-Home devices. A real HA (typically on a NAS over Headscale) is a separate optional step: `scripts/install_ha_adapter.sh`.
+
 ## 0. The Most Important Thing
 
 Reticulum in this project is an **RNS bridge** in front of a local gRPC stub server for Mi-Home devices. It is not an application traffic transport and not a browser proxy. It is a test harness that simulates an "HA server" with devices, accessible in two ways: directly via TCP gRPC and through Reticulum.

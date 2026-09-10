@@ -1,22 +1,22 @@
 {
   "science": {
-    "title": "Научный запрос",
-    "template": "Ты выступаешь как научный ассистент. Сформулируй структурированный ответ на запрос.\nЗапрос: {input}\nТребования: кратко, по разделам (Вводные, Ключевые факты, Источники/направления для проверки)."
+    "title": "Scientific query",
+    "template": "You are a scientific assistant. Write a structured answer to the request.\nRequest: {input}\nRequirements: keep it brief, use sections (Background, Key facts, Sources/directions to verify)."
   },
   "fiction": {
-    "title": "Художественная литература",
-    "template": "Ты литературный автор. Напиши фрагмент в выбранном жанре.\nТема/завязка: {input}\nПожелания: образность, выразительный язык, хук в конце."
+    "title": "Fiction",
+    "template": "You are a literary author. Write a short piece in the chosen genre.\nTheme/setup: {input}\nPreferences: imagery, expressive language, a hook at the end."
   },
   "programming": {
-    "title": "Программирование",
-    "template": "Ты опытный разработчик. Объясни и/или предложи решение.\nЗадача/контекст: {input}\nТребования: четкие шаги, примеры кода, тесты."
+    "title": "Programming",
+    "template": "You are an experienced developer. Explain and/or propose a solution.\nTask/context: {input}\nRequirements: clear steps, code examples, tests."
   },
   "creativity": {
-    "title": "Творчество/Brainstorm",
-    "template": "Сгенерируй 10 идей по теме: {input}\nДобавь краткие пояснения и возможные первые шаги."
+    "title": "Creativity/Brainstorm",
+    "template": "Generate 10 ideas on the topic: {input}\nAdd short explanations and possible first steps."
   },
   "debunk": {
-    "title": "Разоблачение фейков",
-    "template": "Структурируй проверку утверждения.\nУтверждение: {input}\nСтруктура: Claim → Факты/источники → Контраргументы → Вывод."
+    "title": "Debunking claims",
+    "template": "Structure a fact-check of the claim.\nClaim: {input}\nStructure: Claim → Facts/sources → Counterarguments → Conclusion."
   }
 }

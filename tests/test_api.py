@@ -5,9 +5,9 @@ import json
 BASE_URL = "http://localhost:8000"
 
 def test_root():
-    """Тест корневого endpoint"""
+    """Test the root endpoint"""
     print("\n" + "="*50)
-    print("📡 Тест: GET /")
+    print("📡 Test: GET /")
     print("="*50)
     try:
         response = requests.get(f"{BASE_URL}/", timeout=5)
@@ -19,16 +19,16 @@ def test_root():
         return False
 
 def test_prompt_templates():
-    """Тест получения шаблонов промптов"""
+    """Test fetching prompt templates"""
     print("\n" + "="*50)
-    print("📋 Тест: GET /prompt_templates")
+    print("📋 Test: GET /prompt_templates")
     print("="*50)
     try:
         response = requests.get(f"{BASE_URL}/prompt_templates", timeout=5)
         print(f"Status Code: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            print(f"Найдено шаблонов: {data['count']}")
+            print(f"Templates found: {data['count']}")
             for t in data['templates']:
                 print(f"  - {t['category']}: {t['title']}")
         else:
@@ -39,16 +39,16 @@ def test_prompt_templates():
         return False
 
 def test_prompt_categories():
-    """Тест получения категорий"""
+    """Test fetching categories"""
     print("\n" + "="*50)
-    print("📂 Тест: GET /prompt_categories")
+    print("📂 Test: GET /prompt_categories")
     print("="*50)
     try:
         response = requests.get(f"{BASE_URL}/prompt_categories", timeout=5)
         print(f"Status Code: {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            print(f"Категории: {', '.join(data['categories'])}")
+            print(f"Categories: {', '.join(data['categories'])}")
         else:
             print("Error:", response.text)
         return response.status_code == 200
@@ -57,15 +57,15 @@ def test_prompt_categories():
         return False
 
 def test_ai_query_direct():
-    """Тест AI запроса с прямым промптом"""
+    """Test an AI request with a direct prompt"""
     print("\n" + "="*50)
-    print("🤖 Тест: POST /ai_query (прямой промпт)")
+    print("🤖 Test: POST /ai_query (direct prompt)")
     print("="*50)
     
     api_key = os.getenv("API_SECRET_KEY", "secret_key")
     
     payload = {
-        "prompt": "Скажи 'Привет' одним словом",
+        "prompt": "Say 'Hello' in one word",
         "provider": "anthropic",
         "max_tokens": 50
     }
@@ -87,16 +87,16 @@ def test_ai_query_direct():
         return False
 
 def test_ai_query_with_template():
-    """Тест AI запроса с использованием шаблона"""
+    """Test an AI request using a template"""
     print("\n" + "="*50)
-    print("🎯 Тест: POST /ai_query (с шаблоном)")
+    print("🎯 Test: POST /ai_query (with template)")
     print("="*50)
     
     api_key = os.getenv("API_SECRET_KEY", "secret_key")
     
     payload = {
         "template_category": "science",
-        "input_text": "Что такое квантовая запутанность?",
+        "input_text": "What is quantum entanglement?",
         "provider": "anthropic",
         "max_tokens": 500
     }
@@ -110,7 +110,7 @@ def test_ai_query_with_template():
             data = response.json()
             print(f"Provider: {data['provider']}")
             print(f"Template used: {data.get('template_used', 'None')}")
-            print(f"Response (первые 200 символов): {data['response'][:200]}...")
+            print(f"Response (first 200 characters): {data['response'][:200]}...")
         else:
             print("Error:", response.text)
         return response.status_code == 200
@@ -119,32 +119,32 @@ def test_ai_query_with_template():
         return False
 
 def test_bom_categorizer_style():
-    """Тест в стиле compatible AES-256-GCM clients - поиск информации о компоненте"""
+    """Test in compatible AES-256-GCM clients style — look up a component"""
     print("\n" + "="*50)
-    print("🔧 Тест: стиль compatible AES-256-GCM clients (компонент)")
+    print("🔧 Test: compatible AES-256-GCM clients style (component)")
     print("="*50)
     
     api_key = os.getenv("API_SECRET_KEY", "secret_key")
     
-    # Промпт как в compatible AES-256-GCM clients
+    # Prompt as in compatible AES-256-GCM clients
     component_name = "STM32F103C8T6"
-    prompt = f"""Найди информацию об электронном компоненте: {component_name}
+    prompt = f"""Find information about the electronic component: {component_name}
 
-Пожалуйста, предоставь следующую информацию в структурированном виде:
+Please provide the following information in a structured form:
 
-1. Полное название и производитель
-2. Тип компонента (микросхема, резистор, конденсатор и т.д.)
-3. Основные характеристики (напряжение, ток, частота, корпус и т.д.)
-4. Краткое описание назначения
-5. Типичные примеры использования (2-3 примера)
+1. Full name and manufacturer
+2. Component type (IC, resistor, capacitor, etc.)
+3. Key specs (voltage, current, frequency, package, etc.)
+4. Brief description of purpose
+5. Typical use cases (2-3 examples)
 
-Формат ответа: JSON
+Response format: JSON
 {{
     "found": true/false,
-    "full_name": "полное название",
-    "manufacturer": "производитель",
-    "type": "тип компонента",
-    "description": "описание"
+    "full_name": "full name",
+    "manufacturer": "manufacturer",
+    "type": "component type",
+    "description": "description"
 }}"""
 
     payload = {
@@ -153,7 +153,7 @@ def test_bom_categorizer_style():
         "max_tokens": 1000
     }
     
-    headers = {"X-API-KEY": api_key}  # Как в compatible AES-256-GCM clients
+    headers = {"X-API-KEY": api_key}  # As in compatible AES-256-GCM clients
     
     try:
         response = requests.post(f"{BASE_URL}/ai_query", json=payload, headers=headers, timeout=60)
@@ -175,30 +175,30 @@ def main():
     
     results = []
     
-    # Тесты без авторизации
+    # Tests without auth
     results.append(("GET /", test_root()))
     results.append(("GET /prompt_templates", test_prompt_templates()))
     results.append(("GET /prompt_categories", test_prompt_categories()))
     
-    # Тесты с авторизацией (требуют API_SECRET_KEY и Anthropic/OpenAI ключ)
+    # Tests with auth (need API_SECRET_KEY and an Anthropic/OpenAI key)
     api_key = os.getenv("API_SECRET_KEY")
     if api_key:
         results.append(("POST /ai_query (direct)", test_ai_query_direct()))
         results.append(("POST /ai_query (template)", test_ai_query_with_template()))
         results.append(("compatible AES-256-GCM clients style", test_bom_categorizer_style()))
     else:
-        print("\n⚠️  API_SECRET_KEY не установлен - пропускаем тесты с авторизацией")
+        print("\n⚠️  API_SECRET_KEY is not set — skipping authenticated tests")
     
-    # Итоги
+    # Summary
     print("\n" + "="*50)
-    print("📊 РЕЗУЛЬТАТЫ:")
+    print("📊 RESULTS:")
     print("="*50)
     passed = sum(1 for _, r in results if r)
     total = len(results)
     for name, result in results:
         status = "✅" if result else "❌"
         print(f"  {status} {name}")
-    print(f"\n  Итого: {passed}/{total} тестов пройдено")
+    print(f"\n  Total: {passed}/{total} tests passed")
 
 if __name__ == "__main__":
     main()

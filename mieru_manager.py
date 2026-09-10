@@ -2,14 +2,14 @@
 """
 Mieru server manager backed by a local JSON config.
 
-Mieru (project enfein/mieru) состоит из двух частей:
-- ``mita`` — серверная часть на VPS, управляется через systemd и `mita` CLI.
-- ``mieru`` — клиентский SOCKS5/HTTP proxy.
+Mieru (project enfein/mieru) has two parts:
+- ``mita`` — the server on the VPS, managed via systemd and the `mita` CLI.
+- ``mieru`` — the client SOCKS5/HTTP proxy.
 
-Этот менеджер хранит state в ``mieru_config.json`` рядом с другими
-*_config.json файлами проекта и генерирует серверный/клиентский config,
-``mierus://`` URI и Clash/mihomo блок. Управление сервисом идёт через
-``systemctl`` (host_run, чтобы работало из Docker с pid: host).
+This manager stores state in ``mieru_config.json`` next to the other
+project *_config.json files and generates server/client config,
+a ``mierus://`` URI, and a Clash/mihomo block. Service control goes through
+``systemctl`` (host_run, so it works from Docker with pid: host).
 """
 
 import json
@@ -34,7 +34,7 @@ _MIERU_CONFIG_PATH = os.getenv(
     os.path.join(os.getcwd(), "mieru_config.json"),
 )
 
-# Серверный JSON, который скармливается `mita apply config`.
+# Server JSON fed to `mita apply config`.
 _MIERU_SERVER_CONFIG_PATH = os.getenv(
     "MIERU_SERVER_CONFIG_PATH",
     "/etc/mieru/server_config.json",
@@ -122,13 +122,13 @@ def _mask_secret(value: str) -> str:
 
 
 def generate_password(length: int = 24) -> str:
-    """Сгенерировать случайный пароль клиента (URL-safe ASCII)."""
+    """Generate a random client password (URL-safe ASCII)."""
     alphabet = string.ascii_letters + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
 def _canonical_client_name(owner_id) -> str:
-    """``Mieru_ID<first2>_<last2>`` из telegram_id владельца."""
+    """``Mieru_ID<first2>_<last2>`` from the owner's telegram_id."""
     digits = "".join(ch for ch in str(owner_id or "") if ch.isdigit())
     if len(digits) < 2:
         digits = (digits + "00")[:2]
@@ -149,23 +149,23 @@ def is_enabled() -> bool:
 def enable() -> Tuple[bool, str]:
     config = _load_config()
     if not config.get("server"):
-        return False, "❌ Не задан server. Используйте /mieru_set_server <ip>"
+        return False, "❌ server is not set. Use /mieru_set_server <ip>"
     if not config.get("port_bindings"):
-        return False, "❌ Нет port_bindings. Используйте /mieru_set_port <port> [tcp|udp]"
+        return False, "❌ No port_bindings. Use /mieru_set_port <port> [tcp|udp]"
     if not config.get("clients"):
-        return False, "❌ Нет клиентов. Используйте /mieru_add_client <name>"
+        return False, "❌ No clients. Use /mieru_add_client <name>"
     config["enabled"] = True
     if _save_config(config):
-        return True, "✅ Mieru включён"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ Mieru enabled"
+    return False, "❌ Failed to save"
 
 
 def disable() -> Tuple[bool, str]:
     config = _load_config()
     config["enabled"] = False
     if _save_config(config):
-        return True, "🔴 Mieru выключен"
-    return False, "❌ Ошибка при сохранении"
+        return True, "🔴 Mieru disabled"
+    return False, "❌ Failed to save"
 
 
 def get_config(include_secrets: bool = False) -> Dict:
@@ -213,74 +213,74 @@ def get_status() -> Dict:
 def set_server(value: str) -> Tuple[bool, str]:
     clean = (value or "").strip()
     if not clean:
-        return False, "❌ Укажите ip или домен"
+        return False, "❌ Specify an IP or domain"
     config = _load_config()
     config["server"] = clean
     if _save_config(config):
-        return True, f"✅ server установлен: {clean}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ server set: {clean}"
+    return False, "❌ Failed to save"
 
 
 def set_port(port: int, protocol: str = "TCP") -> Tuple[bool, str]:
     try:
         port_int = int(port)
     except (TypeError, ValueError):
-        return False, "❌ port должен быть числом"
+        return False, "❌ port must be a number"
     if port_int < 1 or port_int > 65535:
-        return False, "❌ port должен быть в диапазоне 1..65535"
+        return False, "❌ port must be in the range 1..65535"
     proto = (protocol or "TCP").upper()
     if proto not in PROTOCOLS:
-        return False, "❌ protocol должен быть TCP или UDP"
+        return False, "❌ protocol must be TCP or UDP"
     config = _load_config()
     config["port_bindings"] = [{"port": port_int, "protocol": proto}]
     if _save_config(config):
         return (
             True,
-            f"✅ port {port_int}/{proto.lower()} установлен.\n"
-            f"⚠️ Откройте firewall: `ufw allow {port_int}/{proto.lower()}`",
+            f"✅ port {port_int}/{proto.lower()} set.\n"
+            f"⚠️ Open the firewall: `ufw allow {port_int}/{proto.lower()}`",
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_port_range(port_range: str, protocol: str = "TCP") -> Tuple[bool, str]:
     raw = (port_range or "").strip()
     if "-" not in raw:
-        return False, "❌ port_range формат: <from>-<to>, например 20000-20010"
+        return False, "❌ port_range format: <from>-<to>, for example 20000-20010"
     try:
         lo_str, hi_str = raw.split("-", 1)
         lo = int(lo_str)
         hi = int(hi_str)
     except ValueError:
-        return False, "❌ port_range должен быть числами from-to"
+        return False, "❌ port_range must be numbers from-to"
     if lo < 1 or hi > 65535 or lo > hi:
-        return False, "❌ port_range вне допустимого диапазона"
+        return False, "❌ port_range is outside the allowed range"
     proto = (protocol or "TCP").upper()
     if proto not in PROTOCOLS:
-        return False, "❌ protocol должен быть TCP или UDP"
+        return False, "❌ protocol must be TCP or UDP"
     config = _load_config()
     config["port_bindings"] = [
         {"portRange": {"from": lo, "to": hi}, "protocol": proto}
     ]
     if _save_config(config):
         return True, (
-            f"✅ port_range {lo}-{hi}/{proto.lower()} установлен.\n"
-            f"⚠️ Откройте firewall на каждый порт диапазона."
+            f"✅ port_range {lo}-{hi}/{proto.lower()} set.\n"
+            f"⚠️ Open the firewall for every port in the range."
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_mtu(value: int) -> Tuple[bool, str]:
     try:
         mtu = int(value)
     except (TypeError, ValueError):
-        return False, "❌ mtu должен быть числом"
+        return False, "❌ mtu must be a number"
     if mtu < 1280 or mtu > 1500:
-        return False, "❌ mtu должен быть в диапазоне 1280..1500"
+        return False, "❌ mtu must be in the range 1280..1500"
     config = _load_config()
     config["mtu"] = mtu
     if _save_config(config):
-        return True, f"✅ mtu установлен: {mtu}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ mtu set: {mtu}"
+    return False, "❌ Failed to save"
 
 
 def set_multiplexing(level: str) -> Tuple[bool, str]:
@@ -290,12 +290,12 @@ def set_multiplexing(level: str) -> Tuple[bool, str]:
     elif key.upper() in MULTIPLEXING_LEVELS.values():
         resolved = key.upper()
     else:
-        return False, "❌ multiplexing должен быть off|low|middle|high"
+        return False, "❌ multiplexing must be off|low|middle|high"
     config = _load_config()
     config["multiplexing"] = resolved
     if _save_config(config):
-        return True, f"✅ multiplexing установлен: {resolved}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ multiplexing set: {resolved}"
+    return False, "❌ Failed to save"
 
 
 def set_handshake_mode(mode: str) -> Tuple[bool, str]:
@@ -305,48 +305,48 @@ def set_handshake_mode(mode: str) -> Tuple[bool, str]:
     elif key.upper() in HANDSHAKE_MODES.values():
         resolved = key.upper()
     else:
-        return False, "❌ handshake_mode должен быть standard|no_wait"
+        return False, "❌ handshake_mode must be standard|no_wait"
     config = _load_config()
     config["handshake_mode"] = resolved
     if _save_config(config):
-        return True, f"✅ handshake_mode установлен: {resolved}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ handshake_mode set: {resolved}"
+    return False, "❌ Failed to save"
 
 
 def set_socks5_port(port: int) -> Tuple[bool, str]:
     try:
         port_int = int(port)
     except (TypeError, ValueError):
-        return False, "❌ socks5_port должен быть числом"
+        return False, "❌ socks5_port must be a number"
     if port_int < 1 or port_int > 65535:
-        return False, "❌ socks5_port должен быть в диапазоне 1..65535"
+        return False, "❌ socks5_port must be in the range 1..65535"
     config = _load_config()
     config["socks5_port"] = port_int
     if _save_config(config):
-        return True, f"✅ socks5_port установлен: {port_int}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ socks5_port set: {port_int}"
+    return False, "❌ Failed to save"
 
 
 def set_logging_level(level: str) -> Tuple[bool, str]:
     resolved = (level or "").strip().upper()
     if resolved not in LOGGING_LEVELS:
-        return False, "❌ logging_level должен быть DEBUG|INFO|WARN|ERROR"
+        return False, "❌ logging_level must be DEBUG|INFO|WARN|ERROR"
     config = _load_config()
     config["logging_level"] = resolved
     if _save_config(config):
-        return True, f"✅ logging_level установлен: {resolved}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ logging_level set: {resolved}"
+    return False, "❌ Failed to save"
 
 
 def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
-    """Единая ручка для DPI-параметров mita."""
+    """Single knob for mita DPI parameters."""
     key = (param or "").strip().lower().replace("-", "_")
     raw = (value or "").strip()
     if key in {"protocol", "transport"}:
         config = _load_config()
         proto = raw.upper()
         if proto not in PROTOCOLS:
-            return False, "❌ protocol должен быть tcp или udp"
+            return False, "❌ protocol must be tcp or udp"
         bindings = config.get("port_bindings") or [{"port": 29999, "protocol": "TCP"}]
         new_bindings = []
         for binding in bindings:
@@ -355,13 +355,13 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
             new_bindings.append(entry)
         config["port_bindings"] = new_bindings
         if _save_config(config):
-            return True, f"✅ protocol установлен: {proto}"
-        return False, "❌ Ошибка при сохранении"
+            return True, f"✅ protocol set: {proto}"
+        return False, "❌ Failed to save"
     if key == "port":
         try:
             port_int = int(raw)
         except ValueError:
-            return False, "❌ port должен быть числом"
+            return False, "❌ port must be a number"
         config = _load_config()
         proto = "TCP"
         if config.get("port_bindings"):
@@ -377,7 +377,7 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
         try:
             return set_mtu(int(raw))
         except ValueError:
-            return False, "❌ mtu должен быть числом"
+            return False, "❌ mtu must be a number"
     if key == "multiplexing":
         return set_multiplexing(raw)
     if key in {"handshake", "handshake_mode"}:
@@ -386,11 +386,11 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
         try:
             return set_socks5_port(int(raw))
         except ValueError:
-            return False, "❌ socks5_port должен быть числом"
+            return False, "❌ socks5_port must be a number"
     if key in {"logging", "logging_level", "log_level"}:
         return set_logging_level(raw)
     return False, (
-        "❌ Неизвестный параметр. Доступно: protocol, port, port_range, "
+        "❌ Unknown parameter. Available: protocol, port, port_range, "
         "mtu, multiplexing, handshake, socks5_port, logging"
     )
 
@@ -417,11 +417,11 @@ def get_client(name: str) -> Optional[Dict]:
 def add_client(name: str, owner_id=None, password: Optional[str] = None) -> Tuple[bool, str, Dict]:
     clean = (name or "").strip()
     if not clean:
-        return False, "❌ Имя клиента не может быть пустым", {}
+        return False, "❌ Client name cannot be empty", {}
     config = _load_config()
     for client in config.get("clients", []):
         if client.get("name") == clean:
-            return False, f"❌ Клиент {clean} уже существует", {}
+            return False, f"❌ Client {clean} already exists", {}
     secret = (password or "").strip() or generate_password()
     client = {
         "name": clean,
@@ -431,27 +431,27 @@ def add_client(name: str, owner_id=None, password: Optional[str] = None) -> Tupl
     }
     config.setdefault("clients", []).append(client)
     if _save_config(config):
-        return True, f"✅ Клиент добавлен: {clean}", client
-    return False, "❌ Ошибка при сохранении", {}
+        return True, f"✅ Client added: {clean}", client
+    return False, "❌ Failed to save", {}
 
 
 def delete_client(name: str) -> Tuple[bool, str]:
     clean = (name or "").strip()
     if not clean:
-        return False, "❌ Укажите имя клиента"
+        return False, "❌ Specify a client name"
     config = _load_config()
     clients = config.get("clients", [])
     new_clients = [c for c in clients if c.get("name") != clean]
     if len(new_clients) == len(clients):
-        return False, f"❌ Клиент {clean} не найден"
+        return False, f"❌ Client {clean} not found"
     config["clients"] = new_clients
     if _save_config(config):
-        return True, f"✅ Клиент {clean} удалён"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Client {clean} removed"
+    return False, "❌ Failed to save"
 
 
-# provision_manager / user-card ожидают унифицированный API:
-# remove_client(name) -> (ok, msg) и generate_client_uri(name) -> (ok, msg, uri).
+# provision_manager / user-card expect a unified API:
+# remove_client(name) -> (ok, msg) and generate_client_uri(name) -> (ok, msg, uri).
 def remove_client(name: str) -> Tuple[bool, str]:
     return delete_client(name)
 
@@ -461,7 +461,7 @@ def generate_client_uri(name: str) -> Tuple[bool, str, str]:
         uri = build_simple_uri(name)
     except ValueError as exc:
         return False, f"❌ {exc}", ""
-    return True, "✅ URI готов", uri
+    return True, "✅ URI is ready", uri
 
 
 # ---------------------------------------------------------------------------
@@ -470,7 +470,7 @@ def generate_client_uri(name: str) -> Tuple[bool, str, str]:
 
 
 def build_server_config() -> Dict:
-    """Серверный JSON для ``mita apply config``."""
+    """Server JSON for ``mita apply config``."""
     config = _load_config()
     users = []
     for client in config.get("clients", []):
@@ -487,14 +487,14 @@ def build_server_config() -> Dict:
 
 
 def build_client_config(name: str) -> Dict:
-    """Клиентский JSON для ``mieru apply config``."""
+    """Client JSON for ``mieru apply config``."""
     config = _load_config()
     client = get_client(name)
     if not client:
-        raise ValueError(f"Клиент {name} не найден")
+        raise ValueError(f"Client {name} not found")
     server = config.get("server", "")
     if not server:
-        raise ValueError("server не задан")
+        raise ValueError("server is not set")
     profile_name = visible_profile_name("Mieru", server, client["name"])
     profile = {
         "profileName": profile_name,
@@ -528,19 +528,19 @@ def build_client_config(name: str) -> Dict:
 
 
 def build_simple_uri(name: str) -> str:
-    """``mierus://`` ссылка для шаринга. Format:
+    """``mierus://`` share link. Format:
     ``mierus://<user>:<password>@<server>:<port>?protocol=tcp&mtu=...&mux=...&handshake=...#<name>``
     """
     config = _load_config()
     client = get_client(name)
     if not client:
-        raise ValueError(f"Клиент {name} не найден")
+        raise ValueError(f"Client {name} not found")
     server = config.get("server", "")
     if not server:
-        raise ValueError("server не задан")
+        raise ValueError("server is not set")
     bindings = config.get("port_bindings") or []
     if not bindings:
-        raise ValueError("port_bindings не заданы")
+        raise ValueError("port_bindings are not set")
     first = bindings[0]
     if "port" in first:
         port_repr = str(first["port"])
@@ -548,7 +548,7 @@ def build_simple_uri(name: str) -> str:
         rng = first["portRange"]
         port_repr = f"{rng.get('from')}-{rng.get('to')}"
     else:
-        raise ValueError("неподдерживаемый port_binding")
+        raise ValueError("unsupported port_binding")
     proto = first.get("protocol", "TCP").lower()
     mux = config.get("multiplexing", "MULTIPLEXING_LOW").replace("MULTIPLEXING_", "").lower()
     handshake = config.get("handshake_mode", "HANDSHAKE_STANDARD").replace("HANDSHAKE_", "").lower()
@@ -569,22 +569,22 @@ def build_simple_uri(name: str) -> str:
 
 
 def export_client_config(name: str) -> str:
-    """JSON клиентского config как текст."""
+    """Client config JSON as text."""
     return json.dumps(build_client_config(name), ensure_ascii=False, indent=2)
 
 
 def export_clash_block(name: str) -> str:
-    """Минимальный mihomo/Clash YAML блок (proxy + simple group/rules)."""
+    """Minimal mihomo/Clash YAML block (proxy + simple group/rules)."""
     config = _load_config()
     client = get_client(name)
     if not client:
-        raise ValueError(f"Клиент {name} не найден")
+        raise ValueError(f"Client {name} not found")
     server = config.get("server", "")
     if not server:
-        raise ValueError("server не задан")
+        raise ValueError("server is not set")
     bindings = config.get("port_bindings") or []
     if not bindings or "port" not in bindings[0]:
-        raise ValueError("Clash блок требует фиксированный port (не port_range)")
+        raise ValueError("Clash block requires a fixed port (not port_range)")
     port = bindings[0]["port"]
     mux = config.get("multiplexing", "MULTIPLEXING_LOW").replace("MULTIPLEXING_", "").lower()
     proto = bindings[0].get("protocol", "TCP").lower()
@@ -613,29 +613,28 @@ def export_clash_block(name: str) -> str:
 
 
 def export_aping_profile(name: str) -> str:
-    """Unified ``aping-profile`` v1 для Clash Meta desktop import.
+    """Unified ``aping-profile`` v1 for Clash Meta desktop import.
 
-    Соответствует ``ApiXExportProfile`` из Clash Meta ``shared-rs/src/app_config.rs``:
-    desktop принимает только ``format == "apix-profile"`` или
-    ``format == "aping-profile"``. Любая custom-форма (например, прежний
-    ``aping-mieru-profile``) валидацией ``ApiXExportProfile::validate``
-    отвергается.
+    Matches ``ApiXExportProfile`` from Clash Meta ``shared-rs/src/app_config.rs``:
+    desktop accepts only ``format == "apix-profile"`` or
+    ``format == "aping-profile"``. Any custom format (for example the former
+    ``aping-mieru-profile``) is rejected by ``ApiXExportProfile::validate``.
 
-    Структура секции ``mieru`` совпадает с ``ApiXMieruExport``: 10 полей,
-    `port_bindings` сохраняет оба варианта (`port` и `portRange`).
-    `server.host`/`server.port` — общие, `server.port` берётся из первого
-    `port_binding` (с fallback на `port_range.from`).
+    The ``mieru`` section matches ``ApiXMieruExport``: 10 fields,
+    `port_bindings` keeps both variants (`port` and `portRange`).
+    `server.host`/`server.port` are shared; `server.port` is taken from the first
+    `port_binding` (with a fallback to `port_range.from`).
     """
     config = _load_config()
     client = get_client(name)
     if not client:
-        raise ValueError(f"Клиент {name} не найден")
+        raise ValueError(f"Client {name} not found")
     server = config.get("server", "")
     if not server:
-        raise ValueError("server не задан")
+        raise ValueError("server is not set")
     bindings = list(config.get("port_bindings") or [])
     if not bindings:
-        raise ValueError("port_bindings не заданы")
+        raise ValueError("port_bindings are not set")
 
     first = bindings[0]
     if "port" in first and first.get("port"):
@@ -667,7 +666,7 @@ def export_aping_profile(name: str) -> str:
             "port": server_port,
         },
         "vpn_mode": "auto",
-        # Прочие протокольные секции остаются null — они optional в
+        # Other protocol sections stay null — they are optional in
         # ApiXExportProfile (#[serde(default)]).
         "reality": None,
         "naiveproxy": None,
@@ -701,39 +700,39 @@ def export_aping_profile(name: str) -> str:
 
 
 def _service_action(action: str) -> Tuple[bool, str]:
-    """systemctl <action> mita через host_run (Docker pid:host совместимо)."""
+    """systemctl <action> mita via host_run (Docker pid:host compatible)."""
     service = _load_config().get("service_name", "mita")
     cmd = ["systemctl", action, service]
     try:
         result = _host_run(cmd, capture_output=True, text=True, timeout=30)
     except FileNotFoundError:
-        return False, "systemctl не найден на хосте"
+        return False, "systemctl not found on the host"
     except Exception as exc:
-        return False, f"Ошибка systemctl: {exc}"
+        return False, f"systemctl error: {exc}"
     output = (result.stdout or result.stderr or "").strip()
     return result.returncode == 0, output
 
 
 def _mita_cli(*args: str) -> Tuple[bool, str]:
-    """Запуск ``mita ...`` через host_run."""
+    """Run ``mita ...`` via host_run."""
     cmd = ["mita", *args]
     try:
         result = _host_run(cmd, capture_output=True, text=True, timeout=30)
     except FileNotFoundError:
-        return False, "mita CLI не найден (установите через /mieru_install)"
+        return False, "mita CLI not found (install via /mieru_install)"
     except Exception as exc:
-        return False, f"Ошибка mita: {exc}"
+        return False, f"mita error: {exc}"
     output = (result.stdout or result.stderr or "").strip()
     return result.returncode == 0, output
 
 
 def _write_server_config_file() -> Tuple[bool, str, str]:
-    """Сериализовать build_server_config() в файл на host. Возвращает (ok, msg, path)."""
+    """Serialize build_server_config() to a file on the host. Returns (ok, msg, path)."""
     payload = build_server_config()
     if not payload.get("users"):
-        return False, "❌ Нет clients — нечего применять", ""
+        return False, "❌ No clients — nothing to apply", ""
     if not payload.get("portBindings"):
-        return False, "❌ Нет port_bindings", ""
+        return False, "❌ No port_bindings", ""
     target = _MIERU_SERVER_CONFIG_PATH
     try:
         directory = os.path.dirname(target) or "."
@@ -743,17 +742,17 @@ def _write_server_config_file() -> Tuple[bool, str, str]:
             f.flush()
             os.fsync(f.fileno())
     except PermissionError:
-        return False, f"❌ Нет прав на запись {target}. Запустите бот с доступом к /etc/mieru.", ""
+        return False, f"❌ No write permission for {target}. Run the bot with access to /etc/mieru.", ""
     except Exception as exc:
-        return False, f"❌ Ошибка записи {target}: {exc}", ""
-    return True, f"✅ server_config записан: {target}", target
+        return False, f"❌ Failed to write {target}: {exc}", ""
+    return True, f"✅ server_config written: {target}", target
 
 
 def apply_server_config(reload_only: bool = False) -> Tuple[bool, str]:
-    """Записать server_config и применить через ``mita apply config`` + restart/reload.
+    """Write server_config and apply via ``mita apply config`` + restart/reload.
 
-    ``reload_only=True`` использует ``mita reload`` — допустимо только для
-    изменений users/loggingLevel. Для port/MTU нужен полный restart.
+    ``reload_only=True`` uses ``mita reload`` — valid only for
+    users/loggingLevel changes. Port/MTU need a full restart.
     """
     ok, msg, path = _write_server_config_file()
     if not ok:
@@ -768,15 +767,15 @@ def apply_server_config(reload_only: bool = False) -> Tuple[bool, str]:
         return False, f"{msg}\n❌ mita reload: {reload_out}"
     restart_ok, restart_out = _service_action("restart")
     if restart_ok:
-        return True, f"{msg}\n✅ mita сервис перезапущен"
-    return False, f"{msg}\n❌ Не удалось перезапустить mita: {restart_out}"
+        return True, f"{msg}\n✅ mita service restarted"
+    return False, f"{msg}\n❌ Failed to restart mita: {restart_out}"
 
 
 def install_mieru() -> Tuple[bool, str]:
-    """Запуск scripts/install_mieru.sh."""
+    """Run scripts/install_mieru.sh."""
     script_path = os.path.join(os.path.dirname(__file__), "scripts", "install_mieru.sh")
     if not os.path.exists(script_path):
-        return False, f"❌ Скрипт не найден: {script_path}"
+        return False, f"❌ Script not found: {script_path}"
     try:
         result = _host_run(
             ["bash", script_path],
@@ -785,32 +784,32 @@ def install_mieru() -> Tuple[bool, str]:
             timeout=300,
         )
     except Exception as exc:
-        return False, f"❌ Ошибка запуска install_mieru.sh: {exc}"
+        return False, f"❌ Failed to run install_mieru.sh: {exc}"
     output = (result.stdout or result.stderr or "").strip()
     if result.returncode == 0:
-        return True, output or "✅ Mieru (mita) установлен"
-    return False, output or "❌ Установка завершилась с ошибкой"
+        return True, output or "✅ Mieru (mita) installed"
+    return False, output or "❌ Installation failed"
 
 
 def start() -> Tuple[bool, str]:
     ok, output = _service_action("start")
     if ok:
-        return True, "✅ mita запущен"
-    return False, f"❌ {output or 'не удалось запустить mita'}"
+        return True, "✅ mita started"
+    return False, f"❌ {output or 'failed to start mita'}"
 
 
 def stop() -> Tuple[bool, str]:
     ok, output = _service_action("stop")
     if ok:
-        return True, "🔴 mita остановлен"
-    return False, f"❌ {output or 'не удалось остановить mita'}"
+        return True, "🔴 mita stopped"
+    return False, f"❌ {output or 'failed to stop mita'}"
 
 
 def restart() -> Tuple[bool, str]:
     ok, output = _service_action("restart")
     if ok:
-        return True, "♻️ mita перезапущен"
-    return False, f"❌ {output or 'не удалось перезапустить mita'}"
+        return True, "♻️ mita restarted"
+    return False, f"❌ {output or 'failed to restart mita'}"
 
 
 def logs(lines: int = 80) -> Tuple[bool, str]:
@@ -825,10 +824,10 @@ def logs(lines: int = 80) -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=15,
         )
     except FileNotFoundError:
-        return False, "❌ journalctl не найден на хосте"
+        return False, "❌ journalctl not found on the host"
     except Exception as exc:
-        return False, f"❌ Ошибка journalctl: {exc}"
-    output = (result.stdout or result.stderr or "").strip() or "(пусто)"
+        return False, f"❌ journalctl error: {exc}"
+    output = (result.stdout or result.stderr or "").strip() or "(empty)"
     if len(output) > 3500:
         output = output[-3500:]
     return result.returncode == 0, output

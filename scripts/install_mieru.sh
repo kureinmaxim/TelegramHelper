@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 #
-# install_mieru.sh — установка серверной части Mieru (mita) на VPS.
+# install_mieru.sh — install the Mieru server side (mita) on a VPS.
 # Installer for mita (Mieru).
 #
-# Поведение по умолчанию:
-#   - определяет архитектуру через dpkg --print-architecture
-#   - резолвит последний релиз через GitHub Releases API (или pin --version)
-#   - ставит .deb через dpkg -i
-#   - проверяет systemctl status mita
-#   - включает NTP (timedatectl set-ntp true)
-#   - НЕ открывает firewall автоматически — только если передан --port
-#   - печатает следующие шаги для /mieru_set_* и /mieru_apply
+# Default behaviour:
+#   - detect architecture via dpkg --print-architecture
+#   - resolve the latest release via GitHub Releases API (or pin --version)
+#   - install the .deb via dpkg -i
+#   - check systemctl status mita
+#   - enable NTP (timedatectl set-ntp true)
+#   - does NOT open the firewall automatically — only if --port is passed
+#   - prints next steps for /mieru_set_* and /mieru_apply
 #
 set -euo pipefail
 
-VERSION=""           # пусто => latest через GitHub API
-PORT=""              # если задан, открыть в ufw
-PROTOCOL="tcp"       # tcp|udp для firewall
+VERSION=""           # empty => latest via GitHub API
+PORT=""              # if set, open in ufw
+PROTOCOL="tcp"       # tcp|udp for firewall
 SKIP_NTP="0"
 REPO="enfein/mieru"
 
@@ -25,13 +25,13 @@ usage() {
 Usage: sudo bash scripts/install_mieru.sh [options]
 
 Options:
-  --version VER        Pinned mita version (например 3.32.0). По умолчанию — latest.
-  --port PORT          Открыть указанный порт в ufw после установки.
-  --protocol PROTO     tcp|udp для --port (default: tcp).
-  --no-ntp             Не включать timedatectl set-ntp true.
-  -h | --help          Показать справку.
+  --version VER        Pinned mita version (e.g. 3.32.0). Default — latest.
+  --port PORT          Open this port in ufw after install.
+  --protocol PROTO     tcp|udp for --port (default: tcp).
+  --no-ntp             Do not enable timedatectl set-ntp true.
+  -h | --help          Show help.
 
-После установки задайте параметры через бот:
+After install set parameters via the bot:
   /mieru_set_server <ip>
   /mieru_set_port <port> [tcp|udp]
   /mieru_add_client <name>
@@ -54,13 +54,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ $EUID -ne 0 ]]; then
-  echo "❌ Запустите как root (sudo bash scripts/install_mieru.sh)" >&2
+  echo "❌ Run as root (sudo bash scripts/install_mieru.sh)" >&2
   exit 1
 fi
 
-# --- 1. Определить архитектуру -----------------------------------------------
+# --- 1. Detect architecture -----------------------------------------------
 if ! command -v dpkg >/dev/null 2>&1; then
-  echo "❌ dpkg не найден. install_mieru.sh поддерживает Debian/Ubuntu (.deb)." >&2
+  echo "❌ dpkg not found. install_mieru.sh supports Debian/Ubuntu (.deb)." >&2
   exit 1
 fi
 
@@ -68,21 +68,21 @@ ARCH="$(dpkg --print-architecture)"
 case "$ARCH" in
   amd64|arm64) ;;
   *)
-    echo "❌ Неподдерживаемая архитектура: $ARCH (нужна amd64 или arm64)" >&2
+    echo "❌ Unsupported architecture: $ARCH (need amd64 or arm64)" >&2
     exit 1
     ;;
 esac
 
 export DEBIAN_FRONTEND=noninteractive
 
-# Базовые утилиты для скачивания и проверки.
+# Base utilities for download and checks.
 apt-get update -y >/dev/null
 apt-get install -y curl ca-certificates jq >/dev/null 2>&1 || \
   apt-get install -y curl ca-certificates >/dev/null
 
-# --- 2. Резолвим версию ------------------------------------------------------
+# --- 2. Resolve version ------------------------------------------------------
 if [[ -z "$VERSION" ]]; then
-  echo "→ Определяю последнюю версию mita через GitHub API…"
+  echo "→ Resolving the latest mita version via GitHub API…"
   if command -v jq >/dev/null 2>&1; then
     VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
       | jq -r '.tag_name' | sed 's/^v//')"
@@ -91,8 +91,8 @@ if [[ -z "$VERSION" ]]; then
       | grep -m1 '"tag_name"' | sed -E 's/.*"v?([^"]+)".*/\1/')"
   fi
   if [[ -z "$VERSION" ]]; then
-    echo "❌ Не удалось определить версию mita из GitHub API." >&2
-    echo "   Передайте вручную: --version 3.32.0" >&2
+    echo "❌ Failed to resolve mita version from GitHub API." >&2
+    echo "   Pass it by hand: --version 3.32.0" >&2
     exit 1
   fi
 fi
@@ -100,26 +100,26 @@ fi
 DEB_NAME="mita_${VERSION}_${ARCH}.deb"
 DEB_URL="https://github.com/${REPO}/releases/download/v${VERSION}/${DEB_NAME}"
 
-echo "→ Версия: ${VERSION}, архитектура: ${ARCH}"
+echo "→ Version: ${VERSION}, architecture: ${ARCH}"
 echo "→ URL: ${DEB_URL}"
 
-# --- 3. Скачать и установить ------------------------------------------------
+# --- 3. Download and install ------------------------------------------------
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR"' EXIT
 
 DEB_PATH="${TMPDIR}/${DEB_NAME}"
 if ! curl -fSsLo "$DEB_PATH" "$DEB_URL"; then
-  echo "❌ Не удалось скачать ${DEB_URL}" >&2
+  echo "❌ Failed to download ${DEB_URL}" >&2
   exit 1
 fi
 
 if ! dpkg -i "$DEB_PATH"; then
-  echo "→ dpkg вернул ошибку, пытаюсь apt-get install -f…"
+  echo "→ dpkg returned an error, trying apt-get install -f…"
   apt-get install -f -y
   dpkg -i "$DEB_PATH"
 fi
 
-# --- 4. Проверка systemd -----------------------------------------------------
+# --- 4. systemd check -----------------------------------------------------
 systemctl daemon-reload || true
 SYSTEMD_OK="0"
 if systemctl status mita --no-pager >/dev/null 2>&1; then
@@ -133,50 +133,50 @@ if [[ "$SKIP_NTP" != "1" ]]; then
   fi
 fi
 
-# --- 6. Firewall (только если задан --port) ---------------------------------
+# --- 6. Firewall (only if --port is set) ---------------------------------
 if [[ -n "$PORT" ]]; then
   PROTOCOL_LC="$(echo "$PROTOCOL" | tr '[:upper:]' '[:lower:]')"
   if [[ "$PROTOCOL_LC" != "tcp" && "$PROTOCOL_LC" != "udp" ]]; then
-    echo "⚠️ --protocol должен быть tcp или udp; пропускаю firewall." >&2
+    echo "⚠️ --protocol must be tcp or udp; skipping firewall." >&2
   elif command -v ufw >/dev/null 2>&1; then
     ufw allow "${PORT}/${PROTOCOL_LC}" || true
-    echo "→ ufw: открыт ${PORT}/${PROTOCOL_LC}"
+    echo "→ ufw: opened ${PORT}/${PROTOCOL_LC}"
   else
-    echo "⚠️ ufw не найден — откройте ${PORT}/${PROTOCOL_LC} вручную."
+    echo "⚠️ ufw not found — open ${PORT}/${PROTOCOL_LC} by hand."
   fi
 fi
 
 # --- 7. Final summary -------------------------------------------------------
 cat <<EOF
 
-✅ mita ${VERSION} (${ARCH}) установлен.
+✅ mita ${VERSION} (${ARCH}) installed.
 EOF
 
 if [[ "$SYSTEMD_OK" == "1" ]]; then
-  echo "→ systemctl status mita: OK (статус может быть IDLE до /mieru_apply)"
+  echo "→ systemctl status mita: OK (status may be IDLE until /mieru_apply)"
 else
-  echo "⚠️ systemctl status mita вернул ошибку — проверьте логи:"
+  echo "⚠️ systemctl status mita returned an error — check logs:"
   echo "   journalctl -u mita -n 100 --no-pager"
 fi
 
-# Подсказка про группу mita: позволяет работать с `mita` CLI без sudo.
+# Hint about the mita group: lets you use the `mita` CLI without sudo.
 if [[ -n "${SUDO_USER:-}" ]] && id "$SUDO_USER" >/dev/null 2>&1; then
   if ! id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx mita; then
     usermod -a -G mita "$SUDO_USER" || true
-    echo "→ ${SUDO_USER} добавлен в группу mita — перелогиньтесь по SSH."
+    echo "→ ${SUDO_USER} added to the mita group — re-login over SSH."
   fi
 fi
 
 cat <<EOF
 
-Следующие шаги:
+Next steps:
   /mieru_set_server <ip_or_domain>
-  /mieru_set_port <port> [tcp|udp]      # например: 29999 tcp
+  /mieru_set_port <port> [tcp|udp]      # e.g. 29999 tcp
   /mieru_add_client <name>
   /mieru_apply
   /mieru_start
   /mieru_status
 
-Если порт задаётся вручную, не забудьте firewall:
-  ufw allow <port>/tcp   # или /udp
+If you set the port by hand, do not forget the firewall:
+  ufw allow <port>/tcp   # or /udp
 EOF

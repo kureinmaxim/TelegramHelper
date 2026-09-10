@@ -96,11 +96,11 @@ def _random_string(length: int = 16) -> str:
 
 def _parse_bool(value: str) -> bool:
     clean = str(value).strip().lower()
-    if clean in {"1", "true", "yes", "on", "enable", "enabled", "да", "вкл"}:
+    if clean in {"1", "true", "yes", "on", "enable", "enabled"}:
         return True
-    if clean in {"0", "false", "no", "off", "disable", "disabled", "нет", "выкл"}:
+    if clean in {"0", "false", "no", "off", "disable", "disabled"}:
         return False
-    raise ValueError("значение должно быть on/off, true/false или 1/0")
+    raise ValueError("value must be on/off, true/false, or 1/0")
 
 
 def _run_systemctl(*args: str) -> Tuple[bool, str]:
@@ -123,19 +123,19 @@ def enable() -> Tuple[bool, str]:
     required = ["domain", "username", "password"]
     missing = [key for key in required if not config.get(key)]
     if missing:
-        return False, f"Не настроены обязательные параметры: {', '.join(missing)}"
+        return False, f"Required parameters are not set: {', '.join(missing)}"
     config["enabled"] = True
     if _save_config(config):
-        return True, "✅ NaiveProxy включен"
-    return False, "❌ Ошибка при сохранении конфигурации"
+        return True, "✅ NaiveProxy enabled"
+    return False, "❌ Failed to save configuration"
 
 
 def disable() -> Tuple[bool, str]:
     config = _load_config()
     config["enabled"] = False
     if _save_config(config):
-        return True, "🔴 NaiveProxy выключен"
-    return False, "❌ Ошибка при сохранении конфигурации"
+        return True, "🔴 NaiveProxy disabled"
+    return False, "❌ Failed to save configuration"
 
 
 def get_status() -> Dict:
@@ -177,42 +177,42 @@ def set_domain(domain: str) -> Tuple[bool, str]:
     if not config.get("server"):
         config["server"] = clean
     if _save_config(config):
-        return True, f"✅ Домен NaiveProxy установлен: {clean}"
-    return False, "❌ Ошибка при сохранении домена"
+        return True, f"✅ NaiveProxy domain set: {clean}"
+    return False, "❌ Failed to save domain"
 
 
 def set_server(server: str) -> Tuple[bool, str]:
     config = _load_config()
     config["server"] = server.strip()
     if _save_config(config):
-        return True, f"✅ Сервер NaiveProxy установлен: {config['server']}"
-    return False, "❌ Ошибка при сохранении сервера"
+        return True, f"✅ NaiveProxy server set: {config['server']}"
+    return False, "❌ Failed to save server"
 
 
 def set_port(port: int) -> Tuple[bool, str]:
     if port <= 0 or port > 65535:
-        return False, "❌ Порт должен быть в диапазоне 1-65535"
+        return False, "❌ Port must be in the range 1-65535"
     config = _load_config()
     config["port"] = int(port)
     if _save_config(config):
-        return True, f"✅ Порт NaiveProxy установлен: {port}"
-    return False, "❌ Ошибка при сохранении порта"
+        return True, f"✅ NaiveProxy port set: {port}"
+    return False, "❌ Failed to save port"
 
 
 def set_username(username: str) -> Tuple[bool, str]:
     config = _load_config()
     config["username"] = username.strip()
     if _save_config(config):
-        return True, f"✅ Пользователь NaiveProxy установлен: {config['username']}"
-    return False, "❌ Ошибка при сохранении пользователя"
+        return True, f"✅ NaiveProxy username set: {config['username']}"
+    return False, "❌ Failed to save username"
 
 
 def set_password(password: str) -> Tuple[bool, str]:
     config = _load_config()
     config["password"] = password.strip()
     if _save_config(config):
-        return True, "✅ Пароль NaiveProxy обновлен"
-    return False, "❌ Ошибка при сохранении пароля"
+        return True, "✅ NaiveProxy password updated"
+    return False, "❌ Failed to save password"
 
 
 def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
@@ -223,25 +223,25 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
     if key in {"scheme", "protocol", "transport"}:
         scheme = raw.lower()
         if scheme not in {"https", "quic"}:
-            return False, "❌ scheme должен быть https или quic"
+            return False, "❌ scheme must be https or quic"
         config["scheme"] = scheme
-        message = f"✅ NaiveProxy scheme установлен: {scheme}"
+        message = f"✅ NaiveProxy scheme set: {scheme}"
     elif key == "padding":
         try:
             enabled = _parse_bool(raw)
         except ValueError as exc:
             return False, f"❌ {exc}"
         config["padding"] = enabled
-        message = f"✅ padding установлен: {enabled}"
+        message = f"✅ padding set: {enabled}"
     elif key in {"local_socks_port", "socks_port", "local_port"}:
         try:
             port = int(raw)
         except ValueError:
-            return False, "❌ local_socks_port должен быть числом"
+            return False, "❌ local_socks_port must be a number"
         if port <= 0 or port > 65535:
-            return False, "❌ local_socks_port должен быть в диапазоне 1-65535"
+            return False, "❌ local_socks_port must be in the range 1-65535"
         config["local_socks_port"] = port
-        message = f"✅ local_socks_port установлен: {port}"
+        message = f"✅ local_socks_port set: {port}"
     elif key == "probe_resistance":
         try:
             enabled = _parse_bool(raw)
@@ -249,8 +249,8 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
             return False, f"❌ {exc}"
         config["probe_resistance"] = enabled
         message = (
-            f"✅ probe_resistance установлен: {enabled}\n"
-            "Примените на сервере: /naive_apply"
+            f"✅ probe_resistance set: {enabled}\n"
+            "Apply on the server: /naive_apply"
         )
     elif key == "hide_ip":
         try:
@@ -258,37 +258,37 @@ def set_dpi_param(param: str, value: str) -> Tuple[bool, str]:
         except ValueError as exc:
             return False, f"❌ {exc}"
         config["hide_ip"] = enabled
-        message = f"✅ hide_ip установлен: {enabled}\nПримените на сервере: /naive_apply"
+        message = f"✅ hide_ip set: {enabled}\nApply on the server: /naive_apply"
     elif key == "hide_via":
         try:
             enabled = _parse_bool(raw)
         except ValueError as exc:
             return False, f"❌ {exc}"
         config["hide_via"] = enabled
-        message = f"✅ hide_via установлен: {enabled}\nПримените на сервере: /naive_apply"
+        message = f"✅ hide_via set: {enabled}\nApply on the server: /naive_apply"
     elif key in {"camouflage_url", "camouflage", "reverse_proxy"}:
-        if raw.lower() in {"", "off", "none", "disable", "disabled", "нет", "выкл"}:
+        if raw.lower() in {"", "off", "none", "disable", "disabled"}:
             config["camouflage_url"] = ""
-            message = "✅ camouflage_url отключен\nПримените на сервере: /naive_apply"
+            message = "✅ camouflage_url disabled\nApply on the server: /naive_apply"
         else:
             parsed = urlparse(raw)
             if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-                return False, "❌ camouflage_url должен быть http(s)-URL или off"
+                return False, "❌ camouflage_url must be an http(s) URL or off"
             config["camouflage_url"] = raw
             message = (
-                f"✅ camouflage_url установлен: {raw}\n"
-                "Примените на сервере: /naive_apply"
+                f"✅ camouflage_url set: {raw}\n"
+                "Apply on the server: /naive_apply"
             )
     else:
         allowed = (
             "scheme, padding, local_socks_port, probe_resistance, "
             "hide_ip, hide_via, camouflage_url"
         )
-        return False, f"❌ Неизвестный параметр. Доступно: {allowed}"
+        return False, f"❌ Unknown parameter. Available: {allowed}"
 
     if _save_config(config):
         return True, message
-    return False, "❌ Ошибка при сохранении DPI-параметра"
+    return False, "❌ Failed to save DPI parameter"
 
 
 def generate_credentials() -> Tuple[bool, str, Dict]:
@@ -296,11 +296,11 @@ def generate_credentials() -> Tuple[bool, str, Dict]:
     config["username"] = config.get("username") or f"naive-{_random_string(6).lower()}"
     config["password"] = _random_string(24)
     if _save_config(config):
-        return True, "✅ Учетные данные NaiveProxy сгенерированы", {
+        return True, "✅ NaiveProxy credentials generated", {
             "username": config["username"],
             "password": config["password"],
         }
-    return False, "❌ Ошибка при генерации учетных данных", {}
+    return False, "❌ Failed to generate credentials", {}
 
 
 def build_caddyfile() -> str:
@@ -358,10 +358,10 @@ def write_caddyfile(path: str = None) -> Tuple[bool, str]:
         os.makedirs(directory, exist_ok=True)
         with open(target, "w", encoding="utf-8") as f:
             f.write(content)
-        return True, f"✅ Caddyfile записан: {target}"
+        return True, f"✅ Caddyfile written: {target}"
     except Exception as exc:
         logger.error("Error writing Caddyfile: %s", exc)
-        return False, f"❌ Ошибка записи Caddyfile: {exc}"
+        return False, f"❌ Failed to write Caddyfile: {exc}"
 
 
 def apply_server_config() -> Tuple[bool, str]:
@@ -370,18 +370,18 @@ def apply_server_config() -> Tuple[bool, str]:
         return False, message
     reload_ok, reload_output = _run_systemctl("restart")
     if reload_ok:
-        return True, "✅ Caddy/NaiveProxy конфигурация применена"
-    return False, f"❌ Не удалось перезапустить сервис: {reload_output}"
+        return True, "✅ Caddy/NaiveProxy configuration applied"
+    return False, f"❌ Failed to restart service: {reload_output}"
 
 
 def install_naiveproxy() -> Tuple[bool, str]:
     config = _load_config()
     domain = config.get("domain") or config.get("server")
     if not domain:
-        return False, "❌ Сначала задайте домен через /naive_set_domain"
+        return False, "❌ Set the domain first via /naive_set_domain"
     script_path = os.path.join(os.path.dirname(__file__), "scripts", "install_naiveproxy.sh")
     if not os.path.exists(script_path):
-        return False, f"❌ Скрипт установки не найден: {script_path}"
+        return False, f"❌ Install script not found: {script_path}"
 
     cmd = [
         "bash",
@@ -402,12 +402,12 @@ def install_naiveproxy() -> Tuple[bool, str]:
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except Exception as exc:
         logger.error("Error installing NaiveProxy: %s", exc)
-        return False, f"❌ Ошибка запуска install_naiveproxy.sh: {exc}"
+        return False, f"❌ Failed to run install_naiveproxy.sh: {exc}"
 
     output = (result.stdout or result.stderr or "").strip()
     if result.returncode == 0:
-        return True, output or "✅ NaiveProxy установлен"
-    return False, output or "❌ Установка NaiveProxy завершилась с ошибкой"
+        return True, output or "✅ NaiveProxy installed"
+    return False, output or "❌ NaiveProxy installation failed"
 
 
 def build_client_uri() -> str:

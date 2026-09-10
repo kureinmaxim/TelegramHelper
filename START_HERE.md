@@ -24,7 +24,7 @@ Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md).
    - bot (Docker/systemd) + `.env` (token, admin IDs; API secrets are generated automatically);
    - transports (VLESS/Hy2/…) as needed;
    - **Headscale client**, if you need a path to a NAS (`100.64.x`);
-   - **HA + Reticulum** (stubs) → bridge at `:50061`, hash in journal;
+   - **HA + Reticulum** (optional stubs, not started by the bot) → bridge at `:50061`;
    - **+ ha-adapter** (real HA) — once the mesh is up and `HA_TOKEN` is set.
 3. Verify the bot is running: send `/ver` in Telegram.
 4. Optional Home Assistant path: bridge hash + TCP

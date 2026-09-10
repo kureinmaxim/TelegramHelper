@@ -76,9 +76,9 @@ def _run_rclone(args: List[str], timeout: int = DEFAULT_TIMEOUT) -> RcloneComman
             check=False,
         )
     except FileNotFoundError:
-        return RcloneCommandResult(False, "rclone не установлен в контейнере", 127)
+        return RcloneCommandResult(False, "rclone is not installed in the container", 127)
     except subprocess.TimeoutExpired:
-        return RcloneCommandResult(False, f"rclone не ответил за {timeout}s", 124)
+        return RcloneCommandResult(False, f"rclone did not respond within {timeout}s", 124)
 
     output = "\n".join(
         part.strip() for part in (completed.stdout, completed.stderr) if part.strip()
@@ -167,47 +167,47 @@ def format_status() -> str:
     status = get_status()
     config_note = ""
     if status["config_exists"] is False:
-        config_note = "\n⚠️ RCLONE_CONFIG задан, но файл не найден."
+        config_note = "\n⚠️ RCLONE_CONFIG is set, but the file was not found."
 
     return (
         "🗄️ Rclone backup\n\n"
-        f"Установлен: {'✅' if status['installed'] else '❌'} {status['version']}\n"
+        f"Installed: {'✅' if status['installed'] else '❌'} {status['version']}\n"
         f"Remote: {status['remote']}\n"
         f"Prefix: {status['prefix']}\n"
         f"Config: {status['config_path']}{config_note}\n"
-        f"Файлов выбрано: {status['file_count']}\n"
-        f"В архиве: {', '.join(status['files']) if status['files'] else 'none'}"
+        f"Files selected: {status['file_count']}\n"
+        f"In archive: {', '.join(status['files']) if status['files'] else 'none'}"
     )
 
 
 def test_remote() -> RcloneCommandResult:
     remote = _remote_base()
     if not remote:
-        return RcloneCommandResult(False, "RCLONE_REMOTE не настроен", 2)
+        return RcloneCommandResult(False, "RCLONE_REMOTE is not configured", 2)
     return _run_rclone(["lsd", remote], timeout=30)
 
 
 def list_backups(limit: int = 20) -> RcloneCommandResult:
     remote = _remote_base()
     if not remote:
-        return RcloneCommandResult(False, "RCLONE_REMOTE не настроен", 2)
+        return RcloneCommandResult(False, "RCLONE_REMOTE is not configured", 2)
     prefix_path = _remote_join(_backup_prefix(), _hostname())
     result = _run_rclone(["lsf", prefix_path, "--files-only"], timeout=30)
     if not result.ok:
         return result
     lines = [line for line in result.output.splitlines() if line.strip()]
-    latest = "\n".join(lines[-limit:]) if lines else "(backup-архивы не найдены)"
+    latest = "\n".join(lines[-limit:]) if lines else "(no backup archives found)"
     return RcloneCommandResult(True, latest, 0)
 
 
 def create_backup() -> BackupResult:
     remote = _remote_base()
     if not remote:
-        return BackupResult(False, "RCLONE_REMOTE не настроен")
+        return BackupResult(False, "RCLONE_REMOTE is not configured")
 
     files = _candidate_files()
     if not files:
-        return BackupResult(False, "Runtime-файлы для backup не найдены")
+        return BackupResult(False, "Runtime files for backup were not found")
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     target = _target_path(timestamp)
@@ -234,7 +234,7 @@ def create_backup() -> BackupResult:
 
     return BackupResult(
         True,
-        "Backup успешно загружен",
+        "Backup uploaded successfully",
         target,
         tuple(_safe_member_name(path) for path in files),
     )
@@ -242,11 +242,11 @@ def create_backup() -> BackupResult:
 
 def format_backup_result(result: BackupResult) -> str:
     if not result.ok:
-        return f"❌ Backup не выполнен\n\n{result.message}"
+        return f"❌ Backup failed\n\n{result.message}"
     return (
-        "✅ Backup готов\n\n"
+        "✅ Backup is ready\n\n"
         f"Remote: {result.remote_path}\n"
-        f"Файлов: {len(result.files)}"
+        f"Files: {len(result.files)}"
     )
 
 

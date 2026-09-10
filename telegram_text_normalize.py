@@ -1,14 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Нормализация вставленного из /help текста команд (iOS / копипаст).
+Normalize command text pasted from /help (iOS / copy-paste).
 
-Telegram на части клиентов отправляет «чёрное» сообщение без сущности
-MessageEntity.BOT_COMMAND — тогда CommandHandler в python-telegram-bot
-(фильтр filters.COMMAND) не вызывается. Невидимые символы, U+2044 FRACTION SLASH ⁄ («плоский» слэш), NFKC, блок code/pre
-из /help (iOS): без BOT_COMMAND CommandHandler в PTB не вызывается.
+On some clients Telegram sends a "plain" message without a
+MessageEntity.BOT_COMMAND entity — then CommandHandler in python-telegram-bot
+(filters.COMMAND) never fires. Invisible characters, U+2044 FRACTION SLASH ⁄
+("flat" slash), NFKC, and a code/pre block from /help (iOS): without
+BOT_COMMAND, CommandHandler in PTB is not invoked.
 
-Обработчик из bot.py вешается в group=-1 и только правит text/entities
-до остальных хендлеров.
+The handler from bot.py is registered in group=-1 and only fixes text/entities
+before the other handlers run.
 """
 
 from __future__ import annotations
@@ -26,17 +27,17 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Визуальные «двойники» SOLIDUS (U+002F): из /help с типографикой и с iPhone
-# часто прилетает U+2044 FRACTION SLASH ⁄ — выглядит «положе» обычного /.
+# Visual lookalikes of SOLIDUS (U+002F): /help typography and iPhone paste
+# often send U+2044 FRACTION SLASH ⁄ — looks "flatter" than a normal /.
 _SLASH_ALIASES: tuple[str, ...] = (
     "\uff0f",  # U+FF0F FULLWIDTH SOLIDUS ／
     "\u2215",  # U+2215 DIVISION SLASH ∕
     "\u29f8",  # U+29F8 BIG SOLIDUS ⧸
-    "\u2044",  # U+2044 FRACTION SLASH ⁄ (типичный «не тот» слэш из Rich/интерфейсов)
+    "\u2044",  # U+2044 FRACTION SLASH ⁄ (typical wrong slash from Rich/UIs)
     "\u2571",  # U+2571 BOX DRAWINGS LIGHT DIAGONAL ╱
 )
 
-# Невидимые / форматирующие, часто протаскиваются с iPhone в буфер обмена
+# Invisible / formatting chars often carried over from the iPhone clipboard
 _STRIP_INVISIBLE = (
     "\ufeff",  # BOM
     "\u200b",  # zero-width space
@@ -48,12 +49,12 @@ _STRIP_INVISIBLE = (
     "\u200f",  # RLM
 )
 
-# Префикс команды: /name или /name@bot (как в Telegram)
+# Command prefix: /name or /name@bot (as in Telegram)
 _CMD_PREFIX_RE = re.compile(r"^/[A-Za-z0-9_]+(?:@[A-Za-z0-9_]+)?")
 
 
 def _normalize_first_token_solidus(text: str) -> str:
-    """Заменяет «не тот» слэш только в первом токене; NFKC сворачивает ⁄／ к /."""
+    """Replace a lookalike slash only in the first token; NFKC folds ⁄／ to /."""
     if not text:
         return text
     split = text.split(maxsplit=1)
@@ -68,7 +69,7 @@ def _normalize_first_token_solidus(text: str) -> str:
 
 
 def _command_prefix_length(text: str) -> int:
-    """Длина первого токена-команды (с учётом @bot), без хвостовых аргументов."""
+    """Length of the first command token (including @bot), without trailing args."""
     if not text:
         return 0
     m = _CMD_PREFIX_RE.match(text)
@@ -76,7 +77,7 @@ def _command_prefix_length(text: str) -> int:
 
 
 def normalize_pasted_command_text(text: str) -> str:
-    """Убирает невидимые символы, приводит слэш к ASCII, поджимает пробелы у /command."""
+    """Strip invisible chars, normalize the slash to ASCII, tighten spaces on /command."""
     if not text:
         return text
     t = text
@@ -85,10 +86,10 @@ def normalize_pasted_command_text(text: str) -> str:
     t = t.strip()
     if not t:
         return t
-    # Слэш — только в первом слове (команда), чтобы не трогать дроби в хвосте сообщения
+    # Slash — only in the first word (the command), so fractions later in the message stay intact
     t = _normalize_first_token_solidus(t)
     if t.startswith("/"):
-        # "/   cmd" -> "/cmd" только в начале; аргументы после первого пробела не трогаем
+        # "/   cmd" -> "/cmd" only at the start; args after the first space are left as-is
         head, sep, tail = t.partition(" ")
         head_clean = "/" + head.lstrip("/").strip()
         t = head_clean + (sep + tail if sep else "")
@@ -110,7 +111,7 @@ def _set_message_entities(message, entities: tuple[MessageEntity, ...]) -> None:
 
 
 def _ensure_bot_command_entity(message) -> None:
-    """Добавляет или поправляет BOT_COMMAND у offset=0, если это безопасно."""
+    """Add or fix BOT_COMMAND at offset=0 when it is safe to do so."""
     text = message.text
     if not text or not text.startswith("/"):
         return
@@ -130,7 +131,7 @@ def _ensure_bot_command_entity(message) -> None:
                 )
                 _set_message_entities(message, tuple(raw_entities))
             return
-        # Одна сущность code/pre на всё сообщение — копирование из /help на iOS (команда без BOT_COMMAND)
+        # Single code/pre entity on the whole message — paste from /help on iOS (command without BOT_COMMAND)
         if (
             len(raw_entities) == 1
             and first.offset == 0
@@ -142,7 +143,7 @@ def _ensure_bot_command_entity(message) -> None:
                 (MessageEntity(MessageEntityType.BOT_COMMAND, 0, prefix_len),),
             )
             return
-        # Уже есть другая сущность с offset 0 (bold и т.д.) — не порти оффсеты
+        # Another entity already starts at offset 0 (bold, etc.) — do not shift offsets
         if first.offset == 0:
             return
         raw_entities.insert(
@@ -161,7 +162,7 @@ def _ensure_bot_command_entity(message) -> None:
 async def normalize_pasted_command_update(
     update: Update, _context: "ContextTypes.DEFAULT_TYPE"
 ) -> None:
-    """MessageHandler (group=-1): починить text + entities для CommandHandler."""
+    """MessageHandler (group=-1): fix text + entities for CommandHandler."""
     message = update.effective_message
     if message is None or message.text is None:
         return
@@ -170,9 +171,9 @@ async def normalize_pasted_command_update(
     normalized = normalize_pasted_command_text(original)
     if normalized != original:
         _set_message_text(message, normalized)
-        # offset'ы entities относились к старой строке — сбросить, иначе PTB путается
+        # Entity offsets belonged to the old string — reset them or PTB gets confused
         _set_message_entities(message, ())
         logger.debug("Normalized pasted command text: %r -> %r", original, normalized)
 
-    # Главный фикc для iOS: нет BOT_COMMAND → CommandHandler молчит
+    # Main iOS fix: no BOT_COMMAND → CommandHandler stays silent
     _ensure_bot_command_entity(message)

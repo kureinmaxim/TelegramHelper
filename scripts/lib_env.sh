@@ -1,12 +1,12 @@
 # ============================================================================
-# Общие хелперы для .env (подключать из install_*.sh):
+# Shared .env helpers (source from install_*.sh):
 #   # shellcheck source=lib_env.sh
 #   source "$(dirname "$0")/lib_env.sh"
 #
-# Ожидает переменную ENV_FILE=/path/to/.env
+# Expects ENV_FILE=/path/to/.env
 # ============================================================================
 
-# Значение KEY из .env: без \r, без окружающих кавычек и пробелов.
+# Value of KEY from .env: no \r, no surrounding quotes or spaces.
 env_get() {
   local key="$1" line val
   [[ -f "${ENV_FILE}" ]] || { echo ""; return 0; }
@@ -15,7 +15,7 @@ env_get() {
   val="${line#*=}"
   val="${val%$'\r'}"
   val="$(printf '%s' "${val}" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-  # снять одну пару кавычек
+  # strip one pair of quotes
   if [[ "${val}" =~ ^\"(.*)\"$ ]]; then
     val="${BASH_REMATCH[1]}"
   elif [[ "${val}" =~ ^\'(.*)\'$ ]]; then
@@ -24,7 +24,7 @@ env_get() {
   printf '%s' "${val}"
 }
 
-# Записать KEY=VALUE (создаёт строку, если нет).
+# Write KEY=VALUE (creates the line if missing).
 env_set() {
   local key="$1" value="$2" esc
   touch "${ENV_FILE}"
@@ -41,7 +41,7 @@ env_set() {
   fi
 }
 
-# Плейсхолдер / пусто / типичные заготовки из example.env
+# Placeholder / empty / typical example.env stubs
 env_is_placeholder() {
   local key="$1" val
   val="$(env_get "${key}")"
@@ -54,7 +54,7 @@ env_is_placeholder() {
     optional_separate_encryption_key_otherwise_api_secret_is_used) return 0 ;;
     http://YOUR_SERVER_IP:8000/ai_query) return 0 ;;
   esac
-  # любой YOUR_SERVER_IP внутри значения
+  # any YOUR_SERVER_IP inside the value
   [[ "${val}" == *YOUR_SERVER_IP* ]] && return 0
   return 1
 }
@@ -65,10 +65,10 @@ env_ensure_file() {
   if [[ ! -f "${ENV_FILE}" ]]; then
     if [[ -f "${example}" ]]; then
       cp "${example}" "${ENV_FILE}"
-      echo "Создан ${ENV_FILE} из example.env"
+      echo "Created ${ENV_FILE} from example.env"
     else
       touch "${ENV_FILE}"
-      echo "Создан пустой ${ENV_FILE}"
+      echo "Created empty ${ENV_FILE}"
     fi
   fi
 }
@@ -89,9 +89,9 @@ _detect_public_ip() {
   printf '%s' "${ip}"
 }
 
-# Интерактивная настройка обязательных полей с подсказками.
-# Если значение уже реальное — НЕ переспрашивает (только сообщает).
-# Переменные окружения BOT_TOKEN / ADMIN_USER_IDS имеют приоритет при пустом .env.
+# Interactive setup of required fields with hints.
+# If a value is already real — do NOT re-ask (just report).
+# Env vars BOT_TOKEN / ADMIN_USER_IDS take priority when .env is empty.
 configure_essential_env() {
   local token ids secret hmac pub api_url current
 
@@ -99,62 +99,62 @@ configure_essential_env() {
 
   echo ""
   echo "════════════════════════════════════════════════════════════"
-  echo "  Настройка .env (обязательные поля для бота / API)"
-  echo "  Файл: ${ENV_FILE}"
+  echo "  Configure .env (required fields for the bot / API)"
+  echo "  File: ${ENV_FILE}"
   echo "════════════════════════════════════════════════════════════"
-  echo "  Подсказки:"
-  echo "  • BOT_TOKEN — @BotFather → /newbot → токен вида 123456:AA..."
-  echo "  • ADMIN_USER_IDS — твой числовой Telegram id (@userinfobot"
-  echo "    или напиши боту /info после первого запуска)"
-  echo "  • API_SECRET_KEY / HMAC_SECRET — длинные секреты для API;"
-  echo "    если пусто, скрипт сгенерирует сам"
-  echo "  • Уже заполненные поля НЕ переспрашиваются"
+  echo "  Hints:"
+  echo "  • BOT_TOKEN — @BotFather → /newbot → token like 123456:AA..."
+  echo "  • ADMIN_USER_IDS — your numeric Telegram id (@userinfobot"
+  echo "    or send the bot /info after the first start)"
+  echo "  • API_SECRET_KEY / HMAC_SECRET — long secrets for the API;"
+  echo "    if empty, the script generates them"
+  echo "  • Fields that are already filled are NOT re-asked"
   echo "════════════════════════════════════════════════════════════"
 
   # --- BOT_TOKEN ---
   if ! env_is_placeholder BOT_TOKEN; then
     current="$(env_get BOT_TOKEN)"
-    echo "✅ BOT_TOKEN уже задан (${current:0:6}…${current: -4}) — пропускаю."
+    echo "✅ BOT_TOKEN already set (${current:0:6}…${current: -4}) — skipping."
   else
     token="${BOT_TOKEN:-}"
     if [[ -z "${token}" && -t 0 ]]; then
       echo ""
-      echo "BOT_TOKEN (от @BotFather). Enter — пропустить и задать позже в .env"
+      echo "BOT_TOKEN (from @BotFather). Enter — skip and set later in .env"
       read -r -p "BOT_TOKEN: " token || true
     fi
     if [[ -n "${token}" ]]; then
       if ! [[ "${token}" =~ ^[0-9]+:[A-Za-z0-9_-]+$ ]]; then
-        echo "⚠ Токен не похож на формат BotFather (<цифры>:<строка>). Записываю как есть."
+        echo "⚠ Token does not look like BotFather format (<digits>:<string>). Writing as-is."
       fi
       env_set BOT_TOKEN "${token}"
-      echo "✅ BOT_TOKEN записан."
+      echo "✅ BOT_TOKEN written."
     else
-      echo "⚠ BOT_TOKEN не задан — бот не стартует, пока не впишешь в ${ENV_FILE}"
+      echo "⚠ BOT_TOKEN is not set — the bot will not start until you fill it in ${ENV_FILE}"
     fi
   fi
 
   # --- ADMIN_USER_IDS ---
   if ! env_is_placeholder ADMIN_USER_IDS; then
     current="$(env_get ADMIN_USER_IDS)"
-    echo "✅ ADMIN_USER_IDS уже задан (${current}) — пропускаю."
+    echo "✅ ADMIN_USER_IDS already set (${current}) — skipping."
   else
     ids="${ADMIN_USER_IDS:-}"
     if [[ -z "${ids}" && -t 0 ]]; then
       echo ""
-      echo "ADMIN_USER_IDS — твой Telegram id (число)."
-      echo "Узнать: @userinfobot или @getidsbot. Несколько — через запятую."
-      echo "Enter — пропустить и задать позже в .env"
+      echo "ADMIN_USER_IDS — your Telegram id (number)."
+      echo "Find it: @userinfobot or @getidsbot. Several — comma-separated."
+      echo "Enter — skip and set later in .env"
       read -r -p "ADMIN_USER_IDS: " ids || true
     fi
     if [[ -n "${ids}" ]]; then
       ids="$(printf '%s' "${ids}" | tr -d '[:space:]')"
       if ! [[ "${ids}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
-        echo "⚠ Ожидались числа через запятую. Записываю как есть."
+        echo "⚠ Expected comma-separated numbers. Writing as-is."
       fi
       env_set ADMIN_USER_IDS "${ids}"
-      echo "✅ ADMIN_USER_IDS записан (${ids})."
+      echo "✅ ADMIN_USER_IDS written (${ids})."
     else
-      echo "⚠ ADMIN_USER_IDS не задан — без него бот не признает тебя админом."
+      echo "⚠ ADMIN_USER_IDS is not set — without it the bot will not treat you as admin."
     fi
   fi
 
@@ -162,21 +162,21 @@ configure_essential_env() {
   if env_is_placeholder API_SECRET_KEY; then
     secret="$(_rand_hex32)"
     env_set API_SECRET_KEY "${secret}"
-    echo "✅ API_SECRET_KEY сгенерирован и записан."
+    echo "✅ API_SECRET_KEY generated and written."
   else
-    echo "✅ API_SECRET_KEY уже задан — пропускаю."
+    echo "✅ API_SECRET_KEY already set — skipping."
   fi
 
-  # --- HMAC_SECRET (рядом с API по смыслу; в example.env может быть ниже) ---
+  # --- HMAC_SECRET (next to API; in example.env it may sit lower) ---
   if env_is_placeholder HMAC_SECRET; then
     hmac="$(_rand_hex32)"
     env_set HMAC_SECRET "${hmac}"
-    echo "✅ HMAC_SECRET сгенерирован и записан."
+    echo "✅ HMAC_SECRET generated and written."
   else
-    echo "✅ HMAC_SECRET уже задан — пропускаю."
+    echo "✅ HMAC_SECRET already set — skipping."
   fi
 
-  # --- API_URL / публичный хост ---
+  # --- API_URL / public host ---
   if env_is_placeholder API_URL || env_is_placeholder TELEGRAMHELPER_PUBLIC_HOST; then
     pub="$(env_get TELEGRAMHELPER_PUBLIC_HOST)"
     if env_is_placeholder TELEGRAMHELPER_PUBLIC_HOST; then
@@ -187,8 +187,8 @@ configure_essential_env() {
     fi
     if [[ -t 0 ]]; then
       echo ""
-      echo "Публичный IP/домен этого VPS (для API_URL и подсказок в боте)."
-      read -r -p "PUBLIC_HOST [${pub:-вручную позже}]: " current || true
+      echo "Public IP/domain of this VPS (for API_URL and bot hints)."
+      read -r -p "PUBLIC_HOST [${pub:-set later by hand}]: " current || true
       [[ -n "${current}" ]] && pub="${current}"
     fi
     if [[ -n "${pub}" ]]; then
@@ -200,21 +200,21 @@ configure_essential_env() {
       fi
       echo "✅ TELEGRAMHELPER_PUBLIC_HOST=${pub}"
     else
-      echo "⚠ Публичный хост не задан — поправь API_URL / TELEGRAMHELPER_PUBLIC_HOST в .env"
+      echo "⚠ Public host is not set — fix API_URL / TELEGRAMHELPER_PUBLIC_HOST in .env"
     fi
   else
-    echo "✅ API_URL / TELEGRAMHELPER_PUBLIC_HOST уже заданы — пропускаю."
+    echo "✅ API_URL / TELEGRAMHELPER_PUBLIC_HOST already set — skipping."
   fi
 
   echo ""
-  echo "Критические поля в ${ENV_FILE}:"
+  echo "Critical fields in ${ENV_FILE}:"
   if env_is_placeholder BOT_TOKEN; then
-    echo "  BOT_TOKEN         — ⚠ ещё плейсхолдер"
+    echo "  BOT_TOKEN         — ⚠ still a placeholder"
   else
     echo "  BOT_TOKEN         — ok"
   fi
   if env_is_placeholder ADMIN_USER_IDS; then
-    echo "  ADMIN_USER_IDS    — ⚠ ещё плейсхолдер"
+    echo "  ADMIN_USER_IDS    — ⚠ still a placeholder"
   else
     echo "  ADMIN_USER_IDS    — ok ($(env_get ADMIN_USER_IDS))"
   fi

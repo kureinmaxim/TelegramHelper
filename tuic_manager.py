@@ -1,15 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для управления TUIC конфигурацией.
+Module for managing TUIC configuration.
 
-TUIC v5 — высокопроизводительный прокси на основе QUIC.
-Каждый клиент идентифицируется парой uuid + password.
-Сервер (sing-box inbound) хранит массив users: [{uuid, password, name}].
+TUIC v5 is a high-performance QUIC-based proxy.
+Each client is identified by a uuid + password pair.
+The server (sing-box inbound) stores an array of users: [{uuid, password, name}].
 
-Структура конфигурации:
+Configuration structure:
 {
     "enabled": false,
-    "server": "IP или домен VPS",
+    "server": "VPS IP or domain",
     "port": 443,
     "sni": "",
     "insecure": false,
@@ -77,7 +77,7 @@ def _generate_password(length: int = 16) -> str:
 
 
 def _load_config() -> Dict:
-    """Загрузить конфигурацию TUIC из файла."""
+    """Load TUIC configuration from file."""
     with _tuic_lock:
         if not os.path.exists(_TUIC_CONFIG_PATH):
             return dict(DEFAULT_CONFIG)
@@ -94,7 +94,7 @@ def _load_config() -> Dict:
 
 
 def _save_config(config: Dict) -> bool:
-    """Сохранить конфигурацию TUIC в файл."""
+    """Save TUIC configuration to file."""
     with _tuic_lock:
         try:
             config["updated_at"] = datetime.now().isoformat()
@@ -125,22 +125,22 @@ def is_enabled() -> bool:
 def enable() -> Tuple[bool, str]:
     config = _load_config()
     if not config.get("server"):
-        return False, "❌ Не настроен сервер"
+        return False, "❌ Server is not configured"
     if not config.get("clients"):
-        return False, "❌ Нет ни одного клиента. Сначала добавьте: /tuic_add <имя>"
+        return False, "❌ No clients yet. First add one: /tuic_add <name>"
 
     config["enabled"] = True
     if _save_config(config):
-        return True, "✅ TUIC включён"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ TUIC enabled"
+    return False, "❌ Failed to save"
 
 
 def disable() -> Tuple[bool, str]:
     config = _load_config()
     config["enabled"] = False
     if _save_config(config):
-        return True, "🔴 TUIC выключен"
-    return False, "❌ Ошибка при сохранении"
+        return True, "🔴 TUIC disabled"
+    return False, "❌ Failed to save"
 
 
 def get_status() -> Dict:
@@ -221,7 +221,7 @@ def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
             server = detected_ip
             auto_detected = True
         else:
-            return False, "❌ Не удалось определить IP. Укажите вручную: /tuic_set_server <IP>"
+            return False, "❌ Could not determine IP. Specify manually: /tuic_set_server <IP>"
     else:
         auto_detected = False
 
@@ -229,62 +229,62 @@ def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
     config["server"] = server.strip()
     if _save_config(config):
         if auto_detected:
-            return True, f"✅ Сервер установлен автоматически: {server}"
-        return True, f"✅ Сервер установлен: {server}"
-    return False, "❌ Ошибка при сохранении"
+            return True, f"✅ Server set automatically: {server}"
+        return True, f"✅ Server set: {server}"
+    return False, "❌ Failed to save"
 
 
 def set_port(port: int) -> Tuple[bool, str]:
     if not isinstance(port, int) or port < 1 or port > 65535:
-        return False, "❌ Порт должен быть числом от 1 до 65535"
+        return False, "❌ Port must be a number from 1 to 65535"
 
     config = _load_config()
     config["port"] = port
-    recommended = "⭐ рекомендуемый" if port in RECOMMENDED_PORTS else ""
+    recommended = "⭐ recommended" if port in RECOMMENDED_PORTS else ""
     if _save_config(config):
-        return True, f"✅ Порт установлен: {port} {recommended}\n⚠️ Не забудьте открыть UDP порт: `ufw allow {port}/udp`"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Port set: {port} {recommended}\n⚠️ Remember to open the UDP port: `ufw allow {port}/udp`"
+    return False, "❌ Failed to save"
 
 
 def set_sni(sni: str) -> Tuple[bool, str]:
     config = _load_config()
     config["sni"] = sni.strip() if sni else ""
     if _save_config(config):
-        return True, f"✅ SNI установлен: {config['sni'] or '(пусто)'}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ SNI set: {config['sni'] or '(empty)'}"
+    return False, "❌ Failed to save"
 
 
 def set_insecure(insecure: bool) -> Tuple[bool, str]:
     config = _load_config()
     config["insecure"] = insecure
     if _save_config(config):
-        status = "включён ⚠️" if insecure else "выключен ✅"
+        status = "enabled ⚠️" if insecure else "disabled ✅"
         return True, f"✅ Insecure mode: {status}"
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_congestion_control(cc: str) -> Tuple[bool, str]:
     cc = (cc or "").strip().lower()
     if cc not in CONGESTION_CONTROLS:
-        return False, f"❌ Допустимые значения: {', '.join(CONGESTION_CONTROLS)}"
+        return False, f"❌ Allowed values: {', '.join(CONGESTION_CONTROLS)}"
 
     config = _load_config()
     config["congestion_control"] = cc
     if _save_config(config):
         return True, f"✅ Congestion control: {cc}"
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_udp_relay_mode(mode: str) -> Tuple[bool, str]:
     mode = (mode or "").strip().lower()
     if mode not in UDP_RELAY_MODES:
-        return False, f"❌ Допустимые значения: {', '.join(UDP_RELAY_MODES)}"
+        return False, f"❌ Allowed values: {', '.join(UDP_RELAY_MODES)}"
 
     config = _load_config()
     config["udp_relay_mode"] = mode
     if _save_config(config):
         return True, f"✅ UDP relay mode: {mode}"
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 # === TLS ===
@@ -299,7 +299,7 @@ def generate_self_signed_cert(
     try:
         os.makedirs(cert_dir, exist_ok=True)
     except Exception as e:
-        return False, f"❌ Не удалось создать директорию {cert_dir}: {e}"
+        return False, f"❌ Failed to create directory {cert_dir}: {e}"
 
     try:
         cmd = [
@@ -317,7 +317,7 @@ def generate_self_signed_cert(
             config["tls_cert_path"] = cert_path
             config["tls_key_path"] = key_path
             _save_config(config)
-            return True, f"✅ Сертификат сгенерирован (openssl)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
+            return True, f"✅ Certificate generated (openssl)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
     except FileNotFoundError:
         logger.debug("openssl not found, trying Python cryptography")
     except Exception as e:
@@ -358,11 +358,11 @@ def generate_self_signed_cert(
         config["tls_cert_path"] = cert_path
         config["tls_key_path"] = key_path
         _save_config(config)
-        return True, f"✅ Сертификат сгенерирован (Python)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
+        return True, f"✅ Certificate generated (Python)\n📄 Cert: `{cert_path}`\n🔑 Key: `{key_path}`"
     except ImportError:
-        return False, "❌ Установите openssl или: `pip install cryptography`"
+        return False, "❌ Install openssl or: `pip install cryptography`"
     except Exception as e:
-        return False, f"❌ Ошибка генерации сертификата: {e}"
+        return False, f"❌ Certificate generation error: {e}"
 
 
 def generate_all() -> Tuple[bool, Dict, str]:
@@ -400,14 +400,14 @@ def list_clients() -> List[Dict]:
 def add_client(name: str, client_password: Optional[str] = None,
                client_uuid: Optional[str] = None) -> Tuple[bool, str, Dict]:
     if not name or not name.strip():
-        return False, "❌ Имя клиента не может быть пустым", {}
+        return False, "❌ Client name cannot be empty", {}
 
     name = name.strip()
     config = _load_config()
 
     for client in config.get("clients", []):
         if client.get("name") == name:
-            return False, f"❌ Клиент {name} уже существует", {}
+            return False, f"❌ Client {name} already exists", {}
 
     if not client_uuid:
         client_uuid = _generate_uuid()
@@ -423,13 +423,13 @@ def add_client(name: str, client_password: Optional[str] = None,
 
     config.setdefault("clients", []).append(client)
     if _save_config(config):
-        return True, f"✅ Клиент добавлен: {name}", client
-    return False, "❌ Ошибка при сохранении", {}
+        return True, f"✅ Client added: {name}", client
+    return False, "❌ Failed to save", {}
 
 
 def remove_client(name: str) -> Tuple[bool, str]:
     if not name or not name.strip():
-        return False, "❌ Укажите имя клиента"
+        return False, "❌ Specify a client name"
 
     name = name.strip()
     config = _load_config()
@@ -437,12 +437,12 @@ def remove_client(name: str) -> Tuple[bool, str]:
     new_clients = [c for c in clients if c.get("name") != name]
 
     if len(new_clients) == len(clients):
-        return False, "❌ Клиент не найден"
+        return False, "❌ Client not found"
 
     config["clients"] = new_clients
     if _save_config(config):
-        return True, f"✅ Клиент {name} удалён"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Client {name} removed"
+    return False, "❌ Failed to save"
 
 
 def get_client(name: str) -> Optional[Dict]:
@@ -463,7 +463,7 @@ def generate_tuic_uri(
     comment: str = "TUIC",
 ) -> str:
     """
-    Генерация URI tuic:// для клиента.
+    Generate a tuic:// URI for a client.
 
     Format: tuic://uuid:password@server:port?congestion_control=bbr&udp_relay_mode=native&alpn=h3&sni=xxx#comment
     """
@@ -509,12 +509,12 @@ def generate_tuic_uri(
 def generate_client_uri(name: str) -> Tuple[bool, str, str]:
     client = get_client(name)
     if not client:
-        return False, "❌ Клиент не найден", ""
+        return False, "❌ Client not found", ""
 
     client_uuid = client.get("uuid", "")
     client_password = client.get("password", "")
     if not client_uuid or not client_password:
-        return False, f"❌ У клиента {name} неполные данные (uuid/password)", ""
+        return False, f"❌ Client {name} has incomplete data (uuid/password)", ""
 
     uri = generate_tuic_uri(
         client_uuid,
@@ -522,19 +522,19 @@ def generate_client_uri(name: str) -> Tuple[bool, str, str]:
         visible_profile_name("TUIC", _load_config().get("server", ""), name),
     )
     if not uri:
-        return False, "❌ Не удалось сгенерировать URI. Проверьте настройки сервера", ""
+        return False, "❌ Failed to generate URI. Check server settings", ""
 
-    return True, f"✅ URI для клиента {name} готов", uri
+    return True, f"✅ URI for client {name} is ready", uri
 
 
 def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
     if not content or not content.strip():
-        return False, None, "❌ Нечего кодировать в QR"
+        return False, None, "❌ Nothing to encode in QR"
 
     try:
         import qrcode
     except ImportError:
-        return False, None, "❌ Библиотека qrcode не установлена"
+        return False, None, "❌ qrcode library is not installed"
 
     try:
         qr = qrcode.QRCode(
@@ -550,16 +550,16 @@ def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-        return True, buffer, "✅ QR-код сгенерирован"
+        return True, buffer, "✅ QR code generated"
     except Exception as e:
         logger.error(f"Failed to generate TUIC QR image: {e}")
-        return False, None, f"❌ Ошибка генерации QR: {e}"
+        return False, None, f"❌ QR generation error: {e}"
 
 
 def build_client_qr_payload(name: str) -> Tuple[bool, str, Dict]:
     client = get_client(name)
     if not client:
-        return False, "❌ Клиент не найден", {}
+        return False, "❌ Client not found", {}
 
     success, message, uri = generate_client_uri(name)
     if not success:
@@ -576,14 +576,14 @@ def build_client_qr_payload(name: str) -> Tuple[bool, str, Dict]:
         "uri": uri,
         "qr_buffer": qr_buffer,
     }
-    return True, "✅ QR-пакет для клиента TUIC подготовлен", payload
+    return True, "✅ QR pack for TUIC client is ready", payload
 
 
 # === Export Configurations ===
 
 def export_server_config() -> Dict:
     """
-    Сгенерировать серверную конфигурацию sing-box inbound для TUIC.
+    Generate a server sing-box inbound configuration for TUIC.
 
     Returns:
         Dict — sing-box inbound config
@@ -622,7 +622,7 @@ def export_server_config() -> Dict:
 
 def export_server_singbox_config() -> Dict:
     """
-    Полная серверная конфигурация sing-box с TUIC inbound.
+    Full server sing-box configuration with a TUIC inbound.
     """
     inbound = export_server_config()
     return {
@@ -635,13 +635,13 @@ def export_server_singbox_config() -> Dict:
 
 
 def export_server_config_json() -> str:
-    """Серверная конфигурация в JSON (для записи в файл)."""
+    """Server configuration as JSON (for writing to a file)."""
     return json.dumps(export_server_singbox_config(), indent=2, ensure_ascii=False)
 
 
 def export_singbox_config(client_name: Optional[str] = None) -> Dict:
     """
-    Клиентская конфигурация sing-box с TUIC outbound.
+    Client sing-box configuration with a TUIC outbound.
     """
     config = _load_config()
 
@@ -697,7 +697,7 @@ def export_singbox_config(client_name: Optional[str] = None) -> Dict:
 
 def export_clash_meta_config(client_name: Optional[str] = None) -> str:
     """
-    Клиентская конфигурация Clash Meta (YAML) с TUIC proxy.
+    Client Clash Meta configuration (YAML) with a TUIC proxy.
     """
     config = _load_config()
     server = config.get("server", "")
@@ -800,8 +800,8 @@ def export_subscription_base64() -> str:
 
 def apply_config(config_path: str = "/etc/tuic/config.json") -> Tuple[bool, str]:
     """
-    Применить текущую конфигурацию к серверу.
-    Записывает sing-box JSON и перезапускает сервис.
+    Apply the current configuration to the server.
+    Writes sing-box JSON and restarts the service.
     """
     config_json = export_server_config_json()
 
@@ -820,20 +820,20 @@ def apply_config(config_path: str = "/etc/tuic/config.json") -> Tuple[bool, str]
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode == 0:
-            return True, f"✅ Конфиг применён и сервис перезапущен\n📄 `{config_path}`"
+            return True, f"✅ Config applied and service restarted\n📄 `{config_path}`"
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"⚠️ Конфиг записан, но сервис не перезапустился:\n`{error}`"
+            return False, f"⚠️ Config written, but the service did not restart:\n`{error}`"
 
     except PermissionError:
-        return False, f"❌ Нет прав на запись в {config_path}. Запустите с sudo."
+        return False, f"❌ No write permission for {config_path}. Run with sudo."
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def service_control(action: str) -> Tuple[bool, str]:
     if action not in ("start", "stop", "restart", "status"):
-        return False, f"❌ Неизвестное действие: {action}"
+        return False, f"❌ Unknown action: {action}"
 
     try:
         result = _host_run(
@@ -845,19 +845,19 @@ def service_control(action: str) -> Tuple[bool, str]:
             output = result.stdout.strip() or result.stderr.strip()
             is_active = "active (running)" in output
             status_emoji = "🟢" if is_active else "🔴"
-            return True, f"{status_emoji} TUIC сервис:\n```\n{output[:500]}\n```"
+            return True, f"{status_emoji} TUIC service:\n```\n{output[:500]}\n```"
 
         if result.returncode == 0:
-            action_labels = {"start": "запущен", "stop": "остановлен", "restart": "перезапущен"}
+            action_labels = {"start": "started", "stop": "stopped", "restart": "restarted"}
             return True, f"✅ TUIC {action_labels.get(action, action)}"
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"❌ Ошибка: {error[:300]}"
+            return False, f"❌ Error: {error[:300]}"
 
     except FileNotFoundError:
-        return False, "❌ systemctl не найден"
+        return False, "❌ systemctl not found"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def get_logs(lines: int = 30) -> Tuple[bool, str]:
@@ -866,11 +866,11 @@ def get_logs(lines: int = 30) -> Tuple[bool, str]:
             ["journalctl", "-u", "tuic-server", "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )
-        output = result.stdout.strip() or result.stderr.strip() or "(пусто)"
+        output = result.stdout.strip() or result.stderr.strip() or "(empty)"
         if len(output) > 3500:
             output = output[-3500:]
         return True, output
     except FileNotFoundError:
-        return False, "❌ journalctl не найден"
+        return False, "❌ journalctl not found"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"

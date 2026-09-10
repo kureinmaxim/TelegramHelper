@@ -23,8 +23,8 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Корень проекта выводится из расположения скрипта (scripts/..), без хардкода и
-# без legacy /opt/TelegramSimple. Можно переопределить переменной PROJECT_DIR.
+# Project root is derived from the script location (scripts/..), no hardcoding
+# and no legacy /opt/TelegramSimple. Override with PROJECT_DIR if needed.
 PROJECT_DIR="${PROJECT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 
 # 2. Install Xray (if missing)

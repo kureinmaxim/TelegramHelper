@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для хранения истории бесед с AI.
+Conversation history storage for AI chats.
 
-Поддерживает два режима:
-- simple: простой запрос-ответ без истории
-- chat: режим чата с сохранением истории беседы
+Two modes:
+- simple: single request/response, no history
+- chat: multi-turn chat with persisted history
 """
 
 import json
@@ -19,25 +19,25 @@ logger = logging.getLogger(__name__)
 # Thread safety
 _history_lock = threading.Lock()
 
-# Путь к файлу хранения истории
+# History file path
 _HISTORY_STORE_PATH = os.getenv("CONVERSATION_HISTORY_PATH", 
                                 os.path.join(os.getcwd(), "conversation_history.json"))
 
-# Максимальное количество сообщений в истории одной беседы
+# Max messages kept per conversation
 MAX_HISTORY_MESSAGES = 50
 
-# Время жизни беседы (дни) - старые беседы удаляются
+# Conversation TTL (days); older conversations are deleted
 CONVERSATION_TTL_DAYS = 7
 
-# Структура данных:
+# Data shape:
 # {
 #   "conversations": {
 #       "conversation_id": {
 #           "created_at": "2025-01-01T12:00:00",
 #           "last_activity": "2025-01-01T12:00:00",
 #           "messages": [
-#               {"role": "user", "content": "Привет"},
-#               {"role": "assistant", "content": "Здравствуйте!"}
+#               {"role": "user", "content": "Hello"},
+#               {"role": "assistant", "content": "Hello!"}
 #           ]
 #       }
 #   }
@@ -45,7 +45,7 @@ CONVERSATION_TTL_DAYS = 7
 
 
 def _load_history() -> Dict:
-    """Загрузить историю бесед из файла"""
+    """Load conversation history from file."""
     with _history_lock:
         if not os.path.exists(_HISTORY_STORE_PATH):
             return {"conversations": {}}
@@ -59,7 +59,7 @@ def _load_history() -> Dict:
 
 
 def _save_history(data: Dict) -> None:
-    """Сохранить историю бесед в файл"""
+    """Save conversation history to file."""
     with _history_lock:
         try:
             directory = os.path.dirname(_HISTORY_STORE_PATH) or "."
@@ -75,7 +75,7 @@ def _save_history(data: Dict) -> None:
 
 
 def _cleanup_old_conversations(data: Dict) -> Dict:
-    """Удалить старые беседы (старше TTL)"""
+    """Drop conversations older than TTL."""
     cutoff_date = datetime.now() - timedelta(days=CONVERSATION_TTL_DAYS)
     cutoff_str = cutoff_date.isoformat()
     
@@ -95,20 +95,20 @@ def _cleanup_old_conversations(data: Dict) -> Dict:
 
 def get_conversation_history(conversation_id: str) -> List[Dict[str, str]]:
     """
-    Получить историю беседы
-    
+    Return conversation history.
+
     Args:
-        conversation_id: ID беседы
-        
+        conversation_id: Conversation ID
+
     Returns:
-        Список сообщений в формате [{"role": "user|assistant", "content": "..."}]
+        Messages as [{"role": "user|assistant", "content": "..."}]
     """
     data = _load_history()
     conversations = data.get("conversations", {})
     
     if conversation_id in conversations:
         messages = conversations[conversation_id].get("messages", [])
-        # Ограничиваем количество сообщений
+        # Cap message count
         return messages[-MAX_HISTORY_MESSAGES:]
     
     return []
@@ -120,12 +120,12 @@ def add_message_to_history(
     content: str
 ) -> None:
     """
-    Добавить сообщение в историю беседы
-    
+    Append a message to conversation history.
+
     Args:
-        conversation_id: ID беседы
-        role: "user" или "assistant"
-        content: Текст сообщения
+        conversation_id: Conversation ID
+        role: "user" or "assistant"
+        content: Message text
     """
     data = _load_history()
     conversations = data.setdefault("conversations", {})
@@ -142,17 +142,17 @@ def add_message_to_history(
     conversation = conversations[conversation_id]
     conversation["last_activity"] = now
     
-    # Добавляем сообщение
+    # Append message
     conversation["messages"].append({
         "role": role,
         "content": content
     })
     
-    # Ограничиваем количество сообщений
+    # Cap message count
     if len(conversation["messages"]) > MAX_HISTORY_MESSAGES:
         conversation["messages"] = conversation["messages"][-MAX_HISTORY_MESSAGES:]
     
-    # Очистка старых бесед
+    # Drop expired conversations
     data = _cleanup_old_conversations(data)
     
     _save_history(data)
@@ -160,13 +160,13 @@ def add_message_to_history(
 
 def clear_conversation_history(conversation_id: str) -> bool:
     """
-    Очистить историю конкретной беседы
-    
+    Clear history for one conversation.
+
     Args:
-        conversation_id: ID беседы
-        
+        conversation_id: Conversation ID
+
     Returns:
-        True если беседа была найдена и удалена
+        True if the conversation existed and was deleted
     """
     data = _load_history()
     conversations = data.get("conversations", {})
@@ -181,25 +181,25 @@ def clear_conversation_history(conversation_id: str) -> bool:
 
 def generate_conversation_id(app_id: str, user_id: Optional[str] = None) -> str:
     """
-    Сгенерировать уникальный ID беседы
-    
+    Generate a unique conversation ID.
+
     Args:
-        app_id: ID приложения (например, example-app)
-        user_id: Опциональный ID пользователя
-        
+        app_id: Application ID (e.g. example-app)
+        user_id: Optional user ID
+
     Returns:
-        Уникальный ID беседы
+        Unique conversation ID
     """
     import uuid
     import hashlib
     
-    # Если есть user_id, создаем детерминированный ID
+    # Deterministic ID when user_id is present
     if user_id:
         seed = f"{app_id}:{user_id}"
         conv_id = hashlib.md5(seed.encode()).hexdigest()[:16]
         return f"{app_id}-{conv_id}"
     
-    # Иначе генерируем случайный
+    # Otherwise random
     unique_id = uuid.uuid4().hex[:16]
     return f"{app_id}-{unique_id}"
 

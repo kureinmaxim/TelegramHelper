@@ -1,33 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-Интерактивный ввод для SSH CLI-дашборда: автодополнение команд + история с поиском.
+Interactive input for the SSH CLI dashboard: command completion + searchable history.
 
-Реализован на prompt_toolkit (TAB-дополнение, Ctrl+R reverse-search, персистентная
-история). Если prompt_toolkit недоступен (или ввод не из TTY) — модуль остаётся
-импортируемым (PromptSession.available == False), а cli_dashboard откатывается на
+Built on prompt_toolkit (TAB completion, Ctrl+R reverse-search, persistent
+history). If prompt_toolkit is missing (or stdin is not a TTY) the module stays
+importable (PromptSession.available == False) and cli_dashboard falls back to
 rich.Prompt / input().
 
-История пишется в файл (по умолчанию /app/.cli_history, bind-mount в compose.yaml,
-переживает docker compose --force-recreate). Секреты не попадают в файл: команды из
-SECRET_ARG_COMMANDS сохраняются без аргументов (см. redact_for_history).
+History is written to a file (default /app/.cli_history, bind-mounted in compose.yaml,
+survives docker compose --force-recreate). Secrets never go into the file: commands in
+SECRET_ARG_COMMANDS are stored without arguments (see redact_for_history).
 """
 
 import os
 import sys
 from typing import Dict, List, Optional
 
-# Команды, у которых позиционный аргумент — секрет (pre-auth ключ и т.п.).
-# В историю пишется только имя команды, без аргументов.
+# Commands whose positional argument is a secret (pre-auth key, etc.).
+# Only the command name is written to history, without arguments.
 SECRET_ARG_COMMANDS = {"/headscale_revoke"}
 
 DEFAULT_HISTORY_PATH = os.getenv("CLI_HISTORY_PATH", "/app/.cli_history")
 
 
 def redact_for_history(line: str) -> Optional[str]:
-    """Что записать в историю для строки ввода (или None — не записывать).
+    """What to store in history for this input line (or None — skip).
 
-    Пустые строки пропускаются. Для команд из SECRET_ARG_COMMANDS с аргументами
-    возвращается только имя команды (секрет на диск не попадает).
+    Empty lines are skipped. For SECRET_ARG_COMMANDS with arguments,
+    only the command name is returned (the secret never hits disk).
     """
     stripped = line.strip()
     if not stripped:
@@ -45,14 +45,14 @@ try:
     from prompt_toolkit.history import FileHistory, InMemoryHistory
 
     HAVE_PTK = True
-except ImportError:  # graceful degradation — как rich в остальном проекте
+except ImportError:  # graceful degradation — same as rich elsewhere in the project
     HAVE_PTK = False
 
 
 if HAVE_PTK:
 
     class _RedactingFileHistory(FileHistory):
-        """FileHistory, который не пишет секретные аргументы на диск."""
+        """FileHistory that does not write secret arguments to disk."""
 
         def store_string(self, string: str) -> None:
             safe = redact_for_history(string)
@@ -60,12 +60,12 @@ if HAVE_PTK:
                 super().store_string(safe)
 
     class _CommandCompleter(Completer):
-        """TAB-дополнение команд и статических подсказок аргументов.
+        """TAB-complete commands and static argument hints.
 
-        Свой класс вместо NestedCompleter: тот определяет «слово» по
-        алфавитно-цифровому паттерну и считает ведущий ``/`` границей слова,
-        поэтому ``/head`` у него не дополняется до ``/headscale_*``. Здесь
-        первый токен (с ``/``) матчится целиком.
+        Custom class instead of NestedCompleter: that one treats a "word" as
+        alphanumeric and sees a leading ``/`` as a word boundary, so
+        ``/head`` never completes to ``/headscale_*``. Here the first token
+        (including ``/``) is matched as a whole.
         """
 
         def __init__(self, commands, arg_hints):
@@ -75,12 +75,12 @@ if HAVE_PTK:
         def get_completions(self, document, complete_event):
             text = document.text_before_cursor.lstrip()
             if " " not in text:
-                # Дополняем имя команды (включая ведущий слэш).
+                # Complete the command name (including the leading slash).
                 for cmd in self.commands:
                     if cmd.startswith(text):
                         yield Completion(cmd, start_position=-len(text))
                 return
-            # Дополняем аргумент по статическим подсказкам команды.
+            # Complete the argument from the command's static hints.
             cmd, _, rest = text.partition(" ")
             frag = rest.rsplit(" ", 1)[-1]
             for hint in self.arg_hints.get(cmd, []):
@@ -89,10 +89,10 @@ if HAVE_PTK:
 
 
 class PromptSession:
-    """Узкий интерфейс ввода: .ask(prompt) -> str.
+    """Narrow input interface: .ask(prompt) -> str.
 
-    Если prompt_toolkit есть — TAB-дополнение команд и история с поиском.
-    Иначе .available == False, и вызывающий код использует свой фолбэк.
+    If prompt_toolkit is present — TAB completion and searchable history.
+    Otherwise .available == False and the caller uses its own fallback.
     """
 
     def __init__(
@@ -103,8 +103,8 @@ class PromptSession:
     ):
         self.available = False
         self._session = None
-        # prompt_toolkit нужен интерактивный TTY; в пайпе/без консоли (и в
-        # one-shot режиме) откатываемся на input() у вызывающего кода.
+        # prompt_toolkit needs an interactive TTY; in a pipe / no console (and
+        # one-shot mode) fall back to the caller's input().
         if not HAVE_PTK or not (sys.stdin.isatty() and sys.stdout.isatty()):
             return
 
@@ -116,23 +116,23 @@ class PromptSession:
             )
             self.available = True
         except Exception:
-            # Любая проблема инициализации (нет консоли и т.п.) — мягкий фолбэк.
+            # Any init problem (no console, etc.) — soft fallback.
             self._session = None
             self.available = False
 
     @staticmethod
     def _make_history(history_path: str):
-        """История с правами 0600; при недоступности файла — в памяти."""
+        """History with mode 0600; if the file is unavailable — in memory."""
         try:
             if not os.path.exists(history_path):
-                # Каталог не создаём: путь должен существовать (bind-mount).
+                # Do not create the directory: the path must already exist (bind-mount).
                 open(history_path, "a").close()
             os.chmod(history_path, 0o600)
             return _RedactingFileHistory(history_path)
         except OSError:
-            # Файл — директория (Docker bind без pre-create) или нет прав.
+            # Path is a directory (Docker bind without pre-create) or no permissions.
             return InMemoryHistory()
 
     def ask(self, prompt: str) -> str:
-        """Запросить ввод. Бросает EOFError/KeyboardInterrupt, как input()."""
+        """Prompt for input. Raises EOFError/KeyboardInterrupt, like input()."""
         return self._session.prompt(prompt)

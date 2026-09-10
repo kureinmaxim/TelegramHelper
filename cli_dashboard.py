@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-CLI Dashboard — интерактивное меню бота в терминале (по SSH, без Telegram).
+CLI Dashboard — interactive bot menu in the terminal (over SSH, no Telegram).
 
-Зачем: когда Telegram недоступен (например, нужен VPN до самого Telegram),
-админ заходит на сервер по SSH и управляет ботом через это меню. Логика
-команд НЕ дублируется — каждая команда выполняется через AdminCLI.execute(),
-тот же слой, что обслуживает /admin_command в REST API.
+Why: when Telegram is unreachable (e.g. you need a VPN just to reach Telegram),
+the admin SSHs into the server and drives the bot from this menu. Command
+logic is NOT duplicated — every command goes through AdminCLI.execute(),
+the same layer that serves /admin_command in the REST API.
 
-Запуск:
-  на хосте:        ./scripts/bot_cli.sh                  (docker exec -it ...)
-  в контейнере:    python3 cli_dashboard.py              # интерактивное меню
-  одной командой:  python3 cli_dashboard.py /vless_status [args...]
+Run:
+  on the host:     ./scripts/bot_cli.sh                  (docker exec -it ...)
+  in the container: python3 cli_dashboard.py              # interactive menu
+  one-shot:        python3 cli_dashboard.py /vless_status [args...]
 
-Оформление — rich (см. requirements.txt). Если rich не установлен,
-дашборд деградирует до простого текстового вывода (тот же набор команд).
+UI uses rich (see requirements.txt). If rich is missing,
+the dashboard falls back to plain text (same command set).
 
 Author: Kurein M.N.
 Date: 11.06.2026
@@ -24,8 +24,8 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-# .env до AdminCLI/Config: systemd-бот и main.py грузят dotenv, нативный
-# bot_cli.sh — нет; без этого ADMIN_USER_IDS пуст и /list_users врёт.
+# Load .env before AdminCLI/Config: the systemd bot and main.py load dotenv,
+# native bot_cli.sh does not; without this ADMIN_USER_IDS is empty and /list_users lies.
 try:
     from dotenv import load_dotenv
 
@@ -35,12 +35,12 @@ try:
 except ImportError:
     pass
 
-# Дашборд — терминальный инструмент: его вывод идёт через rich/print, а не через
-# logging. Глушим import-time лог-шум бот-стека (config.py пишет на INFO/WARNING:
+# The dashboard is a terminal tool: output goes through rich/print, not
+# logging. Mute import-time log noise from the bot stack (config.py logs INFO/WARNING:
 # "Configuration loaded successfully", "Admin user IDs: …", "BOT_TOKEN is not set").
-# Делаем это ДО импорта admin_cli (который инстанцирует Config и выставляет
-# root-logger по LOG_LEVEL). Реальные ошибки (ERROR) остаются видимы; явно
-# заданный LOG_LEVEL (напр. DEBUG для отладки) уважаем.
+# Do this BEFORE importing admin_cli (which instantiates Config and sets the
+# root logger from LOG_LEVEL). Real errors (ERROR) stay visible; an explicit
+# LOG_LEVEL (e.g. DEBUG for troubleshooting) is respected.
 os.environ.setdefault("LOG_LEVEL", "ERROR")
 
 try:
@@ -53,7 +53,7 @@ try:
 
     RICH = True
     console = Console()
-except ImportError:  # graceful degradation — как и в остальном проекте
+except ImportError:  # graceful degradation — same as the rest of the project
     RICH = False
     console = None
 
@@ -61,76 +61,76 @@ import cli_prompt
 from admin_cli import AdminCLI
 from utils import get_app_version
 
-# Статические подсказки аргументов для автодополнения (TAB).
+# Static argument hints for TAB completion.
 _ARG_HINTS = {"/headscale_gen": ["24h", "720h", "7d"]}
 
 
-# (command, краткое описание, требует подтверждения, аргументы)
-# Аргументы: None — без аргументов; (подсказка, required) — спросить; при
-# required=False пустой ввод запускает команду без аргументов (а не отменяет).
-# Команды берутся из AdminCLI.COMMANDS — меню только группирует и оформляет их.
+# (command, short description, needs confirmation, arguments)
+# Arguments: None — no args; (hint, required) — prompt; if
+# required=False, empty input runs the command with no args (does not cancel).
+# Commands come from AdminCLI.COMMANDS — the menu only groups and presents them.
 MENU_SECTIONS: List[Tuple[str, List[Tuple[str, str, bool, Optional[Tuple[str, bool]]]]]] = [
-    ("🔧 Система", [
-        ("/info", "Информация о сервере", False, None),
-        ("/ver", "Версия и статус VLESS", False, None),
-        ("/dockhand", "SSH-туннель к Dockhand (8501)", False, None),
-        ("/headscale", "Tailscale IP этого хоста", False, None),
+    ("🔧 System", [
+        ("/info", "Server info", False, None),
+        ("/ver", "Version and VLESS status", False, None),
+        ("/dockhand", "SSH tunnel to Dockhand (8501)", False, None),
+        ("/headscale", "Tailscale IP of this host", False, None),
     ]),
-    ("🤖 Бот", [
-        ("/bot_status", "Включён ли Telegram-бот", False, None),
-        ("/enable_bot", "Включить бота (restart)", True, None),
-        ("/disable_bot", "Выключить бота (restart)", True, None),
+    ("🤖 Bot", [
+        ("/bot_status", "Whether the Telegram bot is enabled", False, None),
+        ("/enable_bot", "Enable the bot (restart)", True, None),
+        ("/disable_bot", "Disable the bot (restart)", True, None),
     ]),
-    ("🌐 Exit node (интернет через VPS)", [
-        ("/exit_node", "Статус + гайд по устройствам", False, None),
-        ("/exit_node_on", "Включить exit node", True, None),
-        ("/exit_node_off", "Выключить exit node", True, None),
+    ("🌐 Exit node (internet via VPS)", [
+        ("/exit_node", "Status + per-device guide", False, None),
+        ("/exit_node_on", "Enable exit node", True, None),
+        ("/exit_node_off", "Disable exit node", True, None),
     ]),
     ("🕸️ Headscale (mesh)", [
-        ("/headscale_status", "Статус Headscale + Headplane", False, None),
-        ("/headscale_list_nodes", "Список нод mesh", False, None),
-        ("/headscale_gen", "Pre-Auth ключ ([user] [срок], напр. 720h)", False,
-         ("[user] [срок] (Enter — дефолт)", False)),
-        ("/headscale_revoke", "Отозвать Pre-Auth ключ (Enter — список)", True,
-         ("<key> [user] (Enter — показать список ключей)", False)),
+        ("/headscale_status", "Headscale + Headplane status", False, None),
+        ("/headscale_list_nodes", "Mesh node list", False, None),
+        ("/headscale_gen", "Pre-Auth key ([user] [ttl], e.g. 720h)", False,
+         ("[user] [ttl] (Enter — default)", False)),
+        ("/headscale_revoke", "Revoke a Pre-Auth key (Enter — list)", True,
+         ("<key> [user] (Enter — show key list)", False)),
     ]),
-    ("🛰 Reticulum / HA-стек", [
-        ("/reticulum_status", "Статус сервисов + bridge hash + I2P", False, None),
-        ("/reticulum_hash", "Bridge destination hash (для клиентов)", False, None),
-        ("/reticulum_i2p", "I2P-путь: статус i2pd + b32 (путь 2)", False, None),
-        ("/reticulum_health", "Здоровье i2pd: сеть/tunnel success/leasesets", False, None),
-        ("/reticulum_restart", "Перезапустить HA-стек (bridge + stub)", True, None),
+    ("🛰 Reticulum / HA-stack", [
+        ("/reticulum_status", "Service status + bridge hash + I2P", False, None),
+        ("/reticulum_hash", "Bridge destination hash (for clients)", False, None),
+        ("/reticulum_i2p", "I2P path: i2pd status + b32 (path 2)", False, None),
+        ("/reticulum_health", "i2pd health: network/tunnel success/leasesets", False, None),
+        ("/reticulum_restart", "Restart HA-stack (bridge + stub)", True, None),
     ]),
     ("🛡️ VLESS-Reality", [
-        ("/vless_status", "Статус VLESS", False, None),
-        ("/vless_config", "Конфигурация (ключи маскированы)", False, None),
-        ("/vless_link", "Ссылка для импорта клиента", False, None),
-        ("/vless_on", "Включить VLESS", True, None),
-        ("/vless_off", "Выключить VLESS", True, None),
-        ("/vless_set_port", "Сменить порт VLESS", True, ("порт (например 8443)", True)),
+        ("/vless_status", "VLESS status", False, None),
+        ("/vless_config", "Config (keys masked)", False, None),
+        ("/vless_link", "Client import URI", False, None),
+        ("/vless_on", "Enable VLESS", True, None),
+        ("/vless_off", "Disable VLESS", True, None),
+        ("/vless_set_port", "Change VLESS port", True, ("port (e.g. 8443)", True)),
     ]),
-    ("👤 Профили пользователей", [
-        ("/list_users", "Все пользователи бота с Telegram ID", False, None),
-        ("/links", "Ссылки профилей по TG-ID; Enter — профили админа", False,
-         ("telegram_user_id (Enter — админ по умолчанию, все ID: /list_users)", False)),
-        ("/qr", "QR-код ссылки в терминале; Enter — список вариантов", False,
-         ("[TG-ID] вариант (vless | hy2 | ...; Enter — показать список)", False)),
+    ("👤 User profiles", [
+        ("/list_users", "All bot users with Telegram ID", False, None),
+        ("/links", "Profile links by TG-ID; Enter — admin profiles", False,
+         ("telegram_user_id (Enter — default admin, all IDs: /list_users)", False)),
+        ("/qr", "QR of a link in the terminal; Enter — variant list", False,
+         ("[TG-ID] variant (vless | hy2 | ...; Enter — show list)", False)),
     ]),
-    ("🗄️ Бэкапы (rclone)", [
-        ("/backup_status", "Статус offsite-бэкапов", False, None),
-        ("/backup_list", "Список последних бэкапов", False, None),
-        ("/backup_test", "Проверить настроенный remote", False, None),
-        ("/backup_now", "Сделать бэкап сейчас", True, None),
+    ("🗄️ Backups (rclone)", [
+        ("/backup_status", "Offsite backup status", False, None),
+        ("/backup_list", "Recent backups", False, None),
+        ("/backup_test", "Check the configured remote", False, None),
+        ("/backup_now", "Run a backup now", True, None),
     ]),
-    ("🔑 Ключи (маскированные)", [
-        ("/api", "API-ключ apiai-v3", False, None),
-        ("/encryption_key", "Ключ шифрования apiai-v3", False, None),
+    ("🔑 Keys (masked)", [
+        ("/api", "apiai-v3 API key", False, None),
+        ("/encryption_key", "apiai-v3 encryption key", False, None),
     ]),
 ]
 
 
 def _flat_menu() -> List[Tuple[str, str, bool, Optional[str]]]:
-    """Сквозная нумерация пунктов по всем секциям."""
+    """Flat numbering of items across all sections."""
     items = []
     for _title, entries in MENU_SECTIONS:
         items.extend(entries)
@@ -144,51 +144,51 @@ def _print_plain(text: str) -> None:
 def _show_result(ok: bool, text: str, command: str) -> None:
     if RICH:
         style = "green" if ok else "red"
-        # Text() — чтобы rich не интерпретировал [скобки] в ссылках/QR как разметку
+        # Text() — so rich does not treat [brackets] in URIs/QR as markup
         console.print(Panel(Text(text), title=command, border_style=style, expand=False))
     else:
         _print_plain(f"--- {command} ---\n{text}\n")
 
 
 def render_menu() -> None:
-    """Нарисовать заголовок и таблицу команд."""
+    """Draw the header and command table."""
     version = get_app_version().get("version", "?")
     if RICH:
         console.print(Panel(
             f"[bold]TelegramHelper — CLI Dashboard[/bold]  v{version}\n"
-            "Меню бота по SSH: те же команды, что в Telegram, но в терминале.",
+            "SSH bot menu: the same commands as in Telegram, in the terminal.",
             border_style="cyan", expand=False,
         ))
         num = 0
         for title, entries in MENU_SECTIONS:
             table = Table(title=title, title_justify="left",
                           box=box.SIMPLE, show_header=False, padding=(0, 1))
-            table.add_column("№", style="bold cyan", width=4, justify="right")
-            table.add_column("Команда", style="yellow", min_width=18)
-            table.add_column("Описание")
+            table.add_column("#", style="bold cyan", width=4, justify="right")
+            table.add_column("Command", style="yellow", min_width=18)
+            table.add_column("Description")
             for command, descr, confirm, _arg in entries:
                 num += 1
                 mark = " ⚠" if confirm else ""
                 table.add_row(str(num), command, descr + mark)
             console.print(table)
-        console.print("[dim]номер — выполнить · команда — напрямую (/vless_status) · "
-                      "m — меню · q — выход · ⚠ — спросит подтверждение[/dim]")
+        console.print("[dim]number — run · command — directly (/vless_status) · "
+                      "m — menu · q — quit · ⚠ — will ask for confirmation[/dim]")
     else:
         print(f"\nTelegramHelper — CLI Dashboard v{version}")
-        print("(установите rich для красивого вида: pip install rich)\n")
+        print("(install rich for a nicer view: pip install rich)\n")
         num = 0
         for title, entries in MENU_SECTIONS:
             print(title)
             for command, descr, confirm, _arg in entries:
                 num += 1
-                mark = " [подтверждение]" if confirm else ""
+                mark = " [confirm]" if confirm else ""
                 print(f"  {num:>3}. {command:<18} {descr}{mark}")
             print()
-        print("номер — выполнить, команда — напрямую, m — меню, q — выход")
+        print("number — run, command — directly, m — menu, q — quit")
 
 
 class _Cancelled(Exception):
-    """Пользователь отменил ввод (Ctrl+C / Ctrl+D / пустой обязательный аргумент)."""
+    """User cancelled input (Ctrl+C / Ctrl+D / empty required argument)."""
 
 
 def _ask(prompt: str) -> str:
@@ -205,43 +205,43 @@ def _confirm(question: str) -> bool:
         if RICH:
             return Confirm.ask(question, default=False)
         answer = input(f"{question} [y/N]: ").strip().lower()
-        return answer in ("y", "yes", "д", "да")
+        return answer in ("y", "yes")
     except (EOFError, KeyboardInterrupt):
         return False
 
 
 def run_command(cli: AdminCLI, command: str, args: List[str],
                 confirm: bool, arg_spec: Optional[Tuple[str, bool]]) -> None:
-    """Выполнить команду через AdminCLI с подтверждением и запросом аргументов."""
+    """Run a command via AdminCLI, with confirmation and argument prompts."""
     try:
         if arg_spec and not args:
             hint, required = arg_spec
-            raw = _ask(f"Аргументы — {hint}")
+            raw = _ask(f"Arguments — {hint}")
             if raw:
                 args = raw.split()
             elif required:
-                _show_result(True, "Отменено (нужны аргументы).", command)
+                _show_result(True, "Cancelled (arguments required).", command)
                 return
-            # необязательный аргумент + Enter → запускаем без аргументов
+            # optional argument + Enter → run with no arguments
         if confirm and not _confirm(
-                f"Выполнить {command}{' ' + ' '.join(args) if args else ''}?"):
-            _show_result(True, "Отменено.", command)
+                f"Run {command}{' ' + ' '.join(args) if args else ''}?"):
+            _show_result(True, "Cancelled.", command)
             return
     except _Cancelled:
-        _show_result(True, "Отменено.", command)
+        _show_result(True, "Cancelled.", command)
         return
     ok, text = cli.execute(command, args)
     _show_result(ok, text, command)
 
 
 def _prompt_choice(session: cli_prompt.PromptSession) -> str:
-    """Главный prompt выбора: prompt_toolkit (TAB/история) или фолбэк на _ask."""
+    """Main choice prompt: prompt_toolkit (TAB/history) or fallback to _ask."""
     if session.available:
         try:
-            return session.ask("\nВыбор: ")
+            return session.ask("\nChoice: ")
         except (EOFError, KeyboardInterrupt):
             raise _Cancelled()
-    return _ask("\n[bold cyan]Выбор[/bold cyan]" if RICH else "\nВыбор")
+    return _ask("\n[bold cyan]Choice[/bold cyan]" if RICH else "\nChoice")
 
 
 def interactive_loop(cli: AdminCLI) -> None:
@@ -264,29 +264,29 @@ def interactive_loop(cli: AdminCLI) -> None:
         if low in ("m", "menu", "h", "help"):
             render_menu()
             continue
-        # Прямой ввод команды: "/vless_set_port 8443"
+        # Direct command: "/vless_set_port 8443"
         if choice.startswith("/"):
             parts = choice.split()
             cmd, descr, confirm, arg = by_command.get(
                 parts[0].lower(), (parts[0], "", False, None))
             run_command(cli, cmd, parts[1:], confirm, arg if len(parts) == 1 else None)
             continue
-        # Ввод по номеру пункта
+        # Select by item number
         if choice.isdigit() and 1 <= int(choice) <= len(items):
             cmd, descr, confirm, arg = items[int(choice) - 1]
             run_command(cli, cmd, [], confirm, arg)
             continue
-        _show_result(False, f"Не понял ввод: {choice!r}. m — меню, q — выход.", "?")
+        _show_result(False, f"Did not understand: {choice!r}. m — menu, q — quit.", "?")
 
 
 def main() -> int:
     cli = AdminCLI()
     argv = sys.argv[1:]
-    # One-shot режим: python3 cli_dashboard.py /vless_status [args...]
+    # One-shot mode: python3 cli_dashboard.py /vless_status [args...]
     if argv:
         command = argv[0] if argv[0].startswith("/") else "/" + argv[0]
         ok, text = cli.execute(command, argv[1:])
-        # В one-shot выводим без рамок — удобно для скриптов/пайпов
+        # One-shot: print without frames — handy for scripts/pipes
         print(text)
         return 0 if ok else 1
     try:

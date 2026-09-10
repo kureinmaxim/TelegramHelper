@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Тесты SSH CLI Headscale-команд и инфраструктуры prompt (без запущенного сервера).
+Tests for SSH CLI Headscale commands and prompt infrastructure (no running server).
 
-Покрывает чистую логику:
-  - разбор аргументов /headscale_gen (срок vs user);
-  - редакцию истории (секретный аргумент /headscale_revoke не сохраняется);
-  - маршрутизацию AdminCLI на headscale_manager.
+Covers pure logic:
+  - /headscale_gen argument parsing (duration vs user);
+  - history redaction (secret /headscale_revoke argument is not stored);
+  - AdminCLI routing to headscale_manager.
 
-Запуск: python -m unittest tests.test_cli_headscale
+Run: python -m unittest tests.test_cli_headscale
 """
 
 import unittest
@@ -64,7 +64,7 @@ class HistoryRedactionTests(unittest.TestCase):
         self.assertIsNone(cli_prompt.redact_for_history("   "))
 
 
-@unittest.skipUnless(cli_prompt.HAVE_PTK, "prompt_toolkit не установлен")
+@unittest.skipUnless(cli_prompt.HAVE_PTK, "prompt_toolkit is not installed")
 class CommandCompleterTests(unittest.TestCase):
     def _complete(self, text, commands, arg_hints=None):
         from prompt_toolkit.document import Document

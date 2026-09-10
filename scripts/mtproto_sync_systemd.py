@@ -19,7 +19,7 @@ def main() -> int:
     print(message)
     if success:
         print()
-        print("Проверьте результат:")
+        print("Check the result:")
         print("systemctl show -p ExecStart mtproto-proxy --no-pager | cat")
         print("systemctl status mtproto-proxy --no-pager | cat")
     return 0 if success else 1

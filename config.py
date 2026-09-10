@@ -13,7 +13,7 @@ class Config:
     def __init__(self):
         """Initialize configuration from environment variables."""
         self.bot_token = self._get_optional_env("BOT_TOKEN")
-        # Поддержка нескольких админов через запятую
+        # Multiple admins, comma-separated
         self.admin_user_ids = self._get_list_env("ADMIN_USER_IDS", [])
         self.debug_mode = self._get_bool_env("DEBUG_MODE", False)
         self.log_level = self._get_optional_env("LOG_LEVEL", "INFO")
@@ -132,8 +132,8 @@ class Config:
         return mapping
     
     def is_admin(self, user_id: int) -> bool:
-        """Админ = первичный (.env ADMIN_USER_IDS) ИЛИ назначенный динамически
-        (storage users.json). Первичные защищены от удаления — см. is_founder_admin."""
+        """Admin = primary (.env ADMIN_USER_IDS) OR dynamically assigned
+        (storage users.json). Primary admins cannot be removed — see is_founder_admin."""
         try:
             uid = int(user_id)
         except (ValueError, TypeError):
@@ -147,7 +147,7 @@ class Config:
             return False
 
     def resolved_admin_user_ids(self) -> list[int]:
-        """Все админы для отображения: .env ADMIN_USER_IDS + users.json admin_user_ids."""
+        """All admins for display: .env ADMIN_USER_IDS + users.json admin_user_ids."""
         try:
             import storage
             dynamic = storage.get_dynamic_admins()
@@ -157,8 +157,8 @@ class Config:
         return sorted(set(primary) | set(dynamic))
 
     def is_founder_admin(self, user_id: int) -> bool:
-        """Первичный админ (из .env ADMIN_USER_IDS, задан при установке) —
-        его нельзя снять ни себе, ни другим."""
+        """Primary admin (from .env ADMIN_USER_IDS, set at install) —
+        cannot be demoted by anyone, including themselves."""
         try:
             return int(user_id) in self.admin_user_ids
         except (ValueError, TypeError):

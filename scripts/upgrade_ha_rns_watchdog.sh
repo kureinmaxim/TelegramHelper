@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Обновить только soft-hang watchdog на уже стоящем VPS (без полной
-# переустановки stub'ов). Идемпотентно.
-# Usage (от root, без sudo — на многих VPS sudo нет):
+# Upgrade only the soft-hang watchdog on an existing VPS (no full stub
+# reinstall). Idempotent.
+# Usage (as root, without sudo — many VPS hosts have no sudo):
 #   bash scripts/upgrade_ha_rns_watchdog.sh
-# Если не root и есть sudo — скрипт сам добавит sudo.
+# If not root and sudo exists, the script prepends sudo itself.
 set -euo pipefail
 SUDO=""
 [[ $(id -u) -eq 0 ]] || SUDO=sudo
@@ -108,7 +108,7 @@ $SUDO systemctl enable --now ha-rns-watchdog.timer
 $SUDO systemctl restart ha-reticulum-bridge
 echo "OK: watchdog upgraded; bridge restarted"
 echo "  timer: $(systemctl is-active ha-rns-watchdog.timer)"
-echo "  hb:    ls -l /tmp/ha-rns-bridge.heartbeat (появится через ~20с)"
+echo "  hb:    ls -l /tmp/ha-rns-bridge.heartbeat (appears in ~20s)"
 echo "  log:   /var/log/ha-rns-watchdog.log"
-echo "NOTE: handler-timeout (os._exit 78) работает только после git pull кода"
-echo "      bridge.py/run_bridge.py в /opt/TelegramHelper (WorkingDirectory юнита)"
+echo "NOTE: handler-timeout (os._exit 78) only works after a git pull of"
+echo "      bridge.py/run_bridge.py in /opt/TelegramHelper (unit WorkingDirectory)"

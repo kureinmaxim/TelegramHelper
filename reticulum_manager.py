@@ -1,13 +1,13 @@
-"""reticulum_manager.py — управление HA-стеком и Reticulum-мостом из бота.
+"""reticulum_manager.py — manage the HA stack and Reticulum bridge from the bot.
 
-HA-стек = три systemd-юнита на хосте:
-  • ha-reticulum-bridge — мост Reticulum (TCP :50061), печатает bridge hash в лог;
-  • ha-stub-grpc        — gRPC-заглушка Mi-Home (:50055);
-  • ha-stub-udp         — UDP-заглушка (:50056).
+HA stack = three systemd units on the host:
+  • ha-reticulum-bridge — Reticulum bridge (TCP :50061), prints the bridge hash to the log;
+  • ha-stub-grpc        — Mi-Home gRPC stub (:50055);
+  • ha-stub-udp         — UDP stub (:50056).
 
-Команды выполняются через host_utils.host_run (nsenter в Docker / прямой
-subprocess на systemd-хосте). Потокобезопасно (threading.Lock), как остальные
-менеджеры проекта.
+Commands run via host_utils.host_run (nsenter in Docker / direct
+subprocess on a systemd host). Thread-safe (threading.Lock), like the other
+project managers.
 """
 from __future__ import annotations
 
@@ -24,17 +24,17 @@ UNITS = ("ha-reticulum-bridge", "ha-stub-grpc", "ha-stub-udp")
 BRIDGE_UNIT = "ha-reticulum-bridge"
 BRIDGE_PORT = 50061
 
-# I2P (этап 3, путь 2): i2pd несёт I2P нативными туннелями, RNS ходит по TCP на
-# localhost. Серверный туннель ha-bridge заворачивает мост (:50061) в I2P-destination.
+# I2P (stage 3, path 2): i2pd carries I2P with native tunnels; RNS talks TCP to
+# localhost. The ha-bridge server tunnel wraps the bridge (:50061) in an I2P destination.
 I2PD_UNIT = "i2pd"
 I2P_WEBCONSOLE = "http://127.0.0.1:7070/?page=i2p_tunnels"
-I2P_CONSOLE = "http://127.0.0.1:7070/"  # главная: network status / tunnel success / routers
+I2P_CONSOLE = "http://127.0.0.1:7070/"  # home: network status / tunnel success / routers
 
 _lock = threading.Lock()
 
 
 def _run(cmd, timeout: int = 15):
-    """host_run с проглатыванием ошибок (None при недоступности)."""
+    """host_run that swallows errors (None when unavailable)."""
     try:
         return host_run(cmd, capture_output=True, text=True, timeout=timeout)
     except Exception as exc:
@@ -60,7 +60,7 @@ def _listening() -> bool:
 
 
 def get_bridge_hash() -> str:
-    """Bridge destination hash из лога старта моста ('' если не найден)."""
+    """Bridge destination hash from the bridge start log ('' if not found)."""
     r = _run(["journalctl", "-u", BRIDGE_UNIT, "--no-pager", "-n", "200"], timeout=20)
     if not r:
         return ""
@@ -70,15 +70,15 @@ def get_bridge_hash() -> str:
         if "destination" in low or "bridge hash" in low:
             m = re.search(r"[0-9a-f]{32}", line)
             if m:
-                found = m.group(0)  # берём последнее (самый свежий старт)
+                found = m.group(0)  # keep the last match (most recent start)
     return found
 
 
 def get_i2p_b32() -> str:
-    """b32 серверного туннеля ha-bridge из веб-консоли i2pd ('' если не найден).
+    """b32 of the ha-bridge server tunnel from the i2pd web console ('' if not found).
 
-    Строка вида 'ha-bridge ⇒ <52symb>.b32.i2p:50061'. Транспортно-независим к
-    bridge hash — это I2P-адрес назначения для клиентского туннеля (путь 2).
+    Line looks like 'ha-bridge ⇒ <52symb>.b32.i2p:50061'. Independent of the
+    bridge hash — this is the I2P destination for the client tunnel (path 2).
     """
     r = _run(["curl", "-s", "--max-time", "5", I2P_WEBCONSOLE], timeout=12)
     if not r or not (r.stdout or ""):
@@ -89,7 +89,7 @@ def get_i2p_b32() -> str:
 
 
 def get_i2p_status() -> Dict:
-    """Статус I2P-пути (i2pd + серверный туннель ha-bridge)."""
+    """I2P path status (i2pd + ha-bridge server tunnel)."""
     with _lock:
         installed = _unit_exists(I2PD_UNIT)
         active = _is_active(I2PD_UNIT) if installed else False
@@ -101,11 +101,11 @@ def get_i2p_status() -> Dict:
 
 
 def get_i2p_health() -> Dict:
-    """Здоровье i2pd из web-консоли: network status, tunnel creation success rate,
-    routers/floodfills, leasesets, transit, uptime. Пустые поля — если недоступно.
+    """i2pd health from the web console: network status, tunnel creation success rate,
+    routers/floodfills, leasesets, transit, uptime. Empty fields if unavailable.
 
-    Помогает понять «прогрелась ли сеть»: низкий success rate и LeaseSets=0 на
-    свежем узле — норма первых минут; b32 моста публикуется после прогрева туннелей.
+    Helps tell whether the network has warmed up: a low success rate and LeaseSets=0 on
+    a fresh node are normal for the first minutes; the bridge b32 is published after tunnels warm up.
     """
     with _lock:
         installed = _unit_exists(I2PD_UNIT)
@@ -138,7 +138,7 @@ def get_i2p_health() -> Dict:
 
 
 def get_status() -> Dict:
-    """Полный статус HA-стека/Reticulum (TCP-мост + I2P-путь)."""
+    """Full HA-stack/Reticulum status (TCP bridge + I2P path)."""
     with _lock:
         installed = _unit_exists(BRIDGE_UNIT)
         services = {u: _is_active(u) for u in UNITS}
@@ -158,11 +158,11 @@ def get_status() -> Dict:
 
 
 def restart() -> Tuple[bool, str]:
-    """Перезапустить все три сервиса HA-стека."""
+    """Restart all three HA-stack services."""
     with _lock:
         r = _run(["systemctl", "restart", *UNITS], timeout=30)
         if r is None:
-            return False, "не удалось выполнить systemctl (нет прав/недоступен)"
+            return False, "could not run systemctl (no permission / unavailable)"
         if r.returncode == 0:
-            return True, "ha-stub-grpc, ha-stub-udp, ha-reticulum-bridge перезапущены"
-        return False, (r.stderr or r.stdout or f"код возврата {r.returncode}").strip()[:300]
+            return True, "ha-stub-grpc, ha-stub-udp, ha-reticulum-bridge restarted"
+        return False, (r.stderr or r.stdout or f"exit code {r.returncode}").strip()[:300]

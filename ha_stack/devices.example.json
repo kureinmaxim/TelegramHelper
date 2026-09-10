@@ -1,4 +1,4 @@
 {
   "kitchen_plug": "switch.lumi_lumi_ctrl_86plug_aq1_switch",
-  "mi_th_sensor": "sensor.<будущий_датчик>_temperature"
+  "mi_th_sensor": "sensor.<future_sensor>_temperature"
 }

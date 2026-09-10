@@ -1,26 +1,26 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-🔐 Secure Config Transfer — Безопасная передача VLESS конфигурации
+🔐 Secure Config Transfer — encrypt a VLESS config for safe hand-off
 
-Шифрует vless_client_config.json для безопасной передачи через
-небезопасные каналы (email, мессенджеры, cloud storage).
+Encrypts vless_client_config.json so it can travel over
+insecure channels (email, messengers, cloud storage).
 
-Использует AES-256-GCM (совместим с SecureMessenger из encryption.py).
+Uses AES-256-GCM (compatible with SecureMessenger from encryption.py).
 
-Использование:
-    # Шифрование
+Usage:
+    # Encrypt
     python3 secure_config_transfer.py encrypt config.json
     python3 secure_config_transfer.py encrypt config.json --output encrypted.bin
-    
-    # Расшифровка  
+
+    # Decrypt
     python3 secure_config_transfer.py decrypt encrypted.bin
     python3 secure_config_transfer.py decrypt encrypted.bin --output config.json
-    
-    # С заданным паролем
+
+    # With a given password
     python3 secure_config_transfer.py encrypt config.json --password "mypass"
-    
-    # Генерация пароля
+
+    # Generate a password
     python3 secure_config_transfer.py generate-password
 """
 
@@ -37,260 +37,260 @@ from typing import Tuple, Optional
 try:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 except ImportError:
-    print("❌ Требуется библиотека cryptography")
+    print("❌ cryptography library is required")
     print("   pip install cryptography")
     sys.exit(1)
 
 
 # ═══════════════════════════════════════════════════════════════
-# Константы
+# Constants
 # ═══════════════════════════════════════════════════════════════
 
-NONCE_SIZE = 12  # 96 бит для AES-GCM (стандарт NIST)
-SALT_SIZE = 16   # Для PBKDF2
-ITERATIONS = 100_000  # PBKDF2 итерации
+NONCE_SIZE = 12  # 96 bits for AES-GCM (NIST standard)
+SALT_SIZE = 16   # For PBKDF2
+ITERATIONS = 100_000  # PBKDF2 iterations
 
-# Магические байты для идентификации формата
+# Magic bytes to identify the format
 MAGIC_BYTES = b'VLESS_ENC_V1'
 
 
 # ═══════════════════════════════════════════════════════════════
-# Криптографические функции
+# Crypto helpers
 # ═══════════════════════════════════════════════════════════════
 
 def derive_key(password: str, salt: bytes) -> bytes:
     """
-    Получить 256-битный ключ из пароля используя PBKDF2-SHA256.
-    
+    Derive a 256-bit key from a password using PBKDF2-SHA256.
+
     Args:
-        password: Пароль пользователя
-        salt: Случайная соль (16 байт)
-    
+        password: User password
+        salt: Random salt (16 bytes)
+
     Returns:
-        32-байтный ключ для AES-256
+        32-byte key for AES-256
     """
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-    
+
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=salt,
         iterations=ITERATIONS,
     )
-    
+
     return kdf.derive(password.encode('utf-8'))
 
 
 def encrypt_data(data: bytes, password: str) -> bytes:
     """
-    Шифрует данные с помощью AES-256-GCM.
-    
-    Формат выходных данных:
+    Encrypt data with AES-256-GCM.
+
+    Output format:
     [MAGIC_BYTES(12)][SALT(16)][NONCE(12)][CIPHERTEXT+TAG]
-    
+
     Args:
-        data: Данные для шифрования
-        password: Пароль
-    
+        data: Data to encrypt
+        password: Password
+
     Returns:
-        Зашифрованный пакет
+        Encrypted packet
     """
-    # Генерируем соль и nonce
+    # Generate salt and nonce
     salt = os.urandom(SALT_SIZE)
     nonce = os.urandom(NONCE_SIZE)
-    
-    # Получаем ключ из пароля
+
+    # Derive key from password
     key = derive_key(password, salt)
-    
-    # Шифруем
+
+    # Encrypt
     aesgcm = AESGCM(key)
     ciphertext = aesgcm.encrypt(nonce, data, None)
-    
-    # Формируем пакет
+
+    # Assemble packet
     return MAGIC_BYTES + salt + nonce + ciphertext
 
 
 def decrypt_data(encrypted: bytes, password: str) -> bytes:
     """
-    Расшифровывает данные AES-256-GCM.
-    
+    Decrypt AES-256-GCM data.
+
     Args:
-        encrypted: Зашифрованный пакет
-        password: Пароль
-    
+        encrypted: Encrypted packet
+        password: Password
+
     Returns:
-        Расшифрованные данные
-    
+        Decrypted data
+
     Raises:
-        ValueError: При неверном формате или пароле
+        ValueError: On wrong format or password
     """
-    # Проверяем магические байты
+    # Check magic bytes
     if not encrypted.startswith(MAGIC_BYTES):
-        raise ValueError("Неверный формат файла (не VLESS_ENC_V1)")
-    
-    # Извлекаем компоненты
+        raise ValueError("Invalid file format (not VLESS_ENC_V1)")
+
+    # Extract components
     offset = len(MAGIC_BYTES)
     salt = encrypted[offset:offset + SALT_SIZE]
     offset += SALT_SIZE
     nonce = encrypted[offset:offset + NONCE_SIZE]
     offset += NONCE_SIZE
     ciphertext = encrypted[offset:]
-    
-    # Получаем ключ из пароля
+
+    # Derive key from password
     key = derive_key(password, salt)
-    
-    # Расшифровываем
+
+    # Decrypt
     try:
         aesgcm = AESGCM(key)
         return aesgcm.decrypt(nonce, ciphertext, None)
     except Exception as e:
-        raise ValueError("Неверный пароль или повреждённые данные") from e
+        raise ValueError("Wrong password or corrupted data") from e
 
 
 def generate_password(length: int = 24) -> str:
     """
-    Генерирует криптографически стойкий пароль.
-    
+    Generate a cryptographically strong password.
+
     Args:
-        length: Длина пароля (по умолчанию 24)
-    
+        length: Password length (default 24)
+
     Returns:
-        Безопасный пароль
+        Safe password
     """
     import secrets
     import string
-    
-    # Используем буквы, цифры и некоторые спецсимволы
+
+    # Letters, digits, and a few specials
     alphabet = string.ascii_letters + string.digits + "-_!@#"
     return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
 # ═══════════════════════════════════════════════════════════════
-# Команды CLI
+# CLI commands
 # ═══════════════════════════════════════════════════════════════
 
 def cmd_encrypt(args):
-    """Команда шифрования"""
+    """Encrypt command"""
     input_path = Path(args.input)
-    
+
     if not input_path.exists():
-        print(f"❌ Файл не найден: {input_path}")
+        print(f"❌ File not found: {input_path}")
         return 1
-    
-    # Определяем выходной файл
+
+    # Output file
     if args.output:
         output_path = Path(args.output)
     else:
         output_path = input_path.with_suffix('.enc')
-    
-    # Получаем пароль
+
+    # Password
     if args.password:
         password = args.password
     else:
-        password = getpass.getpass("🔑 Введите пароль для шифрования: ")
-        password2 = getpass.getpass("🔑 Подтвердите пароль: ")
-        
+        password = getpass.getpass("🔑 Enter encryption password: ")
+        password2 = getpass.getpass("🔑 Confirm password: ")
+
         if password != password2:
-            print("❌ Пароли не совпадают!")
+            print("❌ Passwords do not match!")
             return 1
-    
+
     if len(password) < 8:
-        print("⚠️  Предупреждение: пароль слишком короткий (рекомендуется 12+ символов)")
-    
-    # Читаем и шифруем
-    print(f"📄 Читаю: {input_path}")
+        print("⚠️  Warning: password is too short (12+ characters recommended)")
+
+    # Read and encrypt
+    print(f"📄 Reading: {input_path}")
     data = input_path.read_bytes()
-    
-    print("🔐 Шифрую...")
+
+    print("🔐 Encrypting...")
     encrypted = encrypt_data(data, password)
-    
-    # Записываем
+
+    # Write
     output_path.write_bytes(encrypted)
-    
-    # Также создаём base64 версию для удобства передачи
+
+    # Also write a base64 version for easier transfer
     b64_path = output_path.with_suffix('.enc.txt')
     b64_data = base64.b64encode(encrypted).decode('utf-8')
     b64_path.write_text(b64_data)
-    
+
     print()
     print("═══════════════════════════════════════════════════════════════")
-    print("   ✅ Файл зашифрован!")
+    print("   ✅ File encrypted!")
     print("═══════════════════════════════════════════════════════════════")
     print()
-    print(f"📦 Бинарный:  {output_path} ({len(encrypted)} байт)")
-    print(f"📝 Base64:    {b64_path} ({len(b64_data)} символов)")
+    print(f"📦 Binary:  {output_path} ({len(encrypted)} bytes)")
+    print(f"📝 Base64:    {b64_path} ({len(b64_data)} chars)")
     print()
-    print("💡 Для расшифровки:")
+    print("💡 To decrypt:")
     print(f"   python3 {sys.argv[0]} decrypt {output_path}")
     print()
-    print("⚠️  ВАЖНО: Передайте пароль ОТДЕЛЬНО от файла!")
-    print("   Например: пароль по телефону, файл через email")
-    
+    print("⚠️  IMPORTANT: Send the password SEPARATELY from the file!")
+    print("   e.g. password by phone, file by email")
+
     return 0
 
 
 def cmd_decrypt(args):
-    """Команда расшифровки"""
+    """Decrypt command"""
     input_path = Path(args.input)
-    
+
     if not input_path.exists():
-        print(f"❌ Файл не найден: {input_path}")
+        print(f"❌ File not found: {input_path}")
         return 1
-    
-    # Определяем выходной файл
+
+    # Output file
     if args.output:
         output_path = Path(args.output)
     else:
-        # Убираем .enc или .enc.txt
+        # Strip .enc or .enc.txt
         name = input_path.stem
         if name.endswith('.enc'):
             name = name[:-4]
         output_path = input_path.parent / f"{name}_decrypted.json"
-    
-    # Получаем пароль
+
+    # Password
     if args.password:
         password = args.password
     else:
-        password = getpass.getpass("🔑 Введите пароль для расшифровки: ")
-    
-    # Читаем файл
-    print(f"📄 Читаю: {input_path}")
+        password = getpass.getpass("🔑 Enter decryption password: ")
+
+    # Read file
+    print(f"📄 Reading: {input_path}")
     data = input_path.read_bytes()
-    
-    # Проверяем, не base64 ли это
+
+    # Maybe it is base64
     if not data.startswith(MAGIC_BYTES):
         try:
-            # Пробуем декодировать base64
+            # Try decoding base64
             data = base64.b64decode(data)
         except Exception:
             pass
-    
-    # Расшифровываем
-    print("🔓 Расшифровываю...")
+
+    # Decrypt
+    print("🔓 Decrypting...")
     try:
         decrypted = decrypt_data(data, password)
     except ValueError as e:
         print(f"❌ {e}")
         return 1
-    
-    # Записываем
+
+    # Write
     output_path.write_bytes(decrypted)
-    
+
     print()
     print("═══════════════════════════════════════════════════════════════")
-    print("   ✅ Файл расшифрован!")
+    print("   ✅ File decrypted!")
     print("═══════════════════════════════════════════════════════════════")
     print()
-    print(f"📄 Сохранено: {output_path}")
-    
-    # Показываем содержимое если это JSON
+    print(f"📄 Saved: {output_path}")
+
+    # Show contents if JSON
     try:
         config = json.loads(decrypted)
         print()
-        print("📋 Содержимое конфигурации:")
+        print("📋 Config contents:")
         print("───────────────────────────────────────────────────────────────")
-        
+
         if 'vless_link' in config:
             print(f"🔗 VLESS Link: {config['vless_link'][:50]}...")
         if 'server' in config:
@@ -298,123 +298,123 @@ def cmd_decrypt(args):
         if 'uuid' in config:
             uuid = config['uuid']
             print(f"🆔 UUID: {uuid[:8]}...{uuid[-4:]}")
-            
+
     except json.JSONDecodeError:
         pass
-    
+
     return 0
 
 
 def cmd_generate_password(args):
-    """Команда генерации пароля"""
+    """Generate-password command"""
     password = generate_password(args.length)
-    
+
     print()
     print("═══════════════════════════════════════════════════════════════")
-    print("   🔑 Сгенерирован безопасный пароль")
+    print("   🔑 Generated a safe password")
     print("═══════════════════════════════════════════════════════════════")
     print()
     print(f"   {password}")
     print()
-    print("💡 Используйте с --password при шифровании:")
+    print("💡 Use with --password when encrypting:")
     print(f"   python3 {sys.argv[0]} encrypt config.json --password '{password}'")
-    
+
     return 0
 
 
 def cmd_info(args):
-    """Показать информацию о зашифрованном файле"""
+    """Show info about an encrypted file"""
     input_path = Path(args.input)
-    
+
     if not input_path.exists():
-        print(f"❌ Файл не найден: {input_path}")
+        print(f"❌ File not found: {input_path}")
         return 1
-    
+
     data = input_path.read_bytes()
-    
-    # Проверяем base64
+
+    # Check base64
     is_base64 = False
     if not data.startswith(MAGIC_BYTES):
         try:
             data = base64.b64decode(data)
             is_base64 = True
         except Exception:
-            print("❌ Файл не является зашифрованным конфигом VLESS")
+            print("❌ File is not an encrypted VLESS config")
             return 1
-    
+
     if not data.startswith(MAGIC_BYTES):
-        print("❌ Файл не является зашифрованным конфигом VLESS")
+        print("❌ File is not an encrypted VLESS config")
         return 1
-    
-    # Извлекаем метаданные
+
+    # Extract metadata
     offset = len(MAGIC_BYTES)
     salt = data[offset:offset + SALT_SIZE]
     offset += SALT_SIZE
     nonce = data[offset:offset + NONCE_SIZE]
     offset += NONCE_SIZE
     ciphertext_len = len(data) - offset
-    
+
     print()
     print("═══════════════════════════════════════════════════════════════")
-    print("   📦 Информация о зашифрованном файле")
+    print("   📦 Encrypted file info")
     print("═══════════════════════════════════════════════════════════════")
     print()
-    print(f"📄 Файл: {input_path}")
-    print(f"📊 Размер: {len(data)} байт")
-    print(f"🏷️  Формат: VLESS_ENC_V1")
-    print(f"🔤 Base64: {'Да' if is_base64 else 'Нет'}")
+    print(f"📄 File: {input_path}")
+    print(f"📊 Size: {len(data)} bytes")
+    print(f"🏷️  Format: VLESS_ENC_V1")
+    print(f"🔤 Base64: {'Yes' if is_base64 else 'No'}")
     print()
-    print("🔐 Криптография:")
-    print(f"   • Алгоритм: AES-256-GCM")
-    print(f"   • KDF: PBKDF2-SHA256 ({ITERATIONS:,} итераций)")
-    print(f"   • Salt: {SALT_SIZE} байт")
-    print(f"   • Nonce: {NONCE_SIZE} байт")
-    print(f"   • Шифротекст: {ciphertext_len} байт")
-    
+    print("🔐 Crypto:")
+    print(f"   • Algorithm: AES-256-GCM")
+    print(f"   • KDF: PBKDF2-SHA256 ({ITERATIONS:,} iterations)")
+    print(f"   • Salt: {SALT_SIZE} bytes")
+    print(f"   • Nonce: {NONCE_SIZE} bytes")
+    print(f"   • Ciphertext: {ciphertext_len} bytes")
+
     return 0
 
 
 # ═══════════════════════════════════════════════════════════════
-# Точка входа
+# Entry point
 # ═══════════════════════════════════════════════════════════════
 
 def main():
     parser = argparse.ArgumentParser(
-        description="🔐 Безопасная передача VLESS конфигурации",
+        description="🔐 Secure transfer of a VLESS configuration",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-Примеры использования:
+Examples:
   %(prog)s encrypt vless_config.json
   %(prog)s decrypt vless_config.enc
   %(prog)s generate-password
   %(prog)s info vless_config.enc
         """
     )
-    
-    subparsers = parser.add_subparsers(dest='command', help='Команда')
-    
+
+    subparsers = parser.add_subparsers(dest='command', help='Command')
+
     # encrypt
-    enc_parser = subparsers.add_parser('encrypt', help='Зашифровать файл конфигурации')
-    enc_parser.add_argument('input', help='Входной JSON файл')
-    enc_parser.add_argument('--output', '-o', help='Выходной файл (по умолчанию: input.enc)')
-    enc_parser.add_argument('--password', '-p', help='Пароль (или будет запрошен)')
-    
+    enc_parser = subparsers.add_parser('encrypt', help='Encrypt a config file')
+    enc_parser.add_argument('input', help='Input JSON file')
+    enc_parser.add_argument('--output', '-o', help='Output file (default: input.enc)')
+    enc_parser.add_argument('--password', '-p', help='Password (or you will be prompted)')
+
     # decrypt
-    dec_parser = subparsers.add_parser('decrypt', help='Расшифровать файл')
-    dec_parser.add_argument('input', help='Зашифрованный файл (.enc или .enc.txt)')
-    dec_parser.add_argument('--output', '-o', help='Выходной файл')
-    dec_parser.add_argument('--password', '-p', help='Пароль (или будет запрошен)')
-    
+    dec_parser = subparsers.add_parser('decrypt', help='Decrypt a file')
+    dec_parser.add_argument('input', help='Encrypted file (.enc or .enc.txt)')
+    dec_parser.add_argument('--output', '-o', help='Output file')
+    dec_parser.add_argument('--password', '-p', help='Password (or you will be prompted)')
+
     # generate-password
-    gen_parser = subparsers.add_parser('generate-password', help='Сгенерировать безопасный пароль')
-    gen_parser.add_argument('--length', '-l', type=int, default=24, help='Длина пароля (по умолчанию: 24)')
-    
+    gen_parser = subparsers.add_parser('generate-password', help='Generate a safe password')
+    gen_parser.add_argument('--length', '-l', type=int, default=24, help='Password length (default: 24)')
+
     # info
-    info_parser = subparsers.add_parser('info', help='Информация о зашифрованном файле')
-    info_parser.add_argument('input', help='Зашифрованный файл')
-    
+    info_parser = subparsers.add_parser('info', help='Info about an encrypted file')
+    info_parser.add_argument('input', help='Encrypted file')
+
     args = parser.parse_args()
-    
+
     if args.command == 'encrypt':
         return cmd_encrypt(args)
     elif args.command == 'decrypt':
@@ -430,4 +430,3 @@ def main():
 
 if __name__ == '__main__':
     sys.exit(main())
-

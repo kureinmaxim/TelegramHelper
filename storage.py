@@ -29,7 +29,7 @@ def _ensure_defaults(data: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not isinstance(data, dict):
         data = {}
     data.setdefault("special_user_ids", [])
-    data.setdefault("admin_user_ids", [])  # динамически назначенные админы (env-админы защищены отдельно)
+    data.setdefault("admin_user_ids", [])  # runtime-assigned admins (env admins are stored separately)
     data.setdefault("users", {})
     settings = data.setdefault("settings", {})
     settings.setdefault("echo_enabled", False)
@@ -127,8 +127,8 @@ def remove_special_user(user_id: int) -> None:
         _atomic_write(data)
 
 
-# --- Динамические администраторы (назначаются админом во время работы). ---
-# Первичные админы (из .env ADMIN_USER_IDS) здесь НЕ хранятся и защищены отдельно.
+# --- Runtime admins (assigned by an admin while the bot is running). ---
+# Primary admins (from .env ADMIN_USER_IDS) are not stored here and stay separate.
 
 def is_dynamic_admin(user_id: int) -> bool:
     data = _load_data()
@@ -179,8 +179,8 @@ def track_user(
 
 
 def get_user_email(user_id: int) -> Optional[str]:
-    """Email связан с пользователем для отправки профилей через
-    `/email_profile`. Возвращает None если не задан."""
+    """Email linked to the user for sending profiles via
+    `/email_profile`. Returns None if unset."""
     data = _load_data()
     user = data["users"].get(str(user_id)) or {}
     e = user.get("email")
@@ -204,16 +204,16 @@ def remove_user_email(user_id: int) -> None:
         _atomic_write(data)
 
 
-# --- UI prefs (тема оформления панелей бота; spec 2026-06-11 §7) ---
+# --- UI prefs (bot panel theme; spec 2026-06-11 §7) ---
 
 _UI_THEMES_ALLOWED = ("classic", "minimal", "neon")
 
 
 def get_ui_prefs(user_id: int) -> Dict[str, Any]:
-    """Per-user настройки оформления панелей бота.
+    """Per-user bot panel appearance.
 
-    Возвращает всегда валидный dict: {"theme": str, "compact": bool}.
-    Битые значения в users.json молча заменяются default'ами.
+    Always returns a valid dict: {"theme": str, "compact": bool}.
+    Invalid values in users.json are silently replaced with defaults.
     """
     data = _load_data()
     user = data["users"].get(str(user_id)) or {}
@@ -224,7 +224,7 @@ def get_ui_prefs(user_id: int) -> Dict[str, Any]:
 
 
 def set_ui_pref(user_id: int, key: str, value: Any) -> None:
-    """key: 'theme' (значение из _UI_THEMES_ALLOWED) или 'compact' (bool)."""
+    """key: 'theme' (value from _UI_THEMES_ALLOWED) or 'compact' (bool)."""
     if key == "theme":
         if value not in _UI_THEMES_ALLOWED:
             raise ValueError(f"unknown theme: {value!r}")
@@ -240,8 +240,8 @@ def set_ui_pref(user_id: int, key: str, value: Any) -> None:
 
 
 def get_my_profile_view_count(user_id: int) -> int:
-    """Сколько раз пользователь успешно вызывал /my_profile с
-    bot-managed профилями. Используется для лимита 2 просмотров."""
+    """How many times the user successfully called /my_profile with
+    bot-managed profiles. Used for the 2-view limit."""
     data = _load_data()
     user = data["users"].get(str(user_id)) or {}
     try:
@@ -251,7 +251,7 @@ def get_my_profile_view_count(user_id: int) -> int:
 
 
 def inc_my_profile_view_count(user_id: int) -> int:
-    """Атомарно: +1 к счётчику и вернуть новое значение."""
+    """Atomically increment the counter and return the new value."""
     data = _load_data()
     user = data["users"].setdefault(str(user_id), {})
     try:
@@ -265,7 +265,7 @@ def inc_my_profile_view_count(user_id: int) -> int:
 
 
 def reset_my_profile_view_count(user_id: int) -> None:
-    """Сбросить счётчик (после /provision или auto-cleanup)."""
+    """Reset the counter (after /provision or auto-cleanup)."""
     data = _load_data()
     user = data["users"].get(str(user_id))
     if not user:
@@ -276,8 +276,8 @@ def reset_my_profile_view_count(user_id: int) -> None:
 
 
 def add_my_profile_message(user_id: int, chat_id: int, message_id: int) -> None:
-    """Запомнить, что бот отправил пользователю сообщение, которое нужно
-    будет либо авто-удалить через 15 мин, либо снести на 3-м просмотре."""
+    """Remember a bot message that should be auto-deleted after 15 min
+    or removed on the 3rd view."""
     data = _load_data()
     user = data["users"].setdefault(str(user_id), {})
     msgs = user.setdefault("my_profile_messages", [])
@@ -293,7 +293,7 @@ def add_my_profile_message(user_id: int, chat_id: int, message_id: int) -> None:
 
 
 def get_my_profile_messages(user_id: int) -> List[Dict[str, Any]]:
-    """Список (chat_id, message_id) ранее отправленных сообщений с URL/QR."""
+    """List of (chat_id, message_id) for previously sent URL/QR messages."""
     data = _load_data()
     user = data["users"].get(str(user_id)) or {}
     msgs = user.get("my_profile_messages") or []
@@ -313,7 +313,7 @@ def clear_my_profile_messages(user_id: int) -> None:
 
 
 def remove_my_profile_message(user_id: int, chat_id: int, message_id: int) -> None:
-    """Снять одну запись после успешного auto-delete."""
+    """Drop one record after a successful auto-delete."""
     data = _load_data()
     user = data["users"].get(str(user_id))
     if not user:
@@ -333,12 +333,12 @@ def remove_my_profile_message(user_id: int, chat_id: int, message_id: int) -> No
 
 
 def get_all_my_profile_messages() -> List[Dict[str, Any]]:
-    """Все отслеживаемые URL/QR сообщения по ВСЕМ пользователям.
+    """All tracked URL/QR messages across ALL users.
 
-    Возвращает список dict с ключами user_id, chat_id, message_id. Нужно, чтобы
-    одним проходом снести устаревшие ссылки/QR из всех чатов (админ + все
-    пользователи) — например, после смены порта/SNI/ключей VLESS, когда старые
-    ссылки становятся невалидными и не должны больше нигде показываться."""
+    Returns dicts with keys user_id, chat_id, message_id. Used to purge
+    stale URI/QR messages from every chat (admin + all users) in one pass —
+    e.g. after a VLESS port/SNI/key change, when old links are invalid
+    and must not be shown anywhere."""
     data = _load_data()
     out: List[Dict[str, Any]] = []
     for uid_str, user in (data.get("users") or {}).items():
@@ -363,7 +363,7 @@ def get_all_my_profile_messages() -> List[Dict[str, Any]]:
 
 
 def clear_all_my_profile_messages() -> None:
-    """Очистить трекинг URL/QR сообщений у всех пользователей за один проход."""
+    """Clear URL/QR message tracking for all users in one pass."""
     data = _load_data()
     changed = False
     for user in (data.get("users") or {}).values():

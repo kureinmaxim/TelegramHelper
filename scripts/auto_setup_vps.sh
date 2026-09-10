@@ -4,20 +4,20 @@
 # 🚀 AUTO SETUP VPS — VLESS-Reality + Hysteria2
 # ═══════════════════════════════════════════════════════════════
 #
-# Этот скрипт автоматически настраивает свежий Debian 12 VPS:
-# - Режим minimal: Xray + Hysteria2 (для ручного управления)
-# - Режим full: Docker + TelegramHelper + Xray + Hysteria2 (через бота)
+# This script automatically configures a fresh Debian 12 VPS:
+# - minimal mode: Xray + Hysteria2 (manual management)
+# - full mode: Docker + TelegramHelper + Xray + Hysteria2 (via the bot)
 #
-# Оба протокола работают одновременно:
-#   VLESS-Reality — TCP (маскируется под HTTPS)
-#   Hysteria2     — UDP (QUIC-based, высокая скорость)
+# Both protocols run at the same time:
+#   VLESS-Reality — TCP (masquerades as HTTPS)
+#   Hysteria2     — UDP (QUIC-based, high throughput)
 #
-# Использование:
+# Usage:
 #   ./auto_setup_vps.sh --host 123.45.67.89 --password "your_pass"
 #   ./auto_setup_vps.sh --host 123.45.67.89 --mode full --password "pass"
 #   ./auto_setup_vps.sh --host 123.45.67.89 --no-hysteria2 --password "pass"
 #
-# Или через переменную окружения:
+# Or via an environment variable:
 #   SSH_PASS="your_pass" ./auto_setup_vps.sh --host 123.45.67.89
 #
 # ═══════════════════════════════════════════════════════════════
@@ -25,7 +25,7 @@
 set -e
 umask 077
 
-# Цвета для вывода
+# Output colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -33,27 +33,27 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Значения по умолчанию
+# Defaults
 SSH_HOST=""
 SSH_PORT="22"
 SSH_USER="root"
 SSH_PASSWORD="${SSH_PASS:-}"
-INSTALL_MODE="minimal"  # minimal или full
+INSTALL_MODE="minimal"  # minimal or full
 BOT_TOKEN=""
 ADMIN_ID=""
 OUTPUT_DIR="./vless_configs"
 VLESS_PORT="443"
 
-# Hysteria2 (по умолчанию включен)
+# Hysteria2 (enabled by default)
 HY2_ENABLE="true"
-HY2_PORT="443"          # UDP порт (не конфликтует с VLESS TCP 443)
-HY2_PASSWORD=""          # Авто-генерация если пусто
+HY2_PORT="443"          # UDP port (does not conflict with VLESS TCP 443)
+HY2_PASSWORD=""          # Auto-generate if empty
 
-# AI провайдеры (опционально)
+# AI providers (optional)
 ANTHROPIC_KEY=""
 OPENAI_KEY=""
 
-# Nginx + Certbot (опционально)
+# Nginx + Certbot (optional)
 NGINX_ENABLE="false"
 NGINX_DOMAIN=""
 NGINX_EMAIL=""
@@ -61,14 +61,14 @@ NGINX_HTTPS_PORT=""
 NGINX_UPSTREAM_HOST="127.0.0.1"
 NGINX_UPSTREAM_PORT="8000"
 
-# Headscale (опционально, full режим)
+# Headscale (optional, full mode)
 HEADSCALE_ENABLE="false"
 HEADSCALE_DOMAIN=""
 HA_DOMAIN=""
 
-# Авто-чистка диска через scripts/vps_maintenance.sh
-# (по умолчанию включена — ставит systemd-таймер на еженедельный prune Docker
-# + кэп journald 500M; см. POST_DEPLOY.md §11)
+# Disk auto-cleanup via scripts/vps_maintenance.sh
+# (enabled by default — installs a weekly Docker prune systemd timer
+# + journald cap 500M; see POST_DEPLOY.md §11)
 WITH_MAINTENANCE="true"
 
 print_banner() {
@@ -80,107 +80,107 @@ print_banner() {
 }
 
 print_help() {
-    echo -e "${GREEN}Использование:${NC}"
+    echo -e "${GREEN}Usage:${NC}"
     echo "  $0 [OPTIONS]"
     echo ""
-    echo -e "${GREEN}Обязательные параметры:${NC}"
-    echo "  --host, -h HOST       IP адрес или домен сервера"
-    echo "  --password, -p PASS   SSH пароль (или env SSH_PASS)"
+    echo -e "${GREEN}Required:${NC}"
+    echo "  --host, -h HOST       Server IP or domain"
+    echo "  --password, -p PASS   SSH password (or env SSH_PASS)"
     echo ""
-    echo -e "${GREEN}Опциональные параметры:${NC}"
-    echo "  --port PORT           SSH порт (по умолчанию: 22)"
-    echo "  --user USER           SSH пользователь (по умолчанию: root)"
-    echo "  --mode MODE           Режим установки:"
-    echo "                          minimal - Xray + Hysteria2 (по умолчанию)"
+    echo -e "${GREEN}Optional:${NC}"
+    echo "  --port PORT           SSH port (default: 22)"
+    echo "  --user USER           SSH user (default: root)"
+    echo "  --mode MODE           Install mode:"
+    echo "                          minimal - Xray + Hysteria2 (default)"
     echo "                          full    - Docker + TelegramHelper + Xray + Hysteria2"
-    echo "  --vless-port PORT     Порт VLESS TCP (по умолчанию: 443)"
-    echo "  --hy2-port PORT       Порт Hysteria2 UDP (по умолчанию: 443)"
-    echo "  --hy2-password PASS   Пароль Hysteria2 (по умолчанию: авто)"
-    echo "  --no-hysteria2        Не устанавливать Hysteria2"
+    echo "  --vless-port PORT     VLESS TCP port (default: 443)"
+    echo "  --hy2-port PORT       Hysteria2 UDP port (default: 443)"
+    echo "  --hy2-password PASS   Hysteria2 password (default: auto)"
+    echo "  --no-hysteria2        Do not install Hysteria2"
     echo ""
-    echo -e "${GREEN}Параметры для full режима:${NC}"
-    echo "  --bot-token TOKEN     Telegram Bot Token (от @BotFather)"
-    echo "  --admin-id ID         Ваш Telegram User ID"
-    echo "  --anthropic-key KEY   Anthropic API ключ (опционально)"
-    echo "  --openai-key KEY      OpenAI API ключ (опционально)"
+    echo -e "${GREEN}full-mode options:${NC}"
+    echo "  --bot-token TOKEN     Telegram Bot Token (from @BotFather)"
+    echo "  --admin-id ID         Your Telegram User ID"
+    echo "  --anthropic-key KEY   Anthropic API key (optional)"
+    echo "  --openai-key KEY      OpenAI API key (optional)"
     echo ""
-    echo -e "${GREEN}Nginx + Certbot (опционально, full режим):${NC}"
-    echo "  --nginx               Установить и настроить Nginx + SSL"
-    echo "  --nginx-domain DOMAIN Домен для HTTPS (например api.example.com)"
-    echo "  --nginx-email EMAIL   Email для Let's Encrypt"
-    echo "  --nginx-https-port    HTTPS порт Nginx (по умолчанию: 443 или 8443 при конфликте)"
-    echo "  --nginx-upstream-port Порт API (по умолчанию: 8000)"
+    echo -e "${GREEN}Nginx + Certbot (optional, full mode):${NC}"
+    echo "  --nginx               Install and configure Nginx + SSL"
+    echo "  --nginx-domain DOMAIN HTTPS domain (e.g. api.example.com)"
+    echo "  --nginx-email EMAIL   Email for Let's Encrypt"
+    echo "  --nginx-https-port    Nginx HTTPS port (default: 443, or 8443 on conflict)"
+    echo "  --nginx-upstream-port API port (default: 8000)"
     echo ""
-    echo -e "${GREEN}Headscale (опционально, full режим):${NC}"
-    echo "  --headscale           Установить Headscale (self-hosted Tailscale)"
-    echo "  --headscale-domain D  Домен для Headscale (напр. headscale.example.com)"
-    echo "  --ha-domain DOMAIN    Домен для Home Assistant (напр. ha.example.com)"
+    echo -e "${GREEN}Headscale (optional, full mode):${NC}"
+    echo "  --headscale           Install Headscale (self-hosted Tailscale)"
+    echo "  --headscale-domain D  Headscale domain (e.g. headscale.example.com)"
+    echo "  --ha-domain DOMAIN    Home Assistant domain (e.g. ha.example.com)"
     echo ""
-    echo -e "${GREEN}Дополнительно:${NC}"
-    echo "  --output DIR          Папка для сохранения конфигов"
-    echo "  --no-maintenance      Не ставить авто-чистку диска (по умолчанию ставится:"
-    echo "                          systemd-таймер на еженедельный docker prune +"
-    echo "                          journald cap 500M, см. POST_DEPLOY.md §11)"
-    echo "  --with-maintenance    Явно включить (уже по умолчанию)"
-    echo "  --help                Показать эту справку"
+    echo -e "${GREEN}Extra:${NC}"
+    echo "  --output DIR          Directory to save configs"
+    echo "  --no-maintenance      Skip disk auto-cleanup (installed by default:"
+    echo "                          weekly docker prune systemd timer +"
+    echo "                          journald cap 500M, see POST_DEPLOY.md §11)"
+    echo "  --with-maintenance    Explicitly enable (already the default)"
+    echo "  --help                Show this help"
     echo ""
-    echo -e "${YELLOW}Примеры:${NC}"
-    echo "  # Минимальная установка (Xray + Hysteria2)"
+    echo -e "${YELLOW}Examples:${NC}"
+    echo "  # Minimal install (Xray + Hysteria2)"
     echo "  $0 --host 123.45.67.89 --password 'mypass'"
     echo ""
-    echo "  # Только VLESS (без Hysteria2)"
+    echo "  # VLESS only (no Hysteria2)"
     echo "  $0 --host 123.45.67.89 --no-hysteria2 --password 'mypass'"
     echo ""
-    echo "  # Hysteria2 на другом порту"
+    echo "  # Hysteria2 on another port"
     echo "  $0 --host 123.45.67.89 --hy2-port 8443 --password 'mypass'"
     echo ""
-    echo "  # Полная установка с Telegram-ботом"
+    echo "  # Full install with Telegram bot"
     echo "  $0 --host 123.45.67.89 --mode full \\"
     echo "     --bot-token '123456:ABC...' --admin-id 987654321 \\"
     echo "     --password 'mypass'"
     echo ""
-    echo "  # Через переменную окружения"
+    echo "  # Via environment variable"
     echo "  SSH_PASS='mypass' $0 --host 123.45.67.89 --mode full"
 }
 
 check_dependencies() {
-    echo -e "${BLUE}📦 Проверка зависимостей...${NC}"
+    echo -e "${BLUE}📦 Checking dependencies...${NC}"
     
-    # Проверяем sshpass
+    # Check sshpass
     if ! command -v sshpass &> /dev/null; then
-        echo -e "${YELLOW}⚠️ sshpass не найден${NC}"
+        echo -e "${YELLOW}⚠️ sshpass not found${NC}"
         echo ""
         
-        # Определяем ОС
+        # Detect OS
         if [[ "$OSTYPE" == "darwin"* ]]; then
-            echo "Для macOS установите через Homebrew:"
+            echo "On macOS install via Homebrew:"
             echo -e "${CYAN}  brew install hudochenkov/sshpass/sshpass${NC}"
         elif [[ -f /etc/debian_version ]]; then
-            echo "Для Debian/Ubuntu:"
+            echo "On Debian/Ubuntu:"
             echo -e "${CYAN}  sudo apt-get install sshpass${NC}"
         elif [[ -f /etc/redhat-release ]]; then
-            echo "Для CentOS/RHEL:"
+            echo "On CentOS/RHEL:"
             echo -e "${CYAN}  sudo yum install sshpass${NC}"
         else
-            echo "Установите sshpass для вашей ОС"
+            echo "Install sshpass for your OS"
         fi
         echo ""
         exit 1
     fi
     
-    # Проверяем ssh
+    # Check ssh
     if ! command -v ssh &> /dev/null; then
-        echo -e "${RED}❌ ssh не найден. Установите OpenSSH клиент.${NC}"
+        echo -e "${RED}❌ ssh not found. Install the OpenSSH client.${NC}"
         exit 1
     fi
     
-    # Проверяем scp
+    # Check scp
     if ! command -v scp &> /dev/null; then
-        echo -e "${RED}❌ scp не найден. Установите OpenSSH клиент.${NC}"
+        echo -e "${RED}❌ scp not found. Install the OpenSSH client.${NC}"
         exit 1
     fi
     
-    echo -e "${GREEN}✅ Все зависимости установлены${NC}"
+    echo -e "${GREEN}✅ All dependencies installed${NC}"
 }
 
 parse_args() {
@@ -287,7 +287,7 @@ parse_args() {
                 exit 0
                 ;;
             *)
-                echo -e "${RED}❌ Неизвестный параметр: $1${NC}"
+                echo -e "${RED}❌ Unknown option: $1${NC}"
                 print_help
                 exit 1
                 ;;
@@ -299,50 +299,50 @@ validate_args() {
     local has_error=0
     
     if [[ -z "$SSH_HOST" ]]; then
-        echo -e "${RED}❌ Не указан --host${NC}"
+        echo -e "${RED}❌ --host is required${NC}"
         has_error=1
     fi
     
     if [[ -z "$SSH_PASSWORD" ]]; then
-        echo -e "${RED}❌ Не указан --password (или SSH_PASS)${NC}"
+        echo -e "${RED}❌ --password (or SSH_PASS) is required${NC}"
         has_error=1
     fi
 
     if [[ "$INSTALL_MODE" == "full" && "$NGINX_ENABLE" == "true" ]]; then
         if [[ -z "$NGINX_DOMAIN" || -z "$NGINX_EMAIL" ]]; then
-            echo -e "${RED}❌ Для --nginx нужны --nginx-domain и --nginx-email${NC}"
+            echo -e "${RED}❌ --nginx requires --nginx-domain and --nginx-email${NC}"
             has_error=1
         fi
     fi
 
     if [[ "$INSTALL_MODE" != "full" && "$NGINX_ENABLE" == "true" ]]; then
-        echo -e "${RED}❌ Nginx доступен только в режиме full${NC}"
+        echo -e "${RED}❌ Nginx is available only in full mode${NC}"
         has_error=1
     fi
     
     if [[ "$INSTALL_MODE" != "minimal" && "$INSTALL_MODE" != "full" ]]; then
-        echo -e "${RED}❌ Неверный режим: $INSTALL_MODE (допустимо: minimal, full)${NC}"
+        echo -e "${RED}❌ Invalid mode: $INSTALL_MODE (allowed: minimal, full)${NC}"
         has_error=1
     fi
     
     if [[ "$INSTALL_MODE" == "full" ]]; then
         if [[ -z "$BOT_TOKEN" ]]; then
-            echo -e "${RED}❌ Для full режима требуется --bot-token${NC}"
+            echo -e "${RED}❌ full mode requires --bot-token${NC}"
             has_error=1
         fi
         if [[ -z "$ADMIN_ID" ]]; then
-            echo -e "${RED}❌ Для full режима требуется --admin-id${NC}"
+            echo -e "${RED}❌ full mode requires --admin-id${NC}"
             has_error=1
         fi
     fi
 
     if [[ "$HEADSCALE_ENABLE" == "true" ]]; then
         if [[ "$INSTALL_MODE" != "full" ]]; then
-            echo -e "${RED}❌ Headscale доступен только в режиме full${NC}"
+            echo -e "${RED}❌ Headscale is available only in full mode${NC}"
             has_error=1
         fi
         if [[ -z "$HEADSCALE_DOMAIN" ]]; then
-            echo -e "${RED}❌ Для --headscale требуется --headscale-domain${NC}"
+            echo -e "${RED}❌ --headscale requires --headscale-domain${NC}"
             has_error=1
         fi
     fi
@@ -365,29 +365,29 @@ scp_cmd() {
 }
 
 test_connection() {
-    echo -e "${BLUE}🔗 Проверка подключения к $SSH_HOST...${NC}"
+    echo -e "${BLUE}🔗 Testing connection to $SSH_HOST...${NC}"
     
     if ! ssh_cmd "echo 'Connection OK'" &> /dev/null; then
-        echo -e "${RED}❌ Не удалось подключиться к серверу${NC}"
-        echo "   Проверьте IP, порт, пользователя и пароль"
+        echo -e "${RED}❌ Could not connect to the server${NC}"
+        echo "   Check IP, port, user, and password"
         exit 1
     fi
     
-    echo -e "${GREEN}✅ Подключение успешно!${NC}"
+    echo -e "${GREEN}✅ Connection OK!${NC}"
     
-    # Получаем информацию о сервере
-    echo -e "${BLUE}📋 Информация о сервере:${NC}"
+    # Fetch server info
+    echo -e "${BLUE}📋 Server info:${NC}"
     ssh_cmd "uname -a && cat /etc/os-release | head -2"
 }
 
 run_installation() {
     echo ""
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${CYAN}   📦 Начинаем установку в режиме: ${YELLOW}$INSTALL_MODE${NC}"
+    echo -e "${CYAN}   📦 Starting install in mode: ${YELLOW}$INSTALL_MODE${NC}"
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
     
-    # Создаём временный скрипт установки
+    # Create a temporary install script
     local install_script
     if [[ "$INSTALL_MODE" == "minimal" ]]; then
         install_script=$(create_minimal_install_script)
@@ -395,25 +395,25 @@ run_installation() {
         install_script=$(create_full_install_script)
     fi
     
-    # Копируем и выполняем скрипт
-    echo -e "${BLUE}📤 Загрузка скрипта установки на сервер...${NC}"
+    # Copy and run the script
+    echo -e "${BLUE}📤 Uploading install script to the server...${NC}"
     echo "$install_script" | ssh_cmd "cat > /tmp/install_vless.sh && chmod +x /tmp/install_vless.sh"
     
-    echo -e "${BLUE}⚙️ Запуск установки (это может занять несколько минут)...${NC}"
+    echo -e "${BLUE}⚙️ Starting install (this may take several minutes)...${NC}"
     echo ""
     
-    # Выполняем установку
+    # Run the install
     ssh_cmd "bash /tmp/install_vless.sh"
     
     echo ""
-    echo -e "${GREEN}✅ Установка завершена!${NC}"
+    echo -e "${GREEN}✅ Install finished!${NC}"
 }
 
 create_minimal_install_script() {
-    # Передаём SSH порт для UFW и Fail2ban
+    # Pass SSH port for UFW and Fail2ban
     cat << SCRIPT_EOF
 #!/bin/bash
-# Минимальная установка: Xray + Hysteria2
+# Minimal install: Xray + Hysteria2
 
 set -e
 
@@ -421,7 +421,7 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-# Параметры переданные из локального скрипта
+# Parameters passed from the local script
 SSH_PORT_FOR_UFW="$SSH_PORT"
 HOME_DIR="\$HOME"
 VLESS_PORT="$VLESS_PORT"
@@ -429,15 +429,15 @@ HY2_ENABLE="$HY2_ENABLE"
 HY2_PORT="$HY2_PORT"
 HY2_PASSWORD="$HY2_PASSWORD"
 
-# Определяем нужен ли sudo
+# Detect whether sudo is needed
 if [ "\$(id -u)" -ne 0 ]; then
     SUDO="sudo"
-    echo -e "\${YELLOW}⚠️ Запуск от обычного пользователя, используем sudo\${NC}"
+    echo -e "\${YELLOW}⚠️ Running as a regular user, using sudo\${NC}"
 else
     SUDO=""
 fi
 
-# Подсчёт шагов
+# Step counter
 TOTAL_STEPS=6
 if [ "\$HY2_ENABLE" = "true" ]; then
     TOTAL_STEPS=8
@@ -445,27 +445,27 @@ fi
 STEP=0
 next_step() { STEP=\$((STEP+1)); echo -e "\${YELLOW}[\${STEP}/\${TOTAL_STEPS}] \$1\${NC}"; }
 
-echo -e "\${GREEN}=== Минимальная установка VLESS-Reality + Hysteria2 ===\${NC}"
+echo -e "\${GREEN}=== Minimal VLESS-Reality + Hysteria2 install ===\${NC}"
 
-# 1. Обновление системы
-next_step "Обновление системы..."
+# 1. System update
+next_step "Updating the system..."
 \$SUDO apt-get update -qq
 \$SUDO apt-get upgrade -y -qq
 
-# 2. Установка базовых пакетов + security tools
-next_step "Установка пакетов..."
+# 2. Base packages + security tools
+next_step "Installing packages..."
 \$SUDO apt-get install -y -qq curl jq openssl ca-certificates qrencode ufw fail2ban unattended-upgrades
 
-# 3. Установка Xray
-next_step "Установка Xray-core..."
+# 3. Install Xray
+next_step "Installing Xray-core..."
 if ! command -v xray &> /dev/null; then
     \$SUDO bash -c "\$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 else
-    echo "Xray уже установлен"
+    echo "Xray is already installed"
 fi
 
-# 4. Генерация ключей VLESS
-next_step "Генерация ключей VLESS..."
+# 4. Generate VLESS keys
+next_step "Generating VLESS keys..."
 UUID=\$(xray uuid)
 X25519_OUTPUT=\$(/usr/local/bin/xray x25519 2>/dev/null)
 PRIVATE_KEY=\$(echo "\$X25519_OUTPUT" | grep -i "private" | awk -F': ' '{print \$2}' | tr -d ' ')
@@ -473,9 +473,9 @@ PUBLIC_KEY=\$(echo "\$X25519_OUTPUT" | grep -i "public" | awk -F': ' '{print \$2
 SHORT_ID=\$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)
 SERVER_IP=\$(curl -s https://api.ipify.org || curl -s https://ifconfig.me/ip)
 
-# Проверка что ключи сгенерированы
+# Verify keys were generated
 if [ -z "\$PRIVATE_KEY" ] || [ -z "\$PUBLIC_KEY" ]; then
-    echo -e "\${YELLOW}⚠️ Повторная генерация ключей...\${NC}"
+    echo -e "\${YELLOW}⚠️ Regenerating keys...\${NC}"
     X25519_OUTPUT=\$(/usr/local/bin/xray x25519)
     PRIVATE_KEY=\$(echo "\$X25519_OUTPUT" | head -1 | awk -F': ' '{print \$2}' | tr -d ' ')
     PUBLIC_KEY=\$(echo "\$X25519_OUTPUT" | tail -1 | awk -F': ' '{print \$2}' | tr -d ' ')
@@ -485,14 +485,14 @@ echo "UUID: \$UUID"
 echo "Private Key: [hidden; stored on server only]"
 echo "Public Key: \${PUBLIC_KEY:0:10}..."
 
-# yahoo.com по умолчанию: www.microsoft.com у ряда мобильных операторов
-# блокируется DPI. Сменить потом можно из бота: /vless_set_sni
+# yahoo.com by default: www.microsoft.com is blocked by DPI on some mobile operators
+# Change later from the bot: /vless_set_sni
 SNI="yahoo.com"
 FINGERPRINT="chrome"
 PORT=\$VLESS_PORT
 
-# 5. Создание конфигурации Xray
-next_step "Конфигурация и запуск Xray..."
+# 5. Create Xray config
+next_step "Configuring and starting Xray..."
 \$SUDO tee /usr/local/etc/xray/config.json > /dev/null << EOF
 {
   "log": {"loglevel": "warning"},
@@ -529,21 +529,21 @@ EOF
 
 # ── Hysteria2 Installation ──
 if [ "\$HY2_ENABLE" = "true" ]; then
-    next_step "Установка Hysteria2..."
+    next_step "Installing Hysteria2..."
     if ! command -v hysteria &> /dev/null; then
         bash <(curl -fsSL https://get.hy2.sh/)
     else
-        echo "Hysteria2 уже установлен"
+        echo "Hysteria2 is already installed"
     fi
 
-    next_step "Конфигурация и запуск Hysteria2..."
+    next_step "Configuring and starting Hysteria2..."
 
-    # Генерация пароля Hysteria2
+    # Generate Hysteria2 password
     if [ -z "\$HY2_PASSWORD" ]; then
         HY2_PASSWORD=\$(openssl rand -base64 16 | tr -d '=+/' | head -c 22)
     fi
 
-    # TLS сертификат для Hysteria2
+    # TLS certificate for Hysteria2
     HY2_CERT_DIR="/etc/hysteria"
     \$SUDO mkdir -p "\$HY2_CERT_DIR"
     if [ ! -f "\$HY2_CERT_DIR/server.crt" ] || [ ! -f "\$HY2_CERT_DIR/server.key" ]; then
@@ -555,7 +555,7 @@ if [ "\$HY2_ENABLE" = "true" ]; then
             -days 36500 2>/dev/null
     fi
 
-    # Конфигурация Hysteria2
+    # Hysteria2 config
     \$SUDO tee "\$HY2_CERT_DIR/config.yaml" > /dev/null << EOF
 listen: :\$HY2_PORT
 
@@ -574,7 +574,7 @@ masquerade:
     rewriteHost: true
 EOF
 
-    # Systemd сервис
+    # systemd service
     if [ ! -f /etc/systemd/system/hysteria-server.service ]; then
         \$SUDO tee /etc/systemd/system/hysteria-server.service > /dev/null << 'SVCEOF'
 [Unit]
@@ -598,16 +598,16 @@ SVCEOF
     sleep 2
 
     if systemctl is-active --quiet hysteria-server; then
-        echo -e "\${GREEN}✅ Hysteria2 запущен на UDP порту \$HY2_PORT\${NC}"
+        echo -e "\${GREEN}✅ Hysteria2 started on UDP port \$HY2_PORT\${NC}"
     else
-        echo -e "\${YELLOW}⚠️ Hysteria2 не запустился, проверьте: journalctl -u hysteria-server -n 20\${NC}"
+        echo -e "\${YELLOW}⚠️ Hysteria2 failed to start, check: journalctl -u hysteria-server -n 20\${NC}"
     fi
 
     HY2_LINK="hy2://\${HY2_PASSWORD}@\${SERVER_IP}:\${HY2_PORT}/?insecure=1#Hysteria2"
 fi
 
 # Security Hardening
-next_step "Настройка безопасности..."
+next_step "Configuring security..."
 
 # UFW Firewall
 \$SUDO ufw default deny incoming
@@ -619,7 +619,7 @@ if [ "\$HY2_ENABLE" = "true" ]; then
 fi
 \$SUDO ufw --force enable
 
-# Fail2ban с учётом SSH порта
+# Fail2ban with the SSH port
 \$SUDO tee /etc/fail2ban/jail.local > /dev/null << JAILEOF
 [DEFAULT]
 bantime = 1h
@@ -637,7 +637,7 @@ JAILEOF
 \$SUDO systemctl enable fail2ban
 \$SUDO systemctl restart fail2ban
 
-# Автообновления безопасности
+# Unattended security updates
 echo 'APT::Periodic::Update-Package-Lists "1";' | \$SUDO tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
 echo 'APT::Periodic::Unattended-Upgrade "1";' | \$SUDO tee -a /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
 
@@ -652,9 +652,9 @@ net.ipv4.icmp_echo_ignore_broadcasts = 1
 SYSEOF
 \$SUDO sysctl -p 2>/dev/null || true
 
-echo -e "\${GREEN}✅ UFW, Fail2ban, автообновления настроены\${NC}"
+echo -e "\${GREEN}✅ UFW, Fail2ban, and unattended upgrades configured\${NC}"
 
-# Создаём файл с конфигурацией для клиента
+# Write the client config file
 VLESS_LINK="vless://\${UUID}@\${SERVER_IP}:\${PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=\${SNI}&fp=\${FINGERPRINT}&pbk=\${PUBLIC_KEY}&sid=\${SHORT_ID}&type=tcp#VPS-Reality"
 
 cat > \$HOME_DIR/vless_client_config.txt << EOF
@@ -693,7 +693,7 @@ cat >> \$HOME_DIR/vless_client_config.txt << EOF
 ═══════════════════════════════════════════════════════════════
 EOF
 
-# Сохраняем JSON конфиг
+# Save JSON config
 cat > \$HOME_DIR/vless_client_config.json << EOF
 {
   "server": "\$SERVER_IP",
@@ -715,20 +715,20 @@ EOF
 
 echo ""
 echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
-echo -e "\${GREEN}   ✅ Установка завершена!\${NC}"
+echo -e "\${GREEN}   ✅ Install finished!\${NC}"
 echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
 echo ""
-echo "📄 Конфигурация сохранена в: \$HOME_DIR/vless_client_config.txt"
+echo "📄 Config saved to: \$HOME_DIR/vless_client_config.txt"
 echo ""
 cat \$HOME_DIR/vless_client_config.txt
 SCRIPT_EOF
 }
 
 create_full_install_script() {
-    # Экранируем переменные которые должны быть подставлены
+    # Escape variables that must be interpolated
     cat << SCRIPT_EOF
 #!/bin/bash
-# Полная установка: Docker + TelegramHelper + Xray + Hysteria2
+# Full install: Docker + TelegramHelper + Xray + Hysteria2
 
 set -e
 
@@ -757,15 +757,15 @@ HEADSCALE_ENABLE="$HEADSCALE_ENABLE"
 HEADSCALE_DOMAIN="$HEADSCALE_DOMAIN"
 HA_DOMAIN="$HA_DOMAIN"
 
-# Определяем нужен ли sudo
+# Detect whether sudo is needed
 if [ "\$(id -u)" -ne 0 ]; then
     SUDO="sudo"
-    echo -e "\${YELLOW}⚠️ Запуск от обычного пользователя, используем sudo\${NC}"
+    echo -e "\${YELLOW}⚠️ Running as a regular user, using sudo\${NC}"
 else
     SUDO=""
 fi
 
-# Подсчёт шагов
+# Step counter
 TOTAL_STEPS=9
 if [ "\$HY2_ENABLE" = "true" ]; then
     TOTAL_STEPS=11
@@ -773,41 +773,41 @@ fi
 STEP=0
 next_step() { STEP=\$((STEP+1)); echo -e "\${YELLOW}[\${STEP}/\${TOTAL_STEPS}] \$1\${NC}"; }
 
-echo -e "\${GREEN}=== Полная установка VLESS-Reality + Hysteria2 + TelegramHelper ===\${NC}"
+echo -e "\${GREEN}=== Full VLESS-Reality + Hysteria2 + TelegramHelper install ===\${NC}"
 
-# 1. Обновление системы
-next_step "Обновление системы..."
+# 1. System update
+next_step "Updating the system..."
 \$SUDO apt-get update -qq
 \$SUDO apt-get upgrade -y -qq
 
-# 2. Установка базовых пакетов + security tools
-next_step "Установка пакетов..."
+# 2. Base packages + security tools
+next_step "Installing packages..."
 \$SUDO apt-get install -y -qq curl jq openssl ca-certificates qrencode git python3 python3-pip ufw fail2ban unattended-upgrades
 
-# 3. Установка Docker
-next_step "Установка Docker..."
+# 3. Install Docker
+next_step "Installing Docker..."
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | \$SUDO sh
     \$SUDO systemctl enable docker
     \$SUDO systemctl start docker
     if [ "\$(id -u)" -ne 0 ]; then
         \$SUDO usermod -aG docker \$USER
-        echo -e "\${YELLOW}⚠️ Пользователь добавлен в группу docker. Требуется перелогин.\${NC}"
+        echo -e "\${YELLOW}⚠️ User added to the docker group. Re-login required.\${NC}"
     fi
 else
-    echo "Docker уже установлен"
+    echo "Docker is already installed"
 fi
 
-# 4. Установка Xray
-next_step "Установка Xray-core..."
+# 4. Install Xray
+next_step "Installing Xray-core..."
 if ! command -v xray &> /dev/null; then
     \$SUDO bash -c "\$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 else
-    echo "Xray уже установлен"
+    echo "Xray is already installed"
 fi
 
-# 5. Генерация ключей VLESS
-next_step "Генерация ключей VLESS..."
+# 5. Generate VLESS keys
+next_step "Generating VLESS keys..."
 UUID=\$(xray uuid)
 X25519_OUTPUT=\$(/usr/local/bin/xray x25519 2>/dev/null)
 PRIVATE_KEY=\$(echo "\$X25519_OUTPUT" | grep -i "private" | awk -F': ' '{print \$2}' | tr -d ' ')
@@ -816,7 +816,7 @@ SHORT_ID=\$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)
 SERVER_IP=\$(curl -s https://api.ipify.org || curl -s https://ifconfig.me/ip)
 
 if [ -z "\$PRIVATE_KEY" ] || [ -z "\$PUBLIC_KEY" ]; then
-    echo -e "\${YELLOW}⚠️ Повторная генерация ключей...\${NC}"
+    echo -e "\${YELLOW}⚠️ Regenerating keys...\${NC}"
     X25519_OUTPUT=\$(/usr/local/bin/xray x25519)
     PRIVATE_KEY=\$(echo "\$X25519_OUTPUT" | head -1 | awk -F': ' '{print \$2}' | tr -d ' ')
     PUBLIC_KEY=\$(echo "\$X25519_OUTPUT" | tail -1 | awk -F': ' '{print \$2}' | tr -d ' ')
@@ -826,19 +826,19 @@ echo "UUID: \$UUID"
 echo "Private Key: [hidden; stored on server only]"
 echo "Public Key: \${PUBLIC_KEY:0:10}..."
 
-# Генерация ключей шифрования
+# Generate encryption keys
 API_KEY=\$(python3 -c "import secrets; print(secrets.token_hex(32))")
 HMAC_KEY=\$(openssl rand -hex 32)
 ENC_KEY=\$(python3 -c "import secrets; print(secrets.token_hex(32))")
 
-# yahoo.com по умолчанию: www.microsoft.com у ряда мобильных операторов
-# блокируется DPI. Сменить потом можно из бота: /vless_set_sni
+# yahoo.com by default: www.microsoft.com is blocked by DPI on some mobile operators
+# Change later from the bot: /vless_set_sni
 SNI="yahoo.com"
 FINGERPRINT="chrome"
 PORT=\$VLESS_PORT
 
-# 6. Конфигурация Xray + TelegramHelper
-next_step "Конфигурация Xray и TelegramHelper..."
+# 6. Configure Xray + TelegramHelper
+next_step "Configuring Xray and TelegramHelper..."
 \$SUDO tee /usr/local/etc/xray/config.json > /dev/null << EOF
 {
   "log": {"loglevel": "warning"},
@@ -873,14 +873,14 @@ EOF
 \$SUDO systemctl enable xray
 \$SUDO systemctl restart xray
 
-# Подготовка TelegramHelper
+# Prepare TelegramHelper
 PROJECT_DIR="/opt/TelegramHelper"
 \$SUDO mkdir -p \$PROJECT_DIR
 if [ "\$(id -u)" -ne 0 ]; then
     \$SUDO chown -R \$USER:\$USER \$PROJECT_DIR
 fi
 
-# Создаём .env для бота
+# Create .env for the bot
 cat > \$PROJECT_DIR/.env << EOF
 BOT_TOKEN=\$BOT_TOKEN
 ADMIN_USER_IDS=\$ADMIN_ID
@@ -890,7 +890,7 @@ ENCRYPTION_KEY=\$ENC_KEY
 API_URL=http://\$SERVER_IP:8000/ai_query
 EOF
 
-# Добавляем AI ключи если указаны
+# Add AI keys if provided
 if [ -n "\$ANTHROPIC_KEY" ]; then
     echo "ANTHROPIC_API_KEY=\$ANTHROPIC_KEY" >> \$PROJECT_DIR/.env
     echo "DEFAULT_AI_PROVIDER=anthropic" >> \$PROJECT_DIR/.env
@@ -904,7 +904,7 @@ if [ -n "\$OPENAI_KEY" ]; then
     echo "OPENAI_MODEL=gpt-4o" >> \$PROJECT_DIR/.env
 fi
 
-# Создаём vless_config.json
+# Create vless_config.json
 cat > \$PROJECT_DIR/vless_config.json << EOF
 {
   "enabled": true,
@@ -920,7 +920,7 @@ cat > \$PROJECT_DIR/vless_config.json << EOF
 }
 EOF
 
-# Создаём app_keys.json (ВАЖНО: создать ДО docker compose!)
+# Create app_keys.json (IMPORTANT: create BEFORE docker compose!)
 cat > \$PROJECT_DIR/app_keys.json << EOF
 {
   "app_keys": {
@@ -941,21 +941,21 @@ chmod 600 \$PROJECT_DIR/app_keys.json \$PROJECT_DIR/users.json \$PROJECT_DIR/vle
 
 # ── Hysteria2 Installation ──
 if [ "\$HY2_ENABLE" = "true" ]; then
-    next_step "Установка Hysteria2..."
+    next_step "Installing Hysteria2..."
     if ! command -v hysteria &> /dev/null; then
         bash <(curl -fsSL https://get.hy2.sh/)
     else
-        echo "Hysteria2 уже установлен"
+        echo "Hysteria2 is already installed"
     fi
 
-    next_step "Конфигурация и запуск Hysteria2..."
+    next_step "Configuring and starting Hysteria2..."
 
-    # Генерация пароля Hysteria2
+    # Generate Hysteria2 password
     if [ -z "\$HY2_PASSWORD" ]; then
         HY2_PASSWORD=\$(openssl rand -base64 16 | tr -d '=+/' | head -c 22)
     fi
 
-    # TLS сертификат
+    # TLS certificate
     HY2_CERT_DIR="/etc/hysteria"
     \$SUDO mkdir -p "\$HY2_CERT_DIR"
     if [ ! -f "\$HY2_CERT_DIR/server.crt" ] || [ ! -f "\$HY2_CERT_DIR/server.key" ]; then
@@ -967,7 +967,7 @@ if [ "\$HY2_ENABLE" = "true" ]; then
             -days 36500 2>/dev/null
     fi
 
-    # Конфигурация Hysteria2
+    # Hysteria2 config
     \$SUDO tee "\$HY2_CERT_DIR/config.yaml" > /dev/null << EOF
 listen: :\$HY2_PORT
 
@@ -986,7 +986,7 @@ masquerade:
     rewriteHost: true
 EOF
 
-    # Systemd сервис
+    # systemd service
     if [ ! -f /etc/systemd/system/hysteria-server.service ]; then
         \$SUDO tee /etc/systemd/system/hysteria-server.service > /dev/null << 'SVCEOF'
 [Unit]
@@ -1010,14 +1010,14 @@ SVCEOF
     sleep 2
 
     if systemctl is-active --quiet hysteria-server; then
-        echo -e "\${GREEN}✅ Hysteria2 запущен на UDP порту \$HY2_PORT\${NC}"
+        echo -e "\${GREEN}✅ Hysteria2 started on UDP port \$HY2_PORT\${NC}"
     else
-        echo -e "\${YELLOW}⚠️ Hysteria2 не запустился, проверьте: journalctl -u hysteria-server -n 20\${NC}"
+        echo -e "\${YELLOW}⚠️ Hysteria2 failed to start, check: journalctl -u hysteria-server -n 20\${NC}"
     fi
 
     HY2_LINK="hy2://\${HY2_PASSWORD}@\${SERVER_IP}:\${HY2_PORT}/?insecure=1#Hysteria2"
 
-    # Создаём hysteria2_config.json для TelegramHelper
+    # Create hysteria2_config.json for TelegramHelper
     cat > \$PROJECT_DIR/hysteria2_config.json << EOF
 {
   "enabled": true,
@@ -1039,9 +1039,9 @@ EOF
     chmod 600 \$PROJECT_DIR/hysteria2_config.json 2>/dev/null || true
 fi
 
-# Nginx + SSL (опционально)
+# Nginx + SSL (optional)
 if [ "\$NGINX_ENABLE" = "true" ]; then
-    next_step "Установка Nginx + SSL..."
+    next_step "Installing Nginx + SSL..."
     \$SUDO apt-get install -y -qq nginx certbot
     \$SUDO systemctl enable nginx
     \$SUDO systemctl start nginx
@@ -1052,7 +1052,7 @@ if [ "\$NGINX_ENABLE" = "true" ]; then
     if [ -z "\$NGINX_HTTPS_PORT" ]; then
         if [ "\$PORT" = "443" ]; then
             NGINX_HTTPS_PORT="8443"
-            echo -e "\${YELLOW}⚠️ VLESS использует 443, Nginx будет слушать 8443\${NC}"
+            echo -e "\${YELLOW}⚠️ VLESS uses 443, Nginx will listen on 8443\${NC}"
         else
             NGINX_HTTPS_PORT="443"
         fi
@@ -1101,7 +1101,7 @@ EOF_NGX
 fi
 
 # Security Hardening
-next_step "Настройка безопасности..."
+next_step "Configuring security..."
 
 # UFW Firewall
 \$SUDO ufw default deny incoming
@@ -1136,7 +1136,7 @@ JAILEOF
 \$SUDO systemctl enable fail2ban
 \$SUDO systemctl restart fail2ban
 
-# Автообновления
+# Unattended upgrades
 echo 'APT::Periodic::Update-Package-Lists "1";' | \$SUDO tee /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
 echo 'APT::Periodic::Unattended-Upgrade "1";' | \$SUDO tee -a /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
 
@@ -1151,14 +1151,14 @@ net.ipv4.icmp_echo_ignore_broadcasts = 1
 SYSEOF
 \$SUDO sysctl -p 2>/dev/null || true
 
-echo -e "\${GREEN}✅ UFW, Fail2ban, автообновления настроены\${NC}"
+echo -e "\${GREEN}✅ UFW, Fail2ban, and unattended upgrades configured\${NC}"
 
-# Финализация
-next_step "Финализация..."
+# Finalize
+next_step "Finalizing..."
 
 VLESS_LINK="vless://\${UUID}@\${SERVER_IP}:\${PORT}?encryption=none&flow=xtls-rprx-vision&security=reality&sni=\${SNI}&fp=\${FINGERPRINT}&pbk=\${PUBLIC_KEY}&sid=\${SHORT_ID}&type=tcp#VPS-Reality"
 
-# Клиентский конфиг (текст)
+# Client config (text)
 cat > \$HOME_DIR/vless_client_config.txt << EOF
 ═══════════════════════════════════════════════════════════════
        🛡️  VLESS-Reality + ⚡ Hysteria2 — Client Config
@@ -1193,7 +1193,7 @@ fi
 cat >> \$HOME_DIR/vless_client_config.txt << EOF
 
 ═══════════════════════════════════════════════════════════════
-🔐 API Keys (для TelegramHelper):
+🔐 API Keys (for TelegramHelper):
 
 API_SECRET_KEY: \$API_KEY
 ENCRYPTION_KEY: \$ENC_KEY
@@ -1206,7 +1206,7 @@ URL:        http://localhost:8501
 ═══════════════════════════════════════════════════════════════
 EOF
 
-# Клиентский конфиг (JSON)
+# Client config (JSON)
 cat > \$HOME_DIR/vless_client_config.json << EOF
 {
   "server": "\$SERVER_IP",
@@ -1231,7 +1231,7 @@ EOF
 
 # === HEADSCALE (self-hosted Tailscale) ===
 if [ "\$HEADSCALE_ENABLE" = "true" ]; then
-    echo -e "\${GREEN}[Headscale] Установка Headscale...\${NC}"
+    echo -e "\${GREEN}[Headscale] Installing Headscale...\${NC}"
 
     # Create directories
     mkdir -p /opt/headscale/config /opt/headscale/data
@@ -1257,11 +1257,11 @@ if [ "\$HEADSCALE_ENABLE" = "true" ]; then
 
     # Create default user
     docker exec headscale headscale users create main_user 2>/dev/null || true
-    echo -e "\${GREEN}[Headscale] ✅ Headscale запущен\${NC}"
+    echo -e "\${GREEN}[Headscale] ✅ Headscale started\${NC}"
 
     # Configure Nginx SNI routing if Nginx is enabled
     if [ "\$NGINX_ENABLE" = "true" ]; then
-        echo -e "\${GREEN}[Headscale] Настройка Nginx SNI routing...\${NC}"
+        echo -e "\${GREEN}[Headscale] Configuring Nginx SNI routing...\${NC}"
 
         # Install stream module
         \$SUDO apt-get install -y -qq libnginx-mod-stream 2>/dev/null || true
@@ -1319,7 +1319,7 @@ NGINX_HS_EOF
         if [ -n "\$NGINX_EMAIL" ]; then
             certbot --nginx -d \$HEADSCALE_DOMAIN --non-interactive --agree-tos -m \$NGINX_EMAIL 2>/dev/null || true
         fi
-        echo -e "\${GREEN}[Headscale] ✅ Nginx SNI routing настроен\${NC}"
+        echo -e "\${GREEN}[Headscale] ✅ Nginx SNI routing configured\${NC}"
     fi
 
     # Save Headscale info
@@ -1331,25 +1331,25 @@ Container: headscale
 Generate Pre-Auth key:
   docker exec headscale headscale users list
   docker exec headscale headscale preauthkeys create --user 1 --reusable --expiration 24h
-  # --user = числовой ID из users list, не username
+  # --user = numeric ID from users list, not username
 
 Connect client:
   tailscale up --login-server https://\$HEADSCALE_DOMAIN --authkey <KEY>
 HS_INFO_EOF
-    echo -e "\${GREEN}[Headscale] Информация сохранена в \$HOME_DIR/headscale_info.txt\${NC}"
+    echo -e "\${GREEN}[Headscale] Info saved to \$HOME_DIR/headscale_info.txt\${NC}"
 fi
 
 echo ""
 echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
-echo -e "\${GREEN}   ✅ Полная установка завершена!\${NC}"
+echo -e "\${GREEN}   ✅ Full install finished!\${NC}"
 echo -e "\${GREEN}═══════════════════════════════════════════════════════════════\${NC}"
 echo ""
-echo "📄 Конфигурация: \$HOME_DIR/vless_client_config.txt"
-echo "📁 Проект: \$PROJECT_DIR"
+echo "📄 Config: \$HOME_DIR/vless_client_config.txt"
+echo "📁 Project: \$PROJECT_DIR"
 echo ""
-echo "Следующие шаги:"
-echo "1. Скопируйте проект TelegramHelper в \$PROJECT_DIR"
-echo "2. Запустите: cd \$PROJECT_DIR && docker compose up -d --build"
+echo "Next steps:"
+echo "1. Copy the TelegramHelper project to \$PROJECT_DIR"
+echo "2. Run: cd \$PROJECT_DIR && docker compose up -d --build"
 echo ""
 cat \$HOME_DIR/vless_client_config.txt
 SCRIPT_EOF
@@ -1357,48 +1357,48 @@ SCRIPT_EOF
 
 download_config() {
     echo ""
-    echo -e "${BLUE}📥 Скачивание конфигурации с сервера...${NC}"
+    echo -e "${BLUE}📥 Downloading config from the server...${NC}"
 
-    # Создаём директорию
+    # Create the directory
     mkdir -p "$OUTPUT_DIR"
 
-    # Определяем домашнюю директорию на сервере
+    # Resolve home directory on the server
     REMOTE_HOME=$(ssh_cmd 'echo $HOME')
 
-    # Скачиваем текстовый конфиг
+    # Download text config
     scp_cmd "$SSH_USER@$SSH_HOST:${REMOTE_HOME}/vless_client_config.txt" "$OUTPUT_DIR/vless_config_${SSH_HOST}.txt"
 
-    # Скачиваем JSON конфиг
+    # Download JSON config
     scp_cmd "$SSH_USER@$SSH_HOST:${REMOTE_HOME}/vless_client_config.json" "$OUTPUT_DIR/vless_config_${SSH_HOST}.json"
 
-    echo -e "${GREEN}✅ Конфигурация сохранена в:${NC}"
+    echo -e "${GREEN}✅ Config saved to:${NC}"
     echo "   📄 $OUTPUT_DIR/vless_config_${SSH_HOST}.txt"
     echo "   📄 $OUTPUT_DIR/vless_config_${SSH_HOST}.json"
     echo ""
 
-    # Предлагаем зашифровать
-    echo -e "${YELLOW}💡 Для безопасной передачи рекомендуется зашифровать конфиг:${NC}"
+    # Suggest encrypting
+    echo -e "${YELLOW}💡 For a safer transfer, encrypt the config:${NC}"
     echo "   python3 scripts/secure_config_transfer.py encrypt $OUTPUT_DIR/vless_config_${SSH_HOST}.json"
 }
 
 print_final_summary() {
     echo ""
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
-    echo -e "${GREEN}   🎉 Всё готово!${NC}"
+    echo -e "${GREEN}   🎉 All done!${NC}"
     echo -e "${GREEN}═══════════════════════════════════════════════════════════════${NC}"
     echo ""
-    echo -e "${CYAN}Установленные протоколы:${NC}"
-    echo "  🛡️  VLESS-Reality  — TCP порт $VLESS_PORT"
+    echo -e "${CYAN}Installed protocols:${NC}"
+    echo "  🛡️  VLESS-Reality  — TCP port $VLESS_PORT"
     if [[ "$HY2_ENABLE" == "true" ]]; then
-        echo "  ⚡ Hysteria2      — UDP порт $HY2_PORT"
+        echo "  ⚡ Hysteria2      — UDP port $HY2_PORT"
     fi
     if [[ "$WITH_MAINTENANCE" == "true" ]]; then
-        echo "  🧹 Авто-чистка    — systemd-таймер (вс 04:00 UTC)"
+        echo "  🧹 Auto-cleanup   — systemd timer (Sun 04:00 UTC)"
     fi
     echo ""
-    echo "Теперь вы можете:"
-    echo "1. Импортировать ссылки в приложение (Hiddify, v2rayNG, NekoRay)"
-    echo "2. Использовать конфигурацию из файла"
+    echo "You can now:"
+    echo "1. Import the links into an app (Hiddify, v2rayNG, NekoRay)"
+    echo "2. Use the config from the file"
     echo ""
 
     local SSH_CMD="ssh"
@@ -1408,21 +1408,21 @@ print_final_summary() {
     SSH_CMD="$SSH_CMD $SSH_USER@$SSH_HOST"
 
     if [[ "$INSTALL_MODE" == "full" ]]; then
-        echo "Для запуска бота на сервере:"
+        echo "To start the bot on the server:"
         echo "  $SSH_CMD"
         echo "  cd /opt/TelegramHelper && docker compose up -d --build"
         echo ""
-        echo "Доступные команды бота:"
-        echo "  /vless_status — статус VLESS-Reality"
+        echo "Available bot commands:"
+        echo "  /vless_status — VLESS-Reality status"
         if [[ "$HY2_ENABLE" == "true" ]]; then
-            echo "  /hy2_status   — статус Hysteria2"
+            echo "  /hy2_status   — Hysteria2 status"
         fi
     fi
 }
 
 install_maintenance() {
     if [[ "$WITH_MAINTENANCE" != "true" ]]; then
-        echo -e "${YELLOW}⚠️  Авто-чистка диска отключена (--no-maintenance)${NC}"
+        echo -e "${YELLOW}⚠️  Disk auto-cleanup disabled (--no-maintenance)${NC}"
         return 0
     fi
 
@@ -1431,27 +1431,27 @@ install_maintenance() {
     local local_script="$script_dir/vps_maintenance.sh"
 
     if [[ ! -f "$local_script" ]]; then
-        echo -e "${YELLOW}⚠️  $local_script не найден — пропускаю установку авто-чистки${NC}"
+        echo -e "${YELLOW}⚠️  $local_script not found — skipping auto-cleanup install${NC}"
         return 0
     fi
 
     echo ""
-    echo -e "${BLUE}🧹 Установка авто-чистки диска (vps_maintenance.sh)...${NC}"
+    echo -e "${BLUE}🧹 Installing disk auto-cleanup (vps_maintenance.sh)...${NC}"
 
     if ! scp_cmd "$local_script" "$SSH_USER@$SSH_HOST:/tmp/vps_maintenance.sh" &> /dev/null; then
-        echo -e "${YELLOW}⚠️  Не удалось скопировать vps_maintenance.sh — пропускаю${NC}"
+        echo -e "${YELLOW}⚠️  Could not copy vps_maintenance.sh — skipping${NC}"
         return 0
     fi
 
-    # Скрипт требует root; если SSH_USER не root — пробуем через sudo
+    # Script requires root; if SSH_USER is not root — try via sudo
     ssh_cmd "chmod +x /tmp/vps_maintenance.sh && \
         if [ \$(id -u) -eq 0 ]; then bash /tmp/vps_maintenance.sh --install; \
         else sudo bash /tmp/vps_maintenance.sh --install; fi" \
-        || echo -e "${YELLOW}⚠️  Установка авто-чистки завершилась с ошибкой (не критично, можно поставить руками: ./scripts/vps_maintenance.sh --install)${NC}"
+        || echo -e "${YELLOW}⚠️  Auto-cleanup install failed (non-critical; install manually: ./scripts/vps_maintenance.sh --install)${NC}"
 }
 
 cleanup() {
-    echo -e "${BLUE}🧹 Очистка временных файлов на сервере...${NC}"
+    echo -e "${BLUE}🧹 Cleaning temporary files on the server...${NC}"
     ssh_cmd "rm -f /tmp/install_vless.sh /tmp/vps_maintenance.sh" 2>/dev/null || true
 }
 
@@ -1468,7 +1468,7 @@ main() {
     print_final_summary
 }
 
-# Обработка Ctrl+C
+# Handle Ctrl+C
 trap cleanup EXIT
 
 main "$@"

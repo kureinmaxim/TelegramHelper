@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-Упрощённые обработчики команд бота с поддержкой VLESS-Reality.
+Simplified bot command handlers with VLESS-Reality support.
 
-Этот модуль содержит минимальный набор команд:
-- Базовые: start, help, info, clear
-- Админские: ver, dockhand, headscale, api, gen_api_key, del_api_key, encryption_key, gen_encryption_key,
+This module contains a minimal command set:
+- Basic: start, help, info, clear
+- Admin: ver, dockhand, headscale, api, gen_api_key, del_api_key, encryption_key, gen_encryption_key,
              del_encryption_key, gen_chacha_key, gen_pqc_key
-- Управление пользователями: list_users, users_log, setcity, setgreeting, special_add, special_remove
-- Настройки ИИ: ai_provider, ch_model
+- User management: list_users, users_log, setcity, setgreeting, special_add, special_remove
+- AI settings: ai_provider, ch_model
 - VLESS-Reality: vless_status, vless_on, vless_off, vless_config, vless_set_*, vless_gen_keys, vless_test
 """
 
@@ -114,30 +114,30 @@ logger = logging.getLogger(__name__)
 
 
 class BotHandlersLite(AITranslateMixin):
-    """Упрощённый класс обработчиков бота с поддержкой VLESS-Reality."""
+    """Simplified bot handler class with VLESS-Reality support."""
 
     def __init__(self, config: Config = None):
-        """Инициализация обработчиков."""
+        """Initialize handlers."""
         self.config = config
-        # (chat_id, message_id) -> Task; одна карточка /user — один таймер, сброс при обновлении
+        # (chat_id, message_id) -> Task; one /user card — one timer, reset on refresh
         self._user_card_ttl_tasks: dict[tuple[int, int], asyncio.Task] = {}
 
     async def _reply_export_file(
         self, message, content: str, filename: str, caption: str
     ):
-        """Отправить экспорт как файл, чтобы не упираться в лимиты/MarkdownV2."""
+        """Send an export as a file to avoid Telegram limits/MarkdownV2 issues."""
         buffer = BytesIO(content.encode("utf-8"))
         buffer.name = filename
         await message.reply_document(document=buffer, caption=caption)
 
     def _is_admin(self, user_id: int) -> bool:
-        """Проверить, является ли пользователь администратором."""
+        """Return True if the user is an administrator."""
         if not self.config:
             return False
         return self.config.is_admin(user_id)
 
     def _is_privileged(self, user_id: int) -> bool:
-        """Админ или пользователь из special-списка."""
+        """Admin or a user on the special list."""
         return self._is_admin(user_id) or storage_is_special_user(user_id)
 
     async def _ensure_personal_command_menu(self, context, user_id: int) -> None:
@@ -167,7 +167,7 @@ class BotHandlersLite(AITranslateMixin):
             logger.warning(f"track_user failed for {getattr(user, 'id', '?')}: {e}")
 
     def _secret_reveal_allowed(self) -> bool:
-        """Разрешён ли полный вывод секретов через удалённые каналы."""
+        """Whether full secret reveal is allowed over remote channels."""
         return os.getenv("TELEGRAMHELPER_ALLOW_SECRET_REVEAL", "").strip().lower() in {
             "1",
             "true",
@@ -176,7 +176,7 @@ class BotHandlersLite(AITranslateMixin):
         }
 
     def _mask_secret(self, value: str) -> str:
-        """Вернуть безопасное маскированное представление секрета."""
+        """Return a safe masked representation of a secret."""
         if not value:
             return "***"
         if len(value) <= 12:
@@ -208,12 +208,12 @@ class BotHandlersLite(AITranslateMixin):
                 self._plain_from_markdown_v2(text), **kwargs
             )
 
-    # Темы оформления панелей (spec §7). Настоящие цвета чата Bot API не
-    # контролирует — темы меняют только акценты в сообщениях самого бота.
-    # Имена тем синхронизированы с storage._UI_THEMES_ALLOWED.
+    # Panel appearance themes (spec §7). Bot API cannot control real chat
+    # colors — themes only change accents in the bot's own messages.
+    # Theme names are synced with storage._UI_THEMES_ALLOWED.
     _UI_THEMES: dict = {
         "classic": {
-            "label": "Классика",
+            "label": "Classic",
             "brand": "✨",
             "profile": "ℹ️",
             "help": "❓",
@@ -225,7 +225,7 @@ class BotHandlersLite(AITranslateMixin):
             "ok": "✅",
         },
         "minimal": {
-            "label": "Минимал",
+            "label": "Minimal",
             "brand": "",
             "profile": "",
             "help": "",
@@ -237,7 +237,7 @@ class BotHandlersLite(AITranslateMixin):
             "ok": "OK",
         },
         "neon": {
-            "label": "Неон",
+            "label": "Neon",
             "brand": "🟣",
             "profile": "🟢",
             "help": "💡",
@@ -251,20 +251,20 @@ class BotHandlersLite(AITranslateMixin):
     }
 
     def _theme_icons(self, user_id: int) -> dict:
-        """Словарь акцентов темы пользователя (fallback на classic)."""
+        """User theme accent dictionary (fallback to classic)."""
         prefs = storage_get_ui_prefs(user_id)
         return self._UI_THEMES.get(prefs["theme"], self._UI_THEMES["classic"])
 
     @staticmethod
     def _btn(icons: dict, key: str, text: str) -> str:
-        """Подпись кнопки с акцентом темы; в minimal — без эмодзи."""
+        """Button label with theme accent; minimal theme has no emoji."""
         icon = icons.get(key, "")
         return f"{icon} {text}".strip()
 
     async def _menu_panel(self, message, text: str, keyboard, *, edit: bool):
-        """Показать/обновить панель меню: MarkdownV2 с fallback в plain text.
+        """Show/update a menu panel: MarkdownV2 with plain-text fallback.
 
-        edit=True — edit_text (навигация по панели), иначе reply_text.
+        edit=True — edit_text (in-panel navigation), otherwise reply_text.
         """
         send = message.edit_text if edit else message.reply_text
         try:
@@ -282,31 +282,31 @@ class BotHandlersLite(AITranslateMixin):
                 return None
 
     def _main_menu_keyboard(self, user_id: int) -> InlineKeyboardMarkup:
-        """Кнопки главной панели по роли (spec §2)."""
+        """Main panel buttons by role (spec §2)."""
         icons = self._theme_icons(user_id)
         if self._is_admin(user_id):
             return InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "🗂 Панель /help", callback_data="menu:admin_help"
+                            "🗂 /help panel", callback_data="menu:admin_help"
                         ),
                         InlineKeyboardButton(
-                            self._btn(icons, "diag", "Полный diag"),
+                            self._btn(icons, "diag", "Full diag"),
                             callback_data="menu:diag",
                         ),
                     ],
                     [
                         InlineKeyboardButton(
-                            "👥 Пользователи", callback_data="menu:admin_users"
+                            "👥 Users", callback_data="menu:admin_users"
                         ),
                         InlineKeyboardButton(
-                            "🌐 Интернет через VPS", callback_data="menu:exit_node"
+                            "🌐 Internet via VPS", callback_data="menu:exit_node"
                         ),
                     ],
                     [
                         InlineKeyboardButton(
-                            self._btn(icons, "settings", "Настройки"),
+                            self._btn(icons, "settings", "Settings"),
                             callback_data="menu:settings",
                         ),
                         InlineKeyboardButton(
@@ -321,7 +321,7 @@ class BotHandlersLite(AITranslateMixin):
             rows.append(
                 [
                     InlineKeyboardButton(
-                        self._btn(icons, "vpn", "Мои VPN-профили"),
+                        self._btn(icons, "vpn", "My VPN profiles"),
                         callback_data="menu:my_profile",
                     )
                 ]
@@ -329,7 +329,7 @@ class BotHandlersLite(AITranslateMixin):
             rows.append(
                 [
                     InlineKeyboardButton(
-                        "🌐 Интернет через VPS",
+                        "🌐 Internet via VPS",
                         callback_data="menu:exit_node",
                     )
                 ]
@@ -337,22 +337,22 @@ class BotHandlersLite(AITranslateMixin):
         rows.append(
             [
                 InlineKeyboardButton(
-                    self._btn(icons, "profile", "Мой профиль"),
+                    self._btn(icons, "profile", "My profile"),
                     callback_data="menu:info",
                 ),
                 InlineKeyboardButton(
-                    self._btn(icons, "help", "Справка"), callback_data="menu:help"
+                    self._btn(icons, "help", "Help"), callback_data="menu:help"
                 ),
             ]
         )
         rows.append(
             [
                 InlineKeyboardButton(
-                    self._btn(icons, "diag", "Диагностика"),
+                    self._btn(icons, "diag", "Diagnostics"),
                     callback_data="menu:diag",
                 ),
                 InlineKeyboardButton(
-                    self._btn(icons, "clear", "Очистить"),
+                    self._btn(icons, "clear", "Clear"),
                     callback_data="menu:clear",
                 ),
             ]
@@ -360,7 +360,7 @@ class BotHandlersLite(AITranslateMixin):
         rows.append(
             [
                 InlineKeyboardButton(
-                    self._btn(icons, "settings", "Настройки"),
+                    self._btn(icons, "settings", "Settings"),
                     callback_data="menu:settings",
                 )
             ]
@@ -368,7 +368,7 @@ class BotHandlersLite(AITranslateMixin):
         return InlineKeyboardMarkup(rows)
 
     def _user_help_panel_text(self, user_id: int) -> str:
-        """Текст панели /help (и menu:back) для обычных и special."""
+        """/help panel text (and menu:back) for regular and special users."""
         prefs = storage_get_ui_prefs(user_id)
         icons = self._UI_THEMES.get(prefs["theme"], self._UI_THEMES["classic"])
         version_info = get_app_version()
@@ -378,35 +378,35 @@ class BotHandlersLite(AITranslateMixin):
         lines = [f"{brand}*{app_name}* v{ver}", ""]
         if not prefs["compact"]:
             lines += [
-                "Кнопки ниже выполняют команды за вас\\.",
-                "Эти же действия доступны slash\\-командами из меню Telegram\\.",
+                "Buttons below run commands for you\\.",
+                "The same actions are available as slash\\-commands in the Telegram menu\\.",
                 "",
             ]
         if storage_is_special_user(user_id):
             lines.append(
-                "_VPN\\-профили выдаёт админ; сообщения с URL/QR авто\\-удаляются\\._"
+                "_VPN\\-profiles are issued by admin; messages with URL/QR auto\\-delete\\._"
             )
         return "\n".join(lines).strip()
 
     def _settings_panel(self, user_id: int):
-        """(text, keyboard) экрана /settings (spec §7)."""
+        """(text, keyboard) for the /settings screen (spec §7)."""
         prefs = storage_get_ui_prefs(user_id)
         icons = self._UI_THEMES.get(prefs["theme"], self._UI_THEMES["classic"])
         theme_label = self._escape_md2(self._UI_THEMES[prefs["theme"]]["label"])
-        compact_label = "включён" if prefs["compact"] else "выключен"
+        compact_label = "on" if prefs["compact"] else "off"
         s = f"{icons['settings']} " if icons["settings"] else ""
         lines = [
-            f"{s}*Настройки интерфейса*",
+            f"{s}*Interface settings*",
             "",
-            f"Тема: *{theme_label}*",
-            f"Компактный режим: *{compact_label}*",
+            f"Theme: *{theme_label}*",
+            f"Compact mode: *{compact_label}*",
         ]
         if not prefs["compact"]:
             lines += [
                 "",
-                "_Тема меняет оформление панелей бота\\. Цвета самого чата "
-                "Telegram задаются в настройках приложения и боту "
-                "недоступны\\._",
+                "_Theme changes bot panel styling\\. Chat colors "
+                "are set in the Telegram app and are not "
+                "available to the bot\\._",
             ]
         rows = []
         for name, theme in self._UI_THEMES.items():
@@ -423,9 +423,9 @@ class BotHandlersLite(AITranslateMixin):
             [
                 InlineKeyboardButton(
                     (
-                        "Выключить компактный режим"
+                        "Disable compact mode"
                         if prefs["compact"]
-                        else "Включить компактный режим"
+                        else "Enable compact mode"
                     ),
                     callback_data="menu:toggle_compact",
                 )
@@ -434,14 +434,14 @@ class BotHandlersLite(AITranslateMixin):
         rows.append(
             [
                 InlineKeyboardButton(
-                    self._btn(icons, "back", "Назад"), callback_data="menu:back"
+                    self._btn(icons, "back", "Back"), callback_data="menu:back"
                 )
             ]
         )
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
     async def _reply_vless_qr(self, message, name_or_uuid: str):
-        """Отправить QR и ссылку для VLESS-клиента."""
+        """Send a QR code and import link for a VLESS client."""
         success, response, payload = vless_manager.build_client_qr_payload(name_or_uuid)
         if not success:
             await message.reply_text(response)
@@ -452,13 +452,13 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для VLESS-клиента {payload['name']}",
+            caption=f"QR for VLESS client {payload['name']}",
         )
         await message.reply_text(
-            "📲 VLESS QR для клиента {name}\n\n"
+            "📲 VLESS QR for client {name}\n\n"
             "UUID: {uuid}\n\n"
-            "Ссылка для импорта:\n{link}\n\n"
-            "FoXray: Import/Scan QR -> наведи камеру на код или импортируй ссылку напрямую.".format(
+            "Import link:\n{link}\n\n"
+            "FoXray: Import/Scan QR -> point the camera at the code or import the link directly.".format(
                 name=payload["name"],
                 uuid=payload["uuid"],
                 link=payload["link"],
@@ -467,11 +467,11 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _show_vless_qr_selection(self, message):
-        """Показать inline-меню выбора клиента для QR."""
+        """Show an inline menu to pick a client for QR."""
         clients = vless_manager.list_clients()
         if not clients:
             await message.reply_text(
-                "❌ Список клиентов пуст. Сначала используйте /vless_add_client"
+                "❌ Client list is empty. First use /vless_add_client"
             )
             return
 
@@ -491,16 +491,16 @@ class BotHandlersLite(AITranslateMixin):
             )
 
         if not keyboard:
-            await message.reply_text("❌ У клиентов нет UUID для генерации QR")
+            await message.reply_text("❌ Clients have no UUID for QR generation")
             return
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await message.reply_text(
-            "Выберите клиента для показа QR:", reply_markup=reply_markup
+            "Select a client to show QR:", reply_markup=reply_markup
         )
 
     async def _reply_hy2_qr(self, message, name_or_password: str):
-        """Отправить QR и URI для Hysteria2-клиента."""
+        """Send a QR code and URI for a Hysteria2 client."""
         success, response, payload = hysteria2_manager.build_client_qr_payload(
             name_or_password
         )
@@ -513,13 +513,13 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для Hysteria2-клиента {payload['name']}",
+            caption=f"QR for Hysteria2 client {payload['name']}",
         )
         await message.reply_text(
-            "⚡ Hysteria2 QR для клиента {name}\n\n"
-            "Пароль: {password}\n\n"
-            "URI для импорта:\n{uri}\n\n"
-            "Поддерживаемый клиент может импортировать профиль по QR или напрямую по hy2:// ссылке.".format(
+            "⚡ Hysteria2 QR for client {name}\n\n"
+            "Password: {password}\n\n"
+            "Import URI:\n{uri}\n\n"
+            "A supported client can import the profile via QR or directly from the hy2:// link.".format(
                 name=payload["name"],
                 password=payload["password"],
                 uri=payload["uri"],
@@ -528,11 +528,11 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _show_hy2_qr_selection(self, message):
-        """Показать inline-меню выбора клиента Hysteria2 для QR."""
+        """Show an inline menu to pick a Hysteria2 client for QR."""
         clients = hysteria2_manager.list_clients()
         if not clients:
             await message.reply_text(
-                "❌ Список клиентов пуст. Сначала используйте /hy2_add_client"
+                "❌ Client list is empty. First use /hy2_add_client"
             )
             return
 
@@ -552,16 +552,16 @@ class BotHandlersLite(AITranslateMixin):
             )
 
         if not keyboard:
-            await message.reply_text("❌ У клиентов нет пароля для генерации QR")
+            await message.reply_text("❌ Clients have no password for QR generation")
             return
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await message.reply_text(
-            "Выберите Hysteria2-клиента для показа QR:", reply_markup=reply_markup
+            "Select a Hysteria2 client to show QR:", reply_markup=reply_markup
         )
 
     async def _reply_mt_qr(self, message, name_or_secret: str):
-        """Отправить QR и ссылки для MTProto-клиента."""
+        """Send QR codes and links for an MTProto client."""
         success, response, payload = mtproto_manager.build_client_qr_payload(
             name_or_secret
         )
@@ -574,15 +574,15 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для MTProto-клиента {payload['name']}",
+            caption=f"QR for MTProto client {payload['name']}",
         )
         await message.reply_text(
-            "📡 MTProto QR для клиента {name}\n\n"
-            "Режим: {mode}\n\n"
+            "📡 MTProto QR for client {name}\n\n"
+            "Mode: {mode}\n\n"
             "Secret: {secret}\n\n"
             "HTTPS link:\n{https_link}\n\n"
             "tg:// link:\n{tg_link}\n\n"
-            "Для QR используется HTTPS-ссылка, чтобы камера телефона надёжнее открывала Telegram.".format(
+            "QR uses the HTTPS link so the phone camera opens Telegram more reliably.".format(
                 name=payload["name"],
                 mode=payload.get("secret_mode_label", "unknown"),
                 secret=payload["secret"],
@@ -593,11 +593,11 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _show_mt_qr_selection(self, message):
-        """Показать inline-меню выбора MTProto-клиента для QR."""
+        """Show an inline menu to pick an MTProto client for QR."""
         clients = mtproto_manager.list_clients()
         if not clients:
             await message.reply_text(
-                "❌ Список клиентов пуст. Сначала используйте /mt_add_client"
+                "❌ Client list is empty. First use /mt_add_client"
             )
             return
 
@@ -617,16 +617,16 @@ class BotHandlersLite(AITranslateMixin):
             )
 
         if not keyboard:
-            await message.reply_text("❌ У клиентов нет secret для генерации QR")
+            await message.reply_text("❌ Clients have no secret for QR generation")
             return
 
         reply_markup = InlineKeyboardMarkup(keyboard)
         await message.reply_text(
-            "Выберите MTProto-клиента для показа QR:", reply_markup=reply_markup
+            "Select an MTProto client to show QR:", reply_markup=reply_markup
         )
 
     async def _reply_tuic_qr(self, message, name: str):
-        """Отправить QR и URI для TUIC-клиента."""
+        """Send a QR code and URI for a TUIC client."""
         success, response, payload = tuic_manager.build_client_qr_payload(name)
         if not success:
             await message.reply_text(response)
@@ -637,10 +637,10 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для TUIC-клиента {payload['name']}",
+            caption=f"QR for TUIC client {payload['name']}",
         )
         await message.reply_text(
-            "🔷 TUIC QR для клиента {name}\n\n"
+            "🔷 TUIC QR for client {name}\n\n"
             "UUID: {uuid}\n"
             "Password: {password}\n\n"
             "URI:\n{uri}".format(
@@ -653,7 +653,7 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _reply_anytls_qr(self, message, name: str):
-        """Отправить QR и URI для AnyTLS-клиента."""
+        """Send a QR code and URI for an AnyTLS client."""
         success, response, payload = anytls_manager.build_client_qr_payload(name)
         if not success:
             await message.reply_text(response)
@@ -664,10 +664,10 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для AnyTLS-клиента {payload['name']}",
+            caption=f"QR for AnyTLS client {payload['name']}",
         )
         await message.reply_text(
-            "🔶 AnyTLS QR для клиента {name}\n\n"
+            "🔶 AnyTLS QR for client {name}\n\n"
             "Password: {password}\n\n"
             "URI:\n{uri}".format(
                 name=payload["name"],
@@ -678,7 +678,7 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _reply_xhttp_qr(self, message, name: str):
-        """Отправить QR и URI для XHTTP-клиента."""
+        """Send a QR code and URI for an XHTTP client."""
         success, response, payload = xhttp_manager.build_client_qr_payload(name)
         if not success:
             await message.reply_text(response)
@@ -689,10 +689,10 @@ class BotHandlersLite(AITranslateMixin):
 
         await message.reply_photo(
             photo=qr_buffer,
-            caption=f"QR для XHTTP-клиента {payload['name']}",
+            caption=f"QR for XHTTP client {payload['name']}",
         )
         await message.reply_text(
-            "🌐 XHTTP QR для клиента {name}\n\nUUID: {uuid}\n\nURI:\n{uri}".format(
+            "🌐 XHTTP QR for client {name}\n\nUUID: {uuid}\n\nURI:\n{uri}".format(
                 name=payload["name"],
                 uuid=payload["uuid"],
                 uri=payload["uri"],
@@ -701,7 +701,7 @@ class BotHandlersLite(AITranslateMixin):
         return True
 
     async def _reply_mieru_qr(self, message, name: str):
-        """Отправить URI и QR для Mieru-клиента (per-user; plan §7)."""
+        """Send URI and QR for a Mieru client (per-user; plan §7)."""
         try:
             uri = mieru_manager.build_simple_uri(name)
         except ValueError as exc:
@@ -709,7 +709,7 @@ class BotHandlersLite(AITranslateMixin):
             return False
 
         await message.reply_text(
-            "🛰 Mieru URI для клиента {name}\n\n{uri}".format(name=name, uri=uri)
+            "🛰 Mieru URI for client {name}\n\n{uri}".format(name=name, uri=uri)
         )
         try:
             import qrcode  # type: ignore
@@ -722,7 +722,7 @@ class BotHandlersLite(AITranslateMixin):
             buf.name = f"mieru-{name}.png"
             await message.reply_photo(
                 photo=buf,
-                caption=f"QR для Mieru-клиента {name}",
+                caption=f"QR for Mieru client {name}",
             )
         except Exception as exc:
             logger.warning("mieru QR render failed: %s", exc)
@@ -730,19 +730,19 @@ class BotHandlersLite(AITranslateMixin):
 
     _HELP_MENU_KEYBOARD = [
         [
-            InlineKeyboardButton("🚀 Быстрый старт", callback_data="help_roadmap"),
-            InlineKeyboardButton("👥 Пользователи", callback_data="help_users"),
+            InlineKeyboardButton("🚀 Quick start", callback_data="help_roadmap"),
+            InlineKeyboardButton("👥 Users", callback_data="help_users"),
         ],
         [
-            InlineKeyboardButton("🧩 Протоколы", callback_data="help_protocols"),
-            InlineKeyboardButton("🔎 Диагностика", callback_data="help_diag"),
+            InlineKeyboardButton("🧩 Protocols", callback_data="help_protocols"),
+            InlineKeyboardButton("🔎 Diagnostics", callback_data="help_diag"),
         ],
         [
-            InlineKeyboardButton("🔧 Система и ключи", callback_data="help_admin"),
-            InlineKeyboardButton("💾 Бэкапы", callback_data="help_backup"),
+            InlineKeyboardButton("🔧 System and keys", callback_data="help_admin"),
+            InlineKeyboardButton("💾 Backups", callback_data="help_backup"),
         ],
         [
-            InlineKeyboardButton("⚙️ Настройки", callback_data="menu:settings"),
+            InlineKeyboardButton("⚙️ Settings", callback_data="menu:settings"),
         ],
     ]
 
@@ -784,25 +784,25 @@ class BotHandlersLite(AITranslateMixin):
     )
 
     async def _help_show_menu(self, message, *, edit: bool = True):
-        """Показать главное меню /help с inline-кнопками.
+        """Show the main /help menu with inline buttons.
 
         Args:
             message: Telegram message object.
-            edit: если True — edit_text (для callback), иначе reply_text.
+            edit: if True — edit_text (for callbacks), otherwise reply_text.
         """
         version_info = get_app_version()
         ver = self._escape_md2(version_info.get("version", "N/A"))
         app_name = self._escape_md2(version_info.get("name", "TelegramHelper"))
         text = (
             f"✨ *{app_name}* v{ver}\n\n"
-            "*Админ\\-панель навигации*\n\n"
-            "Slash\\-меню Telegram остаётся полным, но для ежедневной работы удобнее идти через разделы ниже\\.\n\n"
-            "*Чаще всего:*\n"
-            "• `/user <id>` — карточка пользователя с кнопками профилей\n"
-            "• `/profiles <id>` — выданные профили пользователя\n"
-            "• `/provision <id>` — создать bot\\-managed профили\n"
-            "• `/diag` — состояние транспортов и портов\n\n"
-            "_Внутри разделов — короткие сценарии, без длинной простыни команд\\._"
+            "*Admin navigation panel*\n\n"
+            "The Telegram slash\\-menu stays complete, but day\\-to\\-day work is easier through the sections below\\.\n\n"
+            "*Most used:*\n"
+            "• `/user <id>` — user card with profile buttons\n"
+            "• `/profiles <id>` — issued profiles for the user\n"
+            "• `/provision <id>` — create bot\\-managed profiles\n"
+            "• `/diag` — transport and port status\n\n"
+            "_Sections contain short playbooks, not a long command dump\\._"
         )
         reply_markup = InlineKeyboardMarkup(self._HELP_MENU_KEYBOARD)
         if edit:
@@ -815,13 +815,13 @@ class BotHandlersLite(AITranslateMixin):
             )
 
     def _help_section_keyboard(self, section: str) -> InlineKeyboardMarkup:
-        """Навигация внутри admin help; обычный /help пользователей не затрагивает."""
+        """Navigation inside admin help; regular user /help is unchanged."""
         if section == "help_protocols":
             rows = [*self._HELP_PROTOCOL_KEYBOARD]
             rows.append(
                 [
                     InlineKeyboardButton(
-                        "◀️ Назад к главному меню", callback_data="help_back"
+                        "◀️ Back to main menu", callback_data="help_back"
                     )
                 ]
             )
@@ -831,12 +831,12 @@ class BotHandlersLite(AITranslateMixin):
                 [
                     [
                         InlineKeyboardButton(
-                            "🧩 К протоколам", callback_data="help_protocols"
+                            "🧩 To protocols", callback_data="help_protocols"
                         )
                     ],
                     [
                         InlineKeyboardButton(
-                            "◀️ Назад к главному меню", callback_data="help_back"
+                            "◀️ Back to main menu", callback_data="help_back"
                         )
                     ],
                 ]
@@ -845,16 +845,16 @@ class BotHandlersLite(AITranslateMixin):
             [
                 [
                     InlineKeyboardButton(
-                        "◀️ Назад к главному меню", callback_data="help_back"
+                        "◀️ Back to main menu", callback_data="help_back"
                     )
                 ]
             ]
         )
 
-    # === БАЗОВЫЕ КОМАНДЫ ===
+    # === BASIC COMMANDS ===
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /start - запуск бота и приветствие."""
+        """Handle /start — launch the bot and greet the user."""
         try:
             user = update.effective_user
             logger.info(f"User {user.id} ({user.username}) started the bot")
@@ -869,34 +869,34 @@ class BotHandlersLite(AITranslateMixin):
                 )
                 if p.host_is_placeholder:
                     vps_line = (
-                        "🌐 *Адрес VPS:* автоопределение недоступно "
-                        "\\(задайте `/vless\\_set\\_server` или `DOCKHAND\\_SSH\\_HOST` в `.env`\\)"
+                        "🌐 *VPS address:* auto\\-detect unavailable "
+                        "\\(set `/vless\\_set\\_server` or `DOCKHAND\\_SSH\\_HOST` in `.env`\\)"
                     )
                 else:
-                    vps_line = "🌐 *Адрес VPS:* `" + escape_markdown(p.host) + "`"
+                    vps_line = "🌐 *VPS address:* `" + escape_markdown(p.host) + "`"
             except Exception as ex:
                 logger.debug("start_command: VPS host hint failed: %s", ex)
-                vps_line = "🌐 *Адрес VPS:* временно недоступен"
+                vps_line = "🌐 *VPS address:* temporarily unavailable"
 
             if not self._is_admin(user.id):
-                # Обычные и special: приветствие + адрес VPS + кнопки роли.
-                # ReplyKeyboardRemove не нужен: inline-клавиатура живёт в
-                # сообщении и не конфликтует с reply-клавиатурами.
+                # Regular and special users: greeting + VPS address + role buttons.
+                # ReplyKeyboardRemove is not needed: the inline keyboard lives in
+                # the message and does not conflict with reply keyboards.
                 prefs = storage_get_ui_prefs(user.id)
                 icons = self._theme_icons(user.id)
                 brand = f"{icons['brand']} " if icons["brand"] else ""
                 parts = [
-                    f"Привет, {escape_markdown(user.first_name or 'Пользователь')}\\!",
+                    f"Hi, {escape_markdown(user.first_name or 'User')}\\!",
                     "",
-                    f"{brand}*TelegramHelper* — бот для личных задач и уведомлений\\.",
+                    f"{brand}*TelegramHelper* — a bot for personal tasks and notifications\\.",
                     "",
                     vps_line,
                 ]
                 if not prefs["compact"]:
                     parts += [
                         "",
-                        "_Кнопки ниже — основные действия\\. Полный список "
-                        "команд — в меню Telegram\\._",
+                        "_Buttons below are the main actions\\. Full command "
+                        "list is in the Telegram menu\\._",
                     ]
                 await self._menu_panel(
                     update.message,
@@ -909,17 +909,17 @@ class BotHandlersLite(AITranslateMixin):
             protocol_lines = self._build_protocol_status_lines(short=True)
             protocols_block = "\n".join(protocol_lines) if protocol_lines else ""
 
-            welcome_message = f"""Привет, {escape_markdown(user.first_name or "Пользователь")}\\!
+            welcome_message = f"""Hi, {escape_markdown(user.first_name or "User")}\\!
 
-✨ *TelegramHelper* — бот для API, ключей и прокси\\-протоколов
+✨ *TelegramHelper* — a bot for API, keys, and proxy protocols
 
 {vps_line}
 
-*Транспорты на этом VPS:*
+*Transports on this VPS:*
 {protocols_block}
 
-Откройте `/help`, чтобы выбрать раздел и увидеть короткие примеры команд\\.
-Подробная диагностика — `/diag`\\."""
+Open `/help` to pick a section and see short command examples\\.
+Full diagnostics: `/diag`\\."""
 
             await self._menu_panel(
                 update.message,
@@ -931,18 +931,18 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.error(f"Error in start_command: {e}")
             await update.message.reply_text(
-                "Привет! Используйте /help для просмотра команд."
+                "Hi! Use /help to see available commands."
             )
 
-    # === Диагностика транспортов ===
+    # === Transport diagnostics ===
 
     def _build_protocol_status_lines(self, short: bool = True) -> list:
         """
-        Сформировать список MarkdownV2-строк со статусом каждого протокола.
+        Build MarkdownV2 lines with the status of each protocol.
 
-        short=True   — компактный вывод для /start (одна строка на протокол).
-        short=False  — расширенный вывод для /diag (с портом, источниками
-                       сигнала и заметками, без секретов).
+        short=True   — compact output for /start (one line per protocol).
+        short=False  — expanded output for /diag (port, signal sources
+                       and notes, no secrets).
         """
         lines: list = []
         try:
@@ -952,7 +952,7 @@ class BotHandlersLite(AITranslateMixin):
             xui_panel = snapshot.get("xui_panel")
         except Exception as exc:
             logger.warning("_build_protocol_status_lines: gather failed: %s", exc)
-            return ["⚠️ Не удалось собрать статус транспортов\\."]
+            return ["⚠️ Failed to collect transport status\\."]
 
         esc = self._escape_md2
 
@@ -960,32 +960,32 @@ class BotHandlersLite(AITranslateMixin):
             indicator = st.short_indicator()
             label = st.short_label()
             name = esc(st.display)
-            if not st.implemented and label == "выключен":
-                # Не реализованным протоколам без живых сигналов выводим
-                # явное «не реализовано», чтобы не путать с настроенным «выкл».
-                label = "не реализовано в боте"
+            if not st.implemented and label == "off":
+                # Unimplemented protocols with no live signals get an explicit
+                # "not implemented" label so they are not confused with a configured "off".
+                label = "not implemented in the bot"
             if short:
                 lines.append(f"{st.icon} *{name}:* {indicator} {esc(label)}")
             else:
                 port_text = ""
                 if st.port:
-                    port_text = f" (порт {st.port}/{st.transport.upper()})"
+                    port_text = f" (port {st.port}/{st.transport.upper()})"
                 detail_bits = []
                 if st.flag_enabled is True:
-                    detail_bits.append("флаг JSON: вкл")
+                    detail_bits.append("JSON flag: on")
                 elif st.flag_enabled is False:
-                    detail_bits.append("флаг JSON: выкл")
+                    detail_bits.append("JSON flag: off")
                 if st.process_alive is True:
                     procs = ", ".join(sorted(set(st.process_names))) or "yes"
-                    detail_bits.append(f"процесс: {procs}")
+                    detail_bits.append(f"process: {procs}")
                 elif st.process_alive is False:
-                    detail_bits.append("процесс: не найден")
+                    detail_bits.append("process: not found")
                 if st.port_listening is True:
-                    detail_bits.append("порт слушает")
+                    detail_bits.append("port listening")
                 elif st.port_listening is False:
-                    detail_bits.append("порт не слушает")
+                    detail_bits.append("port not listening")
                 if not st.implemented:
-                    detail_bits.append("серверная автоматизация в боте не реализована")
+                    detail_bits.append("server automation is not implemented in the bot")
                 if st.notes:
                     detail_bits.extend(st.notes)
                 detail = "; ".join(esc(b) for b in detail_bits)
@@ -994,11 +994,11 @@ class BotHandlersLite(AITranslateMixin):
                     line += f"\n   ↳ {detail}"
                 lines.append(line)
 
-        # Dockhand — отдельным блоком (это панель, а не транспорт).
+        # Dockhand is a separate block (a panel, not a transport).
         di = dockhand.short_indicator()
         di_label = dockhand.short_label()
         if dockhand.notes and dockhand.live is None:
-            # Если диагностика недоступна, используем мягкий статус.
+            # If diagnostics are unavailable, use a soft status.
             di_label = dockhand.notes[0]
         dockhand_name = esc(dockhand.display)
         if short:
@@ -1011,19 +1011,19 @@ class BotHandlersLite(AITranslateMixin):
                 if container.get("health"):
                     extra_bits.append(f"health: {container.get('health')}")
             elif container.get("available") is False:
-                extra_bits.append("docker.sock не смонтирован")
+                extra_bits.append("docker.sock is not mounted")
             elif container.get("available") and not container.get("found"):
-                extra_bits.append("контейнер не найден")
+                extra_bits.append("container not found")
             extra = "; ".join(esc(b) for b in extra_bits)
             line = f"{dockhand.icon} *{dockhand_name}:* {di} {esc(di_label)}"
             if extra:
                 line += f"\n   ↳ {extra}"
             lines.append(line)
 
-        # 3x-ui — внешняя панель управления Xray. Показываем строку
-        # только когда что-то реально найдено (живой процесс/контейнер,
-        # либо хотя бы установленный бинарь). На «чистом» VPS строки нет
-        # — чтобы /start и /diag не зашумлялись бесполезным сообщением.
+        # 3x-ui is an external Xray control panel. Show a line only when
+        # something is actually found (live process/container, or at least
+        # an installed binary). On a "clean" VPS there is no line — so
+        # /start and /diag are not cluttered with a useless message.
         if xui_panel is not None:
             xui_found = (
                 xui_panel.process_alive is True
@@ -1042,9 +1042,9 @@ class BotHandlersLite(AITranslateMixin):
                     detail_bits: list[str] = []
                     if xui_panel.process_alive is True:
                         procs = ", ".join(sorted(set(xui_panel.process_names))) or "yes"
-                        detail_bits.append(f"процесс: {procs}")
+                        detail_bits.append(f"process: {procs}")
                     elif xui_panel.process_alive is False:
-                        detail_bits.append("процесс: не запущен")
+                        detail_bits.append("process: not running")
                     if xui_panel.notes:
                         detail_bits.extend(xui_panel.notes)
                     detail = "; ".join(esc(b) for b in detail_bits)
@@ -1054,8 +1054,8 @@ class BotHandlersLite(AITranslateMixin):
                     if detail:
                         line += f"\n   ↳ {detail}"
                     line += "\n   ↳ " + esc(
-                        "3x-ui — это панель управления Xray/VLESS, "
-                        "а не второй VLESS-порт; клиентов и inbound смотрите в /vless_list_clients"
+                        "3x-ui is an Xray/VLESS control panel, "
+                        "not a second VLESS port; see clients and inbound in /vless_list_clients"
                     )
                     lines.append(line)
 
@@ -1063,13 +1063,13 @@ class BotHandlersLite(AITranslateMixin):
 
     async def diag_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
-        Команда `/diag`.
+        `/diag` command.
 
-        Администратор: расширенная диагностика (транспорты, Dockhand, 3x-ui,
-        слушающие порты, пояснения).
+        Admin: extended diagnostics (transports, Dockhand, 3x-ui,
+        listening ports, notes).
 
-        Обычные и special-пользователи: та же компактная сводка, что в `/start`,
-        без портов и без операторской легенды.
+        Regular and special users: the same compact summary as `/start`,
+        without ports and without the operator legend.
         """
         try:
             user = update.effective_user
@@ -1086,17 +1086,17 @@ class BotHandlersLite(AITranslateMixin):
                 except Exception as exc:
                     logger.error("diag_command (user): failed to build lines: %s", exc)
                     await msg.reply_text(
-                        "❌ Не удалось собрать диагностику. См. логи бота.",
+                        "❌ Failed to collect diagnostics. See bot logs.",
                     )
                     return
                 message = (
-                    "🔎 *Краткая диагностика*\n\n"
+                    "🔎 *Brief diagnostics*\n\n"
                     + "\n".join(lines)
-                    + "\n\n_Полный отчёт \\(порты на хосте, детали процессов, пояснения\\) "
-                    "доступен только администратору\\._"
+                    + "\n\n_Full report \\(host ports, process details, notes\\) "
+                    "is admin\\-only\\._"
                 )
                 if len(message) > 3800:
-                    message = message[:3800] + "\n…\\(сокращено\\)"
+                    message = message[:3800] + "\n…\\(truncated\\)"
                 try:
                     await msg.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
                 except Exception as md_exc:
@@ -1119,11 +1119,11 @@ class BotHandlersLite(AITranslateMixin):
             except Exception as exc:
                 logger.error("diag_command: failed to build lines: %s", exc)
                 await msg.reply_text(
-                    "❌ Не удалось собрать диагностику. См. логи бота.",
+                    "❌ Failed to collect diagnostics. See bot logs.",
                 )
                 return
 
-            # Сводка по слушающим портам — полезна, чтобы быстро увидеть конфликты.
+            # Listening-port summary — useful for spotting conflicts quickly.
             try:
                 host_ports = live_status.host_listen_ports()
                 tcp_sample = sorted(host_ports.get("tcp", set()))
@@ -1133,7 +1133,7 @@ class BotHandlersLite(AITranslateMixin):
 
             def _fmt_ports(ports):
                 if not ports:
-                    return "нет данных"
+                    return "no data"
                 shown = ports[:25]
                 more = len(ports) - len(shown)
                 base = ", ".join(str(p) for p in shown)
@@ -1143,44 +1143,44 @@ class BotHandlersLite(AITranslateMixin):
             udp_line = esc(_fmt_ports(udp_sample))
 
             diag_legend = (
-                "\n\n*Не путать три разных компонента:*\n"
-                "• *VLESS\\-Reality \\(бот → host Xray\\)* — транспорт, который ведёт бот "
-                "\\(`xray` на хосте, `/usr/local/etc/xray`\\); это *не* веб\\-панель\\.\n"
-                "• *Dockhand \\(Docker\\)* — Streamlit для логов и диагностики бота; "
-                "не VPN и не панель клиентов Xray\\.\n"
-                "• *3x\\-ui* — сторонняя веб\\-панель Xray; в её блоке строка "
-                "*развёртывание 3x-ui* показывает *нативно на хосте* или *Docker*\\.\n"
+                "\n\n*Do not confuse three different components:*\n"
+                "• *VLESS\\-Reality \\(bot → host Xray\\)* — the transport the bot manages "
+                "\\(`xray` on the host, `/usr/local/etc/xray`\\); this is *not* a web panel\\.\n"
+                "• *Dockhand \\(Docker\\)* — Streamlit for bot logs and diagnostics; "
+                "not a VPN and not an Xray client panel\\.\n"
+                "• *3x\\-ui* — a third\\-party Xray web panel; in its block the "
+                "*3x\\-ui deploy* line shows *native on host* or *Docker*\\.\n"
             )
 
             footer = (
-                "\n\n*Слушающие порты на хосте:*\n"
+                "\n\n*Listening ports on the host:*\n"
                 f"• TCP: {tcp_line}\n"
                 f"• UDP: {udp_line}\n\n"
-                "_🟢 — реально работает; 🔴 — выключено/не запущено;_\n"
-                "_⚪ — не удалось проверить \\(нет прав/нет данных\\)\\._"
+                "_🟢 — actually running; 🔴 — off/not started;_\n"
+                "_⚪ — could not check \\(no permissions/no data\\)\\._"
             )
 
             message = (
-                "🔎 *Диагностика транспортов*\n\n"
+                "🔎 *Transport diagnostics*\n\n"
                 + "\n\n".join(lines)
                 + diag_legend
                 + footer
             )
-            # Telegram limit ~4096 chars; обрезаем по необходимости.
+            # Telegram limit ~4096 chars; truncate if needed.
             if len(message) > 3800:
-                message = message[:3800] + "\n…\\(сокращено\\)"
+                message = message[:3800] + "\n…\\(truncated\\)"
 
             try:
                 await msg.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
             except Exception as md_exc:
-                # MarkdownV2 строгий: один не-экранированный символ в
-                # любой из строк live_status'а валит весь reply. Чтобы
-                # admin не оставался без диагностики — retry plain text.
+                # MarkdownV2 is strict: one unescaped character in
+                # any live_status line fails the whole reply. Retry
+                # as plain text so admin is not left without diagnostics.
                 logger.warning(
                     "diag_command MD2 failed (%s) — fallback plain text",
                     md_exc,
                 )
-                # Снимаем MD2-экранирование (\\X → X) для читаемости.
+                # Strip MD2 escaping (\\X → X) for readability.
                 plain = (
                     message.replace("\\", "")
                     .replace("*", "")
@@ -1190,32 +1190,32 @@ class BotHandlersLite(AITranslateMixin):
                 await msg.reply_text(plain)
         except Exception as e:
             logger.error(f"Error in diag_command: {e}")
-            await update.message.reply_text("Ошибка при сборе диагностики.")
+            await update.message.reply_text("Failed to collect diagnostics.")
 
     # === Help: section texts (class-level) ===
 
     _HELP_SECTIONS = {
         "help_main": (
-            "📚 *Основные команды*\n\n"
-            "• `/start` — приветствие и статус\n"
-            "• `/help` — это меню\n"
-            "• `/info` — профиль пользователя\n"
-            "• `/diag` — краткий статус транспортов; полный отчёт — у админа\n"
-            "• `/clear` — очистить чат"
+            "📚 *Main commands*\n\n"
+            "• `/start` — greeting and status\n"
+            "• `/help` — this menu\n"
+            "• `/info` — user profile\n"
+            "• `/diag` — brief transport status; full report is admin\\-only\n"
+            "• `/clear` — clear the chat"
         ),
         "help_protocols": (
-            "🧩 *Протоколы*\n\n"
-            "Выберите транспорт ниже\\. В каждом разделе есть короткий сценарий запуска, "
-            "экспорт профиля и команды диагностики\\.\n\n"
-            "*Рабочий flow для пользователя:*\n"
-            "• `/provision <id>` — создать bot\\-managed профили\n"
-            "• `/profiles <id>` — посмотреть и выдать ссылки/QR\n"
-            "• `/user <id>` — карточка с кнопками создать/удалить/ротировать\n\n"
-            "*Быстрая проверка всех транспортов:* `/diag`"
+            "🧩 *Protocols*\n\n"
+            "Pick a transport below\\. Each section has a short launch playbook, "
+            "profile export, and diagnostic commands\\.\n\n"
+            "*Working flow for a user:*\n"
+            "• `/provision <id>` — create bot\\-managed profiles\n"
+            "• `/profiles <id>` — view and issue links/QR\n"
+            "• `/user <id>` — card with create/delete/rotate buttons\n\n"
+            "*Quick check of all transports:* `/diag`"
         ),
         "help_roadmap": (
-            "🚀 *Быстрый старт / сервер с нуля*\n\n"
-            "Короткий маршрут для чистого VPS: сначала поднимите основной профиль, затем добавляйте запасные протоколы\\.\n\n"
+            "🚀 *Quick start / server from scratch*\n\n"
+            "Short path for a clean VPS: bring up the primary profile first, then add fallback protocols\\.\n\n"
             "*1\\. VLESS\\-Reality*\n"
             "`/vless\\_sync` → `/vless\\_add\\_client phone` → `/vless\\_qr phone`\n\n"
             "*2\\. Hysteria2*\n"
@@ -1228,196 +1228,196 @@ class BotHandlersLite(AITranslateMixin):
             "*5\\. Mieru*\n"
             "`/mieru\\_install` → `/mieru\\_set\\_server IP` → `/mieru\\_set\\_port 29999 tcp` "
             "→ `/mieru\\_add\\_client phone` → `/mieru\\_apply` → `/mieru\\_export phone`\n\n"
-            "Проверка: `/PROTO\\_status` и `/PROTO\\_logs`"
+            "Check: `/PROTO\\_status` and `/PROTO\\_logs`"
         ),
         "help_admin": (
-            "🔧 *Система и ключи*\n\n"
-            "*Ежедневно полезно:*\n"
-            "• `/info` — профиль и Telegram ID\n"
-            "• `/ver` — версия, адрес VPS и полная сводка VLESS\\-Reality\n"
-            "• `/dockhand` — доступ к панели Dockhand\n"
-            "• `/headscale` — Tailscale IP сервера\n"
-            "• `/diag` — транспортная диагностика\n\n"
-            "*Ключи:*\n"
-            "• `/api` и `/encryption\\_key` — показать маску\n"
-            "• `/gen\\_api\\_key` / `/del\\_api\\_key` — API ключи\n"
-            "• `/gen\\_encryption\\_key` / `/del\\_encryption\\_key` — ключи шифрования\n"
-            "• `/gen\\_chacha\\_key` / `/gen\\_pqc\\_key` — доп\\. ключи\n\n"
-            "*ИИ:*\n"
-            "• `/ai\\_provider openai` — выбрать провайдера\n"
-            "• `/ch\\_model` — выбрать модель"
+            "🔧 *System and keys*\n\n"
+            "*Useful daily:*\n"
+            "• `/info` — profile and Telegram ID\n"
+            "• `/ver` — version, VPS address, and full VLESS\\-Reality summary\n"
+            "• `/dockhand` — Dockhand panel access\n"
+            "• `/headscale` — server Tailscale IP\n"
+            "• `/diag` — transport diagnostics\n\n"
+            "*Keys:*\n"
+            "• `/api` and `/encryption\\_key` — show a mask\n"
+            "• `/gen\\_api\\_key` / `/del\\_api\\_key` — API keys\n"
+            "• `/gen\\_encryption\\_key` / `/del\\_encryption\\_key` — encryption keys\n"
+            "• `/gen\\_chacha\\_key` / `/gen\\_pqc\\_key` — extra keys\n\n"
+            "*AI:*\n"
+            "• `/ai\\_provider openai` — choose a provider\n"
+            "• `/ch\\_model` — choose a model"
         ),
         "help_backup": (
-            "💾 *Бэкапы*\n\n"
-            "Offsite backup работает через rclone и полезен перед обновлениями, "
-            "переездом VPS или крупными изменениями конфигов\\.\n\n"
-            "*Команды:*\n"
-            "• `/rclone` — что это и как включить backup\n"
-            "• `/backup\\_status` — статус rclone\n"
-            "• `/backup\\_test` — проверить remote\n"
-            "• `/backup\\_now` — создать backup\n"
-            "• `/backup\\_list` — последние архивы\n\n"
-            "Перед ручными правками `*_config\\.json` лучше сделать `/backup\\_now`\\."
+            "💾 *Backups*\n\n"
+            "Offsite backup runs via rclone and is useful before updates, "
+            "a VPS move, or large config changes\\.\n\n"
+            "*Commands:*\n"
+            "• `/rclone` — what it is and how to enable backup\n"
+            "• `/backup\\_status` — rclone status\n"
+            "• `/backup\\_test` — test the remote\n"
+            "• `/backup\\_now` — create a backup\n"
+            "• `/backup\\_list` — recent archives\n\n"
+            "Before manual edits to `*_config\\.json`, run `/backup\\_now`\\."
         ),
         "help_diag": (
-            "🔎 *Диагностика*\n\n"
-            "*Главное:*\n"
-            "• `/diag` — сводка транспортов, процессов и портов\n"
-            "• `/ver` — версия, адрес VPS и VLESS\\-сводка\n"
-            "• `/dockhand` — SSH\\-туннель к панели логов\n\n"
-            "*По протоколам:*\n"
-            "• `/PROTO\\_status` — состояние конкретного транспорта\n"
-            "• `/PROTO\\_logs 80` — последние логи, где поддерживается\n"
-            "• `/vless\\_test` — проверка VLESS порта\n\n"
-            "Если неясно, кто занял порт `443`, сначала смотрите `/diag`, затем конкретный раздел в «Протоколах»\\."
+            "🔎 *Diagnostics*\n\n"
+            "*Main:*\n"
+            "• `/diag` — transports, processes, and ports summary\n"
+            "• `/ver` — version, VPS address, and VLESS summary\n"
+            "• `/dockhand` — SSH tunnel to the logs panel\n\n"
+            "*Per protocol:*\n"
+            "• `/PROTO\\_status` — status of a specific transport\n"
+            "• `/PROTO\\_logs 80` — recent logs where supported\n"
+            "• `/vless\\_test` — VLESS port check\n\n"
+            "If it is unclear who took port `443`, start with `/diag`, then the matching Protocols section\\."
         ),
         "help_users": (
-            "👥 *Пользователи*\n\n"
-            "*Основной рабочий сценарий:*\n"
-            "• `/user 12345` — карточка пользователя с кнопками профилей\n"
-            "• `/profiles 12345` — показать выданные профили\n"
-            "• `/provision 12345` — создать bot\\-managed клиентов\n"
-            "• `/email\\_profile 12345` — отправить профили на email\n\n"
-            "*Списки и роли:*\n"
-            "• `/list\\_users` — все известные пользователи\n"
-            "• `/users\\_log` — журнал первого/последнего обращения\n"
-            "• `/special\\_add 12345` — добавить в особые\n"
-            "• `/special\\_remove 12345` — убрать из особых\n\n"
-            "*Поля пользователя:*\n"
-            "• `/setemail 12345 user@example\\.com` — email для профилей\n"
-            "• `/setcity 12345 Moscow` — город пользователя\n"
-            "• `/setgreeting 12345 Привет` — личное приветствие\n\n"
-            "Подсказка: админу можно просто отправить TG ID числом — бот откроет карточку\\."
+            "👥 *Users*\n\n"
+            "*Main working scenario:*\n"
+            "• `/user 12345` — user card with profile buttons\n"
+            "• `/profiles 12345` — show issued profiles\n"
+            "• `/provision 12345` — create bot\\-managed clients\n"
+            "• `/email\\_profile 12345` — send profiles by email\n\n"
+            "*Lists and roles:*\n"
+            "• `/list\\_users` — all known users\n"
+            "• `/users\\_log` — first/last seen journal\n"
+            "• `/special\\_add 12345` — add to special\n"
+            "• `/special\\_remove 12345` — remove from special\n\n"
+            "*User fields:*\n"
+            "• `/setemail 12345 user@example\\.com` — email for profiles\n"
+            "• `/setcity 12345 Moscow` — user city\n"
+            "• `/setgreeting 12345 Hello` — personal greeting\n\n"
+            "Tip: an admin can just send a numeric TG ID — the bot opens the card\\."
         ),
         "help_vless": (
             "🛡️ *VLESS\\-Reality*\n\n"
-            "Основной профиль: маскирует трафик под обычный HTTPS\\.\n\n"
-            "*Быстрый старт \\(legacy host\\-Xray\\):*\n"
+            "Primary profile: disguises traffic as ordinary HTTPS\\.\n\n"
+            "*Quick start \\(legacy host\\-Xray\\):*\n"
             "`/vless\\_set\\_server IP` → `/vless\\_sync` → `/vless\\_on` → `/provision <id>`\n"
-            "Прямой путь \\(без 3x\\-ui\\): `/vless\\_add\\_client phone` → `/vless\\_qr phone`\n\n"
-            "⚠️ `/vless\\_on` обязателен: без него `/provision` не включит VLESS\\. "
-            "При активной 3x\\-ui клиентами управляет панель — `/vless\\_add\\_client` "
-            "редиректит на `/provision`\\.\n\n"
-            "*Команды:*\n"
-            "• `/vless\\_status` — статус\n"
-            "• `/vless\\_config` — конфиг\n"
-            "• `/vless\\_gen\\_keys` — ключи Reality\n"
-            "• `/vless\\_set\\_port 443` — порт\n"
-            "• `/vless\\_on` / `/vless\\_off` — включить или выключить\n"
-            "• `/vless\\_test` — проверка порта\n"
-            "• `/vless\\_export` — экспорт\n\n"
-            "*Клиенты:*\n"
-            "`/vless\\_list\\_clients` — список VLESS\\-клиентов\n"
+            "Direct path \\(no 3x\\-ui\\): `/vless\\_add\\_client phone` → `/vless\\_qr phone`\n\n"
+            "⚠️ `/vless\\_on` is required: without it `/provision` will not enable VLESS\\. "
+            "When 3x\\-ui is active the panel manages clients — `/vless\\_add\\_client` "
+            "redirects to `/provision`\\.\n\n"
+            "*Commands:*\n"
+            "• `/vless\\_status` — status\n"
+            "• `/vless\\_config` — config\n"
+            "• `/vless\\_gen\\_keys` — Reality keys\n"
+            "• `/vless\\_set\\_port 443` — port\n"
+            "• `/vless\\_on` / `/vless\\_off` — enable or disable\n"
+            "• `/vless\\_test` — port check\n"
+            "• `/vless\\_export` — export\n\n"
+            "*Clients:*\n"
+            "`/vless\\_list\\_clients` — VLESS client list\n"
             "`/vless\\_add\\_client phone` → `/vless\\_qr phone`\n"
-            "`/vless\\_del\\_client phone` — удалить клиента\n\n"
-            "Для пользователя по TG ID лучше использовать единый flow: "
+            "`/vless\\_del\\_client phone` — delete a client\n\n"
+            "For a user by TG ID prefer the unified flow: "
             "`/provision <id>` → `/profiles <id>`\\.\n\n"
-            "После смены SNI/fingerprint/short\\_id/Reality\\-ключей заново выдайте URI/QR: "
-            "`/profiles <id>`, `/my\\_profile` или `/vless\\_export`\\.\n\n"
-            "*Смена SNI \\(маскировка\\):*\n"
-            "`/vless\\_set\\_sni` без домена — кнопки выбора \\(текущий помечен ✅\\)\\. "
-            "Одно нажатие меняет SNI, пишет конфиг и предлагает перезапуск Xray\\. "
-            "Мобильные операторы часто режут `www\\.microsoft\\.com` — тогда берите `yahoo\\.com`\\.\n\n"
-            "*Если не подключается:*\n"
-            "`/xray\\_status`, `/vless\\_test`, затем firewall: `ufw allow 443/tcp`"
+            "After changing SNI/fingerprint/short\\_id/Reality keys, re\\-issue URI/QR: "
+            "`/profiles <id>`, `/my\\_profile`, or `/vless\\_export`\\.\n\n"
+            "*Change SNI \\(camouflage\\):*\n"
+            "`/vless\\_set\\_sni` with no domain — picker buttons \\(current marked ✅\\)\\. "
+            "One tap changes SNI, writes the config, and offers an Xray restart\\. "
+            "Mobile operators often block `www\\.microsoft\\.com` — then use `yahoo\\.com`\\.\n\n"
+            "*If it does not connect:*\n"
+            "`/xray\\_status`, `/vless\\_test`, then firewall: `ufw allow 443/tcp`"
         ),
         "help_hy2": (
             "⚡ *Hysteria2*\n\n"
-            "Быстрый UDP/QUIC\\-профиль, хорош как запасной канал\\.\n\n"
-            "*Быстрый старт \\(по порядку\\):*\n"
+            "Fast UDP/QUIC profile, good as a fallback channel\\.\n\n"
+            "*Quick start \\(in order\\):*\n"
             "1\\. `/hy2\\_install`\n"
             "2\\. `/hy2\\_set\\_server IP`\n"
-            "3\\. `/hy2\\_gen\\_all` — пароль \\+ сертификат \\+ IP\n"
-            "4\\. `/hy2\\_apply` — записать конфиг на сервер\n"
-            "5\\. `/hy2\\_on` — пометить профиль активным \\(для `/provision`\\)\n"
-            "6\\. `/hy2\\_start` — запустить сервис\n"
-            "7\\. `/hy2\\_add\\_client phone` → `/hy2\\_qr phone` — выдать QR\n\n"
-            "Проверка: `/hy2\\_status` покажет 🟢 профиль \\+ 🟢 сервис и подскажет следующий шаг\\.\n\n"
-            "*Команды:*\n"
-            "• `/hy2\\_status` / `/hy2\\_config` — состояние\n"
-            "• `/hy2\\_on` / `/hy2\\_off` — активировать / снять профиль\n"
-            "• `/hy2\\_set\\_port 8443` — UDP порт\n"
-            "• `/hy2\\_set\\_obfs salamander pass` — обфускация\n"
-            "• `/hy2\\_set\\_speed 0 0` — авто скорость\n"
-            "• `/hy2\\_set\\_quic\\_safe 1` — Windows\\-совместимость\n"
-            "• `/hy2\\_logs` — диагностика\n\n"
-            "После смены SNI/obfs/QUIC/порта: `/hy2\\_apply`, затем заново выдайте URI/QR через "
-            "`/profiles <id>`, `/my\\_profile` или `/hy2\\_export`\\.\n\n"
+            "3\\. `/hy2\\_gen\\_all` — password \\+ certificate \\+ IP\n"
+            "4\\. `/hy2\\_apply` — write config to the server\n"
+            "5\\. `/hy2\\_on` — mark the profile active \\(for `/provision`\\)\n"
+            "6\\. `/hy2\\_start` — start the service\n"
+            "7\\. `/hy2\\_add\\_client phone` → `/hy2\\_qr phone` — issue QR\n\n"
+            "Check: `/hy2\\_status` shows 🟢 profile \\+ 🟢 service and hints the next step\\.\n\n"
+            "*Commands:*\n"
+            "• `/hy2\\_status` / `/hy2\\_config` — state\n"
+            "• `/hy2\\_on` / `/hy2\\_off` — activate / deactivate the profile\n"
+            "• `/hy2\\_set\\_port 8443` — UDP port\n"
+            "• `/hy2\\_set\\_obfs salamander pass` — obfuscation\n"
+            "• `/hy2\\_set\\_speed 0 0` — auto speed\n"
+            "• `/hy2\\_set\\_quic\\_safe 1` — Windows compatibility\n"
+            "• `/hy2\\_logs` — diagnostics\n\n"
+            "After changing SNI/obfs/QUIC/port: `/hy2\\_apply`, then re\\-issue URI/QR via "
+            "`/profiles <id>`, `/my\\_profile`, or `/hy2\\_export`\\.\n\n"
             "Firewall: `ufw allow 8443/udp`"
         ),
         "help_tuic": (
             "🔷 *TUIC*\n\n"
-            "Лёгкий QUIC\\-профиль с TLS сертификатом и QR для клиента\\.\n\n"
-            "*Быстрый старт:*\n"
+            "Lightweight QUIC profile with a TLS certificate and client QR\\.\n\n"
+            "*Quick start:*\n"
             "`/tuic\\_set\\_server IP` → `/tuic\\_gen\\_all` → `/tuic\\_apply` → `/tuic\\_start` → `/tuic\\_qr phone`\n\n"
-            "*Команды:*\n"
-            "• `/tuic\\_status` / `/tuic\\_config` — состояние\n"
-            "• `/tuic\\_set\\_port 8444` — UDP порт\n"
+            "*Commands:*\n"
+            "• `/tuic\\_status` / `/tuic\\_config` — state\n"
+            "• `/tuic\\_set\\_port 8444` — UDP port\n"
             "• `/tuic\\_set\\_cc bbr` — congestion control\n"
-            "• `/tuic\\_add phone` / `/tuic\\_list` — клиенты\n"
-            "• `/tuic\\_logs` / `/tuic\\_export` — логи и экспорт\n\n"
+            "• `/tuic\\_add phone` / `/tuic\\_list` — clients\n"
+            "• `/tuic\\_logs` / `/tuic\\_export` — logs and export\n\n"
             "Firewall: `ufw allow 8444/udp`"
         ),
         "help_anytls": (
             "🔶 *AnyTLS*\n\n"
-            "TCP\\-профиль с TLS, простой для клиентов и диагностики\\.\n\n"
-            "*Быстрый старт:*\n"
+            "TCP profile with TLS, simple for clients and diagnostics\\.\n\n"
+            "*Quick start:*\n"
             "`/anytls\\_set\\_server IP` → `/anytls\\_gen\\_all` → `/anytls\\_apply` → `/anytls\\_start` → `/anytls\\_qr phone`\n\n"
-            "*Команды:*\n"
-            "• `/anytls\\_status` / `/anytls\\_config` — состояние\n"
-            "• `/anytls\\_set\\_port 8445` — TCP порт\n"
-            "• `/anytls\\_gen\\_cert` — сертификат\n"
-            "• `/anytls\\_add phone` / `/anytls\\_list` — клиенты\n"
-            "• `/anytls\\_logs` / `/anytls\\_export` — логи и экспорт\n\n"
+            "*Commands:*\n"
+            "• `/anytls\\_status` / `/anytls\\_config` — state\n"
+            "• `/anytls\\_set\\_port 8445` — TCP port\n"
+            "• `/anytls\\_gen\\_cert` — certificate\n"
+            "• `/anytls\\_add phone` / `/anytls\\_list` — clients\n"
+            "• `/anytls\\_logs` / `/anytls\\_export` — logs and export\n\n"
             "Firewall: `ufw allow 8445/tcp`"
         ),
         "help_xhttp": (
             "🌐 *XHTTP \\(VLESS\\+XHTTP\\)*\n\n"
-            "VLESS поверх HTTP\\-транспорта: удобно для нестандартных сетей\\.\n\n"
-            "*Быстрый старт:*\n"
+            "VLESS over HTTP transport: useful on unusual networks\\.\n\n"
+            "*Quick start:*\n"
             "`/xhttp\\_set\\_server IP` → `/xhttp\\_gen\\_all` → `/xhttp\\_apply` → `/xhttp\\_start` → `/xhttp\\_qr phone`\n\n"
-            "*Команды:*\n"
-            "• `/xhttp\\_status` / `/xhttp\\_config` — состояние\n"
-            "• `/xhttp\\_set\\_path /tg` — путь\n"
+            "*Commands:*\n"
+            "• `/xhttp\\_status` / `/xhttp\\_config` — state\n"
+            "• `/xhttp\\_set\\_path /tg` — path\n"
             "• `/xhttp\\_set\\_host example.com` — host\n"
-            "• `/xhttp\\_set\\_mode auto` — режим\n"
-            "• `/xhttp\\_logs` / `/xhttp\\_export` — логи и экспорт\n\n"
-            "Если path занят: `/xhttp\\_set\\_path /new`"
+            "• `/xhttp\\_set\\_mode auto` — mode\n"
+            "• `/xhttp\\_logs` / `/xhttp\\_export` — logs and export\n\n"
+            "If the path is taken: `/xhttp\\_set\\_path /new`"
         ),
         "help_naive": (
             "🌐 *NaiveProxy*\n\n"
-            "HTTPS\\-прокси через Caddy, требует домен с корректным DNS\\.\n\n"
-            "*Быстрый старт:*\n"
+            "HTTPS proxy via Caddy; needs a domain with correct DNS\\.\n\n"
+            "*Quick start:*\n"
             "`/naive\\_install` → `/naive\\_set\\_domain example.com` → `/naive\\_gen\\_creds` → `/naive\\_apply` → `/naive\\_uri`\n\n"
-            "*Команды:*\n"
-            "• `/naive\\_status` / `/naive\\_config` — состояние\n"
-            "• `/naive\\_set\\_port 443` — HTTPS порт\n"
-            "• `/naive\\_set\\_user user` — логин\n"
-            "• `/naive\\_set\\_password pass` — пароль\n"
-            "• `/naive\\_set\\_dpi scheme https` / `padding on` / `probe\\_resistance on` — DPI\\-параметры\n"
-            "• `/naive\\_export` — экспорт\n\n"
-            "После клиентских DPI\\-параметров заново выдайте профиль через `/naive\\_export`\\. "
-            "После серверных параметров сначала `/naive\\_apply`, потом `/naive\\_export`\\.\n\n"
-            "Проверьте DNS домена перед запуском\\."
+            "*Commands:*\n"
+            "• `/naive\\_status` / `/naive\\_config` — state\n"
+            "• `/naive\\_set\\_port 443` — HTTPS port\n"
+            "• `/naive\\_set\\_user user` — login\n"
+            "• `/naive\\_set\\_password pass` — password\n"
+            "• `/naive\\_set\\_dpi scheme https` / `padding on` / `probe\\_resistance on` — DPI parameters\n"
+            "• `/naive\\_export` — export\n\n"
+            "After client DPI parameters, re\\-issue the profile via `/naive\\_export`\\. "
+            "After server parameters, run `/naive\\_apply` first, then `/naive\\_export`\\.\n\n"
+            "Verify the domain DNS before starting\\."
         ),
         "help_mt": (
             "📡 *MTProto Proxy*\n\n"
-            "Нативный Telegram\\-прокси с fake\\-TLS секретом\\.\n\n"
-            "*Быстрый старт:*\n"
+            "Native Telegram proxy with a fake\\-TLS secret\\.\n\n"
+            "*Quick start:*\n"
             "`/mt\\_install` → `/mt\\_set\\_server IP` → `/mt\\_gen\\_all` → `/mt\\_apply` → `/mt\\_start` → `/mt\\_qr phone`\n\n"
-            "*Команды:*\n"
-            "• `/mt\\_status` / `/mt\\_config` — состояние\n"
-            "• `/mt\\_set\\_mode ee\\_split` — режим секрета\n"
-            "• `/mt\\_set\\_domain www.microsoft.com` — fake\\-TLS домен\n"
-            "• `/mt\\_set\\_workers 4` — воркеры\n"
-            "• `/mt\\_logs` / `/mt\\_export` — логи и экспорт\n\n"
+            "*Commands:*\n"
+            "• `/mt\\_status` / `/mt\\_config` — state\n"
+            "• `/mt\\_set\\_mode ee\\_split` — secret mode\n"
+            "• `/mt\\_set\\_domain www.microsoft.com` — fake\\-TLS domain\n"
+            "• `/mt\\_set\\_workers 4` — workers\n"
+            "• `/mt\\_logs` / `/mt\\_export` — logs and export\n\n"
             "Firewall: `ufw allow 8443/tcp`"
         ),
         "help_mieru": (
             "🕵️ *Mieru*\n\n"
-            "Запасной TCP/UDP транспорт без домена и TLS\\-сертификата\\. "
-            "Полезен, если VLESS/Hysteria2/NaiveProxy в сети нестабильны, "
-            "и для DPI\\-экспериментов с port/MTU/multiplexing/handshake\\.\n\n"
+            "Fallback TCP/UDP transport with no domain or TLS certificate\\. "
+            "Useful when VLESS/Hysteria2/NaiveProxy are unstable on the network, "
+            "and for DPI experiments with port/MTU/multiplexing/handshake\\.\n\n"
             "*Quickstart \\(admin\\):*\n"
             "`/mieru\\_install`\n"
             "`/mieru\\_set\\_server IP`\n"
@@ -1426,57 +1426,57 @@ class BotHandlersLite(AITranslateMixin):
             "`/mieru\\_apply`\n"
             "`/mieru\\_start`\n"
             "`/mieru\\_export phone`\n\n"
-            "*Тонкая настройка:* `/mieru\\_set\\_dpi <param> <value>` — "
+            "*Fine\\-tuning:* `/mieru\\_set\\_dpi <param> <value>` — "
             "protocol/port/port\\_range/mtu/multiplexing/handshake/socks5\\_port/logging\\.\n"
-            "*Логи и состояние:* `/mieru\\_status`, `/mieru\\_logs \\[N\\]`\\.\n\n"
-            "⚠️ После изменения port/MTU/multiplexing/handshake заново выдайте "
-            "URI/QR/export через `/mieru\\_export <name>`\\.\n"
-            "ℹ️ Подробности — `MIERU\\_GUIDE\\.md`\\."
+            "*Logs and state:* `/mieru\\_status`, `/mieru\\_logs \\[N\\]`\\.\n\n"
+            "⚠️ After changing port/MTU/multiplexing/handshake, re\\-issue "
+            "URI/QR/export via `/mieru\\_export <name>`\\.\n"
+            "ℹ️ Details: `MIERU\\_GUIDE\\.md`\\."
         ),
         "help_xui": (
-            "🛠 *3x\\-ui интеграция \\(опционально\\)*\n\n"
-            "Это отдельный режим для VPS, где реально установлена панель "
-            "`3x\\-ui` и именно она управляет Xray/VLESS\\-Reality\\.\n\n"
-            "Если `/vless\\_list\\_clients` пишет `legacy Xray`, значит VLESS "
-            "на этом сервере работает *без панели* через `xray.service` и "
-            "`/usr/local/etc/xray/config.json`\\. В таком режиме кнопки "
-            "3x\\-ui не управляют текущими VLESS\\-клиентами — используйте "
+            "🛠 *3x\\-ui integration \\(optional\\)*\n\n"
+            "A separate mode for a VPS where the `3x\\-ui` panel is actually "
+            "installed and it is what manages Xray/VLESS\\-Reality\\.\n\n"
+            "If `/vless\\_list\\_clients` says `legacy Xray`, VLESS on this "
+            "server runs *without the panel* via `xray.service` and "
+            "`/usr/local/etc/xray/config.json`\\. In that mode 3x\\-ui buttons "
+            "do not manage current VLESS clients — use "
             "`/vless\\_status`, `/vless\\_sync`, `/vless\\_qr`, "
             "`/vless\\_export`\\.\n\n"
-            "Если панель есть \\(локально или через Headscale/Tailscale mesh\\), "
-            "бот может ходить в её REST API и создавать/удалять клиентов "
-            "в выбранном inbound\\.\n\n"
-            "*Настройка:*\n"
-            "• `/xui\\_setup` — пошаговый ввод URL → логин → пароль → "
-            "выбор inbound\\.\n"
-            "  ⚠️ Сообщение с паролем удаляется СРАЗУ после ввода\\.\n"
-            "  Пароль хранится только в зашифрованном виде \\(AES\\-256\\-GCM "
-            "ключом из `ENCRYPTION\\_KEY`\\)\\.\n"
-            "• `/xui\\_status` — состояние, маскированный логин, last\\-seen "
-            "связь с панелью\\.\n"
-            "• `/xui\\_list` — список inbound'ов\\.\n"
-            "• `/xui\\_set\\_inbound <id>` — выбрать дефолтный inbound\\.\n"
-            "• `/xui\\_enable` / `/xui\\_disable` — включить/выключить "
-            "интеграцию без удаления кредов\\.\n"
-            "• `/xui\\_clear YES` — стереть креды полностью\\.\n"
-            "• `/xui\\_cancel` — выйти из мастера `/xui\\_setup`\\.\n\n"
-            "*В карточке `/user <id>`:*\n"
-            "Если интеграция настроена и пользователь — `admin`/`special`, "
-            "появляется блок «VLESS через 3x\\-ui» с кнопками "
-            "*➕ В 3x\\-ui*, *❌ Из 3x\\-ui*, *📲 QR \\(3x\\-ui\\)*\\. Имя "
-            "клиента в панели = имя профиля бота \\(`Vless82\\.\\.09`\\), "
-            "так что одного TG ID достаточно для CRUD\\.\n\n"
-            "*Как понять, какой режим сейчас:*\n"
-            "• `/xui\\_status` — покажет, настроена ли REST\\-интеграция\\.\n"
-            "• `/vless\\_list\\_clients` — покажет либо `3x\\-ui inbound`, "
-            "либо `legacy Xray`\\.\n\n"
-            "Это не пересекается с legacy Xray в `/usr/local/etc/xray`: "
-            "3x\\-ui и `xray.service` — разные источники истины\\."
+            "If the panel exists \\(locally or via Headscale/Tailscale mesh\\), "
+            "the bot can call its REST API and create/delete clients "
+            "in the selected inbound\\.\n\n"
+            "*Setup:*\n"
+            "• `/xui\\_setup` — step\\-by\\-step URL → login → password → "
+            "inbound picker\\.\n"
+            "  ⚠️ The password message is deleted IMMEDIATELY after input\\.\n"
+            "  The password is stored encrypted only \\(AES\\-256\\-GCM "
+            "with the key from `ENCRYPTION\\_KEY`\\)\\.\n"
+            "• `/xui\\_status` — state, masked login, last\\-seen "
+            "panel connectivity\\.\n"
+            "• `/xui\\_list` — inbound list\\.\n"
+            "• `/xui\\_set\\_inbound <id>` — set the default inbound\\.\n"
+            "• `/xui\\_enable` / `/xui\\_disable` — enable/disable "
+            "integration without deleting credentials\\.\n"
+            "• `/xui\\_clear YES` — wipe credentials completely\\.\n"
+            "• `/xui\\_cancel` — exit the `/xui\\_setup` wizard\\.\n\n"
+            "*On the `/user <id>` card:*\n"
+            "If integration is configured and the user is `admin`/`special`, "
+            "a “VLESS via 3x\\-ui” block appears with buttons "
+            "*➕ To 3x\\-ui*, *❌ From 3x\\-ui*, *📲 QR \\(3x\\-ui\\)*\\. The "
+            "client name in the panel equals the bot profile name \\(`Vless82\\.\\.09`\\), "
+            "so one TG ID is enough for CRUD\\.\n\n"
+            "*How to tell which mode is active:*\n"
+            "• `/xui\\_status` — whether REST integration is configured\\.\n"
+            "• `/vless\\_list\\_clients` — shows either `3x\\-ui inbound` "
+            "or `legacy Xray`\\.\n\n"
+            "This does not overlap with legacy Xray in `/usr/local/etc/xray`: "
+            "3x\\-ui and `xray.service` are different sources of truth\\."
         ),
     }
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /help — главное меню справки с inline-кнопками по протоколам."""
+        """Handle /help — main help menu with inline protocol buttons."""
         try:
             user = update.effective_user
             logger.info(f"User {user.id} requested help")
@@ -1494,10 +1494,10 @@ class BotHandlersLite(AITranslateMixin):
 
         except Exception as e:
             logger.error(f"Error in help_command: {e}")
-            await update.message.reply_text("Ошибка при отображении справки.")
+            await update.message.reply_text("Failed to display help.")
 
     async def info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /info - информация о пользователе (доступна всем)."""
+        """Handle /info — user information (available to everyone)."""
         try:
             user = update.effective_user
             chat = update.effective_chat
@@ -1520,10 +1520,10 @@ class BotHandlersLite(AITranslateMixin):
 
         except Exception as e:
             logger.error(f"Error in info_command: {e}")
-            await update.effective_message.reply_text("Не удалось получить информацию.")
+            await update.effective_message.reply_text("Could not get information.")
 
     async def clear_chat(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка команды /clear - визуальная очистка чата."""
+        """Handle /clear — visual chat clearing."""
         try:
             user = update.effective_user
             message = update.effective_message
@@ -1532,19 +1532,19 @@ class BotHandlersLite(AITranslateMixin):
 
             if context.args:
                 await message.reply_text(
-                    "Telegram не даёт боту надёжно удалить произвольные старые "
-                    "сообщения по числу. Используйте просто /clear."
+                    "Telegram does not let the bot reliably delete arbitrary old "
+                    "messages by count. Just use /clear."
                 )
                 return
 
             logger.info(f"User {user.id} requested visual chat clearing")
 
             clear_message = (
-                "🧹 *Чат очищен* 🧹\n\n"
+                "🧹 *Chat cleared* 🧹\n\n"
                 "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
                 "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n"
                 "⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯\n\n"
-                "История сообщений выше этой отметки визуально отделена\\."
+                "History above this mark is visually separated\\."
             )
 
             await message.reply_text(clear_message, parse_mode=ParseMode.MARKDOWN_V2)
@@ -1552,12 +1552,12 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.error(f"Error in clear_chat: {e}")
             if update.effective_message:
-                await update.effective_message.reply_text("Не удалось очистить чат.")
+                await update.effective_message.reply_text("Could not clear the chat.")
 
     async def settings_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /settings — персональные настройки оформления панелей бота."""
+        """/settings command — personal bot panel appearance settings."""
         try:
             user = update.effective_user
             self._track_user(user)
@@ -1567,13 +1567,13 @@ class BotHandlersLite(AITranslateMixin):
             logger.error(f"Error in settings_command: {e}")
             if update.effective_message:
                 await update.effective_message.reply_text(
-                    "Не удалось открыть настройки."
+                    "Could not open settings."
                 )
 
-    # === АДМИНСКИЕ КОМАНДЫ - СИСТЕМА И ИНФОРМАЦИЯ ===
+    # === ADMIN COMMANDS — SYSTEM AND INFO ===
 
     async def version_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /ver — версия приложения (всем); адрес VPS (всем); полный VLESS — только админ."""
+        """/ver command — app version (everyone); VPS address (everyone); full VLESS — admin only."""
         msg = update.effective_message
         if msg is None:
             logger.warning("/ver: effective_message is None")
@@ -1583,7 +1583,7 @@ class BotHandlersLite(AITranslateMixin):
             logger.info(f"User {user.id} requested version info")
 
             def he(x) -> str:
-                """HTML-escape для Telegram HTML parse mode."""
+                """HTML-escape for Telegram HTML parse mode."""
                 if x is None:
                     return ""
                 return html.escape(str(x), quote=False)
@@ -1598,14 +1598,14 @@ class BotHandlersLite(AITranslateMixin):
                 else "N/A"
             )
 
-            # HTML: не смешивать с MarkdownV2 (в MDV2 `=` и экранирование внутри `code` ломали разбор).
-            version_message = f"""📋 <b>Информация о версии</b>
+            # HTML: do not mix with MarkdownV2 (in MDV2 `=` and escaping inside `code` broke parsing).
+            version_message = f"""📋 <b>Version information</b>
 
-🔖 Версия: <code>{he(ver_disp)}</code>
-📦 Название: {name_disp}
-📝 Описание: {desc_disp}"""
+🔖 Version: <code>{he(ver_disp)}</code>
+📦 Name: {name_disp}
+📝 Description: {desc_disp}"""
 
-            # Адрес VPS — всем (как в /start).
+            # VPS address — everyone (same as /start).
             try:
                 from dockhand_tunnel_hints import get_dockhand_ssh_params
 
@@ -1614,22 +1614,22 @@ class BotHandlersLite(AITranslateMixin):
                 )
                 if p.host_is_placeholder:
                     version_message += (
-                        "\n\n🌐 <b>Адрес VPS:</b> автоопределение недоступно "
-                        "(задайте <code>/vless_set_server</code> или "
-                        "<code>DOCKHAND_SSH_HOST</code> в <code>.env</code>)."
+                        "\n\n🌐 <b>VPS address:</b> auto-detect unavailable "
+                        "(set <code>/vless_set_server</code> or "
+                        "<code>DOCKHAND_SSH_HOST</code> in <code>.env</code>)."
                     )
                 else:
                     version_message += (
-                        f"\n\n🌐 <b>Адрес VPS:</b> <code>{he(p.host)}</code>"
+                        f"\n\n🌐 <b>VPS address:</b> <code>{he(p.host)}</code>"
                     )
             except Exception as ex:
                 logger.debug("version_command: VPS host hint failed: %s", ex)
-                version_message += "\n\n🌐 <b>Адрес VPS:</b> временно недоступен"
+                version_message += "\n\n🌐 <b>VPS address:</b> temporarily unavailable"
 
             if not self._is_admin(user.id):
                 version_message += (
-                    "\n\n<i>Подробный блок VLESS-Reality и готовность конфигурации на сервере — "
-                    "в ответе «/ver» у администратора.</i>"
+                    "\n\n<i>The detailed VLESS-Reality block and server config readiness "
+                    "are in the admin «/ver» reply.</i>"
                 )
                 await msg.reply_text(
                     version_message,
@@ -1637,7 +1637,7 @@ class BotHandlersLite(AITranslateMixin):
                 )
                 return
 
-            # Только администратор: расширенная сводка по VLESS (как раньше у admin/special).
+            # Admin only: extended VLESS summary (previously admin/special).
             card = vless_manager.get_vless_version_card_fields()
             vless_status = card["status"]
             server_raw = (card.get("server") or "").strip()
@@ -1646,26 +1646,26 @@ class BotHandlersLite(AITranslateMixin):
 
             if server_raw:
                 server_block = (
-                    f"Сервер (VLESS, адрес для клиентов): <code>{he(server_raw)}</code>"
+                    f"Server (VLESS, client address): <code>{he(server_raw)}</code>"
                 )
             else:
                 server_block = (
-                    "Сервер (VLESS): <b>не задан</b> — в конфиге нет публичного IP или домена, "
-                    "куда клиенты подключаются по Reality.\n"
-                    "Укажите: <code>/vless_set_server</code> или <code>/vless_sync</code>."
+                    "Server (VLESS): <b>not set</b> — config has no public IP or domain "
+                    "for clients to connect via Reality.\n"
+                    "Set it with: <code>/vless_set_server</code> or <code>/vless_sync</code>."
                 )
                 if public_hint:
                     server_block += (
-                        f"\nНа этом VPS из <code>.env</code>/окружения известен адрес "
+                        f"\nThis VPS has a known address from <code>.env</code>/environment "
                         f"<code>{he(public_hint)}</code> "
-                        f"(часто это тот же IP — его можно задать как сервер VLESS).\n"
-                        f"Пример: <code>/vless_set_server {he(public_hint)}</code>"
+                        f"(often the same IP — you can set it as the VLESS server).\n"
+                        f"Example: <code>/vless_set_server {he(public_hint)}</code>"
                     )
 
             gaps_ru = {
-                "server": "публичный адрес сервера",
-                "uuid": "UUID клиента (корень конфига или запись в clients)",
-                "public_key": "ключи Reality",
+                "server": "public server address",
+                "uuid": "client UUID (config root or a clients entry)",
+                "public_key": "Reality keys",
                 "short_id": "short id",
             }
             cfg_line = ""
@@ -1673,7 +1673,7 @@ class BotHandlersLite(AITranslateMixin):
                 labels = [gaps_ru[k] for k in missing_keys if k in gaps_ru]
                 if labels:
                     cfg_line = (
-                        "\nДля полной конфигурации Reality в <code>vless_config.json</code> не хватает: "
+                        "\nReality config in <code>vless_config.json</code> is missing: "
                         + he(", ".join(labels))
                         + "."
                     )
@@ -1695,28 +1695,28 @@ class BotHandlersLite(AITranslateMixin):
                     and vr.port_listening is True
                 ):
                     runtime_line = (
-                        "\n<b>На хосте:</b> процесс Xray слушает порт (см. <code>/diag</code>).\n"
-                        "<b>Ниже:</b> флаги из <code>vless_config.json</code> "
-                        "(поле enabled в JSON и полнота полей).\n"
+                        "\n<b>On the host:</b> the Xray process is listening on the port (see <code>/diag</code>).\n"
+                        "<b>Below:</b> flags from <code>vless_config.json</code> "
+                        "(the enabled field in JSON and completeness of fields).\n"
                     )
                 elif vr is not None and vr.process_alive is True:
                     runtime_line = (
-                        "\n<b>На хосте:</b> процесс Xray найден; порт см. в <code>/diag</code>.\n"
-                        "<b>Ниже:</b> <code>vless_config.json</code> "
-                        "(не путать с работой бинаря на диске).\n"
+                        "\n<b>On the host:</b> Xray process found; see the port in <code>/diag</code>.\n"
+                        "<b>Below:</b> <code>vless_config.json</code> "
+                        "(do not confuse with the binary running on disk).\n"
                     )
             except Exception:
                 runtime_line = ""
 
             vless_stat_line = (
-                "🟢 Включён (JSON: enabled=true)"
+                "🟢 On (JSON: enabled=true)"
                 if vless_status["enabled"]
-                else "🔴 Выключен (JSON: enabled=false; процесс Xray на VPS может быть запущен отдельно)"
+                else "🔴 Off (JSON: enabled=false; the Xray process on the VPS may still be running separately)"
             )
             version_message += f"""
 
-🛡️ <b>VLESS-Reality</b>:{runtime_line}Статус: {vless_stat_line}
-Сконфигурирован: {"✅ Да" if vless_status["configured"] else "❌ Нет"}
+🛡️ <b>VLESS-Reality</b>:{runtime_line}Status: {vless_stat_line}
+Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
 {server_block}{cfg_line}"""
 
             await msg.reply_text(
@@ -1727,19 +1727,19 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.exception("Error in version_command: %s", e)
             try:
-                await msg.reply_text("Ошибка при получении информации о версии.")
+                await msg.reply_text("Failed to get version information.")
             except Exception:
                 pass
 
     async def dockhand_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /dockhand — подсказка по SSH-туннелю к Dockhand (админ/special)."""
+        """/dockhand command — SSH tunnel hint to Dockhand (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
@@ -1755,7 +1755,7 @@ class BotHandlersLite(AITranslateMixin):
             cmd_bg = build_ssh_tunnel_command(params, background=True)
 
             await update.message.reply_text(
-                "📋 Скопируйте в терминал на своём ПК (PowerShell, cmd или Terminal):\n\n"
+                "📋 Copy into a terminal on your PC (PowerShell, cmd, or Terminal):\n\n"
                 f"{cmd}"
             )
 
@@ -1765,23 +1765,23 @@ class BotHandlersLite(AITranslateMixin):
             placeholder_warn = ""
             if params.host_is_placeholder:
                 placeholder_warn = (
-                    "\n\n⚠️ В команде выше остался плейсхолдер YOUR_SERVER_IP — "
-                    "задайте DOCKHAND_SSH_HOST в .env рядом с compose или настройте /vless_set_server."
+                    "\n\n⚠️ The command above still has the YOUR_SERVER_IP placeholder — "
+                    "set DOCKHAND_SSH_HOST in .env next to compose or configure /vless_set_server."
                 )
 
             body = (
-                "Dockhand — панель диагностики на сервере; порт 8501 слушает только 127.0.0.1 на VPS "
-                "(см. DOCKHAND_GUIDE.md в репозитории).\n\n"
-                "Windows: встроенный OpenSSH (Windows 10/11) — тот же ssh в cmd или PowerShell.\n"
-                "macOS / Linux: обычный Terminal — те же команды.\n\n"
-                "После установки туннеля откройте на этом же компьютере в браузере:\n"
+                "Dockhand is a diagnostics panel on the server; port 8501 listens on 127.0.0.1 on the VPS only "
+                "(see DOCKHAND_GUIDE.md in the repo).\n\n"
+                "Windows: built-in OpenSSH (Windows 10/11) — the same ssh in cmd or PowerShell.\n"
+                "macOS / Linux: a regular Terminal — the same commands.\n\n"
+                "After the tunnel is up, open this on the same computer in a browser:\n"
                 "http://localhost:8501\n\n"
-                "Фоновый туннель (без интерактивной сессии, удобно на macOS/Linux):\n"
+                "Background tunnel (no interactive session, convenient on macOS/Linux):\n"
                 f"{cmd_bg}\n\n"
-                "Остановка фонового процесса (macOS/Linux): "
-                'pkill -f "ssh.*127.0.0.1:8501" или найдите PID через ps aux | grep ssh. '
-                "На Windows для фона чаще используют отдельное окно или WSL.\n\n"
-                f"Подставлено: {params.user}@{params.host}, SSH-порт {params.port}."
+                "Stop the background process (macOS/Linux): "
+                'pkill -f "ssh.*127.0.0.1:8501" or find the PID via ps aux | grep ssh. '
+                "On Windows, background use is usually a separate window or WSL.\n\n"
+                f"Substituted: {params.user}@{params.host}, SSH port {params.port}."
                 f"{notes_tail}{placeholder_warn}"
             )
             await update.message.reply_text(
@@ -1791,7 +1791,7 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.error(f"Error in dockhand_command: {e}")
             await update.message.reply_text(
-                "Ошибка при формировании подсказки Dockhand."
+                "Failed to build the Dockhand hint."
             )
 
 
@@ -1803,54 +1803,54 @@ class BotHandlersLite(AITranslateMixin):
 
 
     async def backup_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /backup_status — статус rclone backup (админ/special)."""
+        """/backup_status command — rclone backup status (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
             await update.message.reply_text(rclone_manager.format_status())
         except Exception as e:
             logger.error(f"Error in backup_status: {e}")
-            await update.message.reply_text("Ошибка при проверке backup-статуса.")
+            await update.message.reply_text("Failed to check backup status.")
 
     async def rclone_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Короткая справка /rclone с базовыми шагами запуска offsite backup."""
+        """Short /rclone help with basic offsite backup setup steps."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
 
             self._track_user(user)
             await update.message.reply_text(
-                "📦 Rclone backup (кратко)\n\n"
-                "Если offsite backup ещё не настроен, начните так:\n"
-                "1) Подготовьте rclone config на сервере.\n"
-                "2) Добавьте в .env минимум: RCLONE_REMOTE, RCLONE_CONFIG.\n"
-                "3) Пересоздайте контейнер бота: docker compose up -d --force-recreate telegram-helper.\n\n"
-                "Проверка и запуск:\n"
-                "• /backup_status — текущий статус\n"
-                "• /backup_test — проверка remote\n"
-                "• /backup_now — создать backup сейчас\n"
-                "• /backup_list — последние архивы."
+                "📦 Rclone backup (short)\n\n"
+                "If offsite backup is not set up yet, start here:\n"
+                "1) Prepare rclone config on the server.\n"
+                "2) Add at least RCLONE_REMOTE and RCLONE_CONFIG to .env.\n"
+                "3) Recreate the bot container: docker compose up -d --force-recreate telegram-helper.\n\n"
+                "Check and run:\n"
+                "• /backup_status — current status\n"
+                "• /backup_test — test the remote\n"
+                "• /backup_now — create a backup now\n"
+                "• /backup_list — recent archives."
             )
         except Exception as e:
             logger.error(f"Error in rclone_command: {e}")
-            await update.message.reply_text("Ошибка при выводе справки по rclone.")
+            await update.message.reply_text("Failed to show rclone help.")
 
     async def backup_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /backup_test — проверить доступ к rclone remote (админ/special)."""
+        """/backup_test command — check rclone remote access (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
@@ -1860,32 +1860,32 @@ class BotHandlersLite(AITranslateMixin):
             )
         except Exception as e:
             logger.error(f"Error in backup_test: {e}")
-            await update.message.reply_text("Ошибка при проверке rclone remote.")
+            await update.message.reply_text("Failed to test rclone remote.")
 
     async def backup_now(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /backup_now — создать offsite backup runtime-файлов (админ/special)."""
+        """/backup_now command — create an offsite backup of runtime files (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
-            await update.message.reply_text("⏳ Запускаю backup runtime-файлов...")
+            await update.message.reply_text("⏳ Starting backup of runtime files...")
             result = rclone_manager.create_backup()
             await update.message.reply_text(rclone_manager.format_backup_result(result))
         except Exception as e:
             logger.error(f"Error in backup_now: {e}")
-            await update.message.reply_text("Ошибка при создании backup.")
+            await update.message.reply_text("Failed to create backup.")
 
     async def backup_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /backup_list — показать последние backup-архивы (админ/special)."""
+        """/backup_list command — show recent backup archives (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
@@ -1895,15 +1895,15 @@ class BotHandlersLite(AITranslateMixin):
             )
         except Exception as e:
             logger.error(f"Error in backup_list: {e}")
-            await update.message.reply_text("Ошибка при чтении списка backup.")
+            await update.message.reply_text("Failed to read backup list.")
 
     async def api_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /api - показать маскированный API ключ."""
+        """/api command — show a masked API key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -1917,7 +1917,7 @@ class BotHandlersLite(AITranslateMixin):
                 keyboard = []
                 for app_id in all_apps:
                     if app_id == "default":
-                        label = "🔑 По умолчанию (из .env)"
+                        label = "🔑 Default (from .env)"
                     else:
                         app_name = ALLOWED_APPS.get(app_id, {}).get("name", app_id)
                         label = f"🔑 {app_name} ({app_id})"
@@ -1927,30 +1927,30 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🔐 Выберите сервис для просмотра API ключа:",
+                    "🔐 Select a service to view the API key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
-                # Если модуль security не найден, показываем дефолтный ключ
-                api_key = os.getenv("API_SECRET_KEY", "не настроен")
+                # If the security module is missing, show the default key
+                api_key = os.getenv("API_SECRET_KEY", "not configured")
                 masked = self._mask_secret(api_key)
                 await update.message.reply_text(
-                    f"🔑 API ключ: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2
+                    f"🔑 API key: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2
                 )
 
         except Exception as e:
             logger.error(f"Error in api_command: {e}")
-            await update.message.reply_text("Ошибка при получении API ключа.")
+            await update.message.reply_text("Failed to get API key.")
 
     async def gen_api_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /gen_api_key - сгенерировать новый API ключ."""
+        """/gen_api_key command — generate a new API key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -1965,7 +1965,7 @@ class BotHandlersLite(AITranslateMixin):
                 keyboard = []
                 for app_id in all_apps:
                     if app_id == "default":
-                        label = "🔑 По умолчанию (в .env)"
+                        label = "🔑 Default (in .env)"
                     else:
                         app_name = ALLOWED_APPS.get(app_id, {}).get("name", app_id)
                         label = f"🔑 {app_name} ({app_id})"
@@ -1979,28 +1979,28 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🔐 Выберите сервис для генерации нового API ключа:",
+                    "🔐 Select a service to generate a new API key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
                 await update.message.reply_text(
-                    "⚠️ Безопасный режим не показывает новый API ключ в Telegram.\n"
-                    "Сгенерируйте и сохраните его локально на сервере, затем обновите `API_SECRET_KEY` в `.env`."
+                    "⚠️ Safe mode does not show a new API key in Telegram.\n"
+                    "Generate and save it locally on the server, then update `API_SECRET_KEY` in `.env`."
                 )
 
         except Exception as e:
             logger.error(f"Error in gen_api_key_command: {e}")
-            await update.message.reply_text("Ошибка при генерации API ключа.")
+            await update.message.reply_text("Failed to generate API key.")
 
     async def del_api_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /del_api_key - удалить API ключ."""
+        """/del_api_key command — delete an API key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2013,7 +2013,7 @@ class BotHandlersLite(AITranslateMixin):
                 app_ids = list_app_ids()
                 if not app_ids:
                     await update.message.reply_text(
-                        "❌ Нет сохранённых индивидуальных ключей."
+                        "❌ No saved individual keys."
                     )
                     return
 
@@ -2031,25 +2031,25 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🗑️ Выберите сервис для УДАЛЕНИЯ API ключа:",
+                    "🗑️ Select a service to DELETE the API key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
-                await update.message.reply_text("❌ Модуль app_keys не найден.")
+                await update.message.reply_text("❌ app_keys module not found.")
 
         except Exception as e:
             logger.error(f"Error in del_api_key_command: {e}")
-            await update.message.reply_text("Ошибка при удалении API ключа.")
+            await update.message.reply_text("Failed to delete API key.")
 
     async def encryption_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /encryption_key - показать маскированный ключ шифрования."""
+        """/encryption_key command — show a masked encryption key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2063,7 +2063,7 @@ class BotHandlersLite(AITranslateMixin):
                 keyboard = []
                 for app_id in all_apps:
                     if app_id == "default":
-                        label = "🔐 По умолчанию (из .env)"
+                        label = "🔐 Default (from .env)"
                     else:
                         app_name = ALLOWED_APPS.get(app_id, {}).get("name", app_id)
                         label = f"🔐 {app_name} ({app_id})"
@@ -2077,29 +2077,29 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🔐 Выберите сервис для просмотра ключа шифрования:",
+                    "🔐 Select a service to view the encryption key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
-                enc_key = os.getenv("ENCRYPTION_KEY", "не настроен")
+                enc_key = os.getenv("ENCRYPTION_KEY", "not configured")
                 masked = self._mask_secret(enc_key)
                 await update.message.reply_text(
-                    f"🔐 Ключ шифрования: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2
+                    f"🔐 Encryption key: `{masked}`", parse_mode=ParseMode.MARKDOWN_V2
                 )
 
         except Exception as e:
             logger.error(f"Error in encryption_key_command: {e}")
-            await update.message.reply_text("Ошибка при получении ключа шифрования.")
+            await update.message.reply_text("Failed to get encryption key.")
 
     async def gen_encryption_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /gen_encryption_key - сгенерировать новый ключ шифрования."""
+        """/gen_encryption_key command — generate a new encryption key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2114,7 +2114,7 @@ class BotHandlersLite(AITranslateMixin):
                 keyboard = []
                 for app_id in all_apps:
                     if app_id == "default":
-                        label = "🔐 По умолчанию (в .env)"
+                        label = "🔐 Default (in .env)"
                     else:
                         app_name = ALLOWED_APPS.get(app_id, {}).get("name", app_id)
                         label = f"🔐 {app_name} ({app_id})"
@@ -2128,28 +2128,28 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🔐 Выберите сервис для генерации нового ключа шифрования:",
+                    "🔐 Select a service to generate a new encryption key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
                 await update.message.reply_text(
-                    "⚠️ Безопасный режим не показывает новый ключ шифрования в Telegram.\n"
-                    "Сгенерируйте и сохраните его локально на сервере, затем обновите `ENCRYPTION_KEY` в `.env`."
+                    "⚠️ Safe mode does not show a new encryption key in Telegram.\n"
+                    "Generate and save it locally on the server, then update `ENCRYPTION_KEY` in `.env`."
                 )
 
         except Exception as e:
             logger.error(f"Error in gen_encryption_key_command: {e}")
-            await update.message.reply_text("Ошибка при генерации ключа шифрования.")
+            await update.message.reply_text("Failed to generate encryption key.")
 
     async def del_encryption_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /del_encryption_key - удалить ключ шифрования."""
+        """/del_encryption_key command — delete an encryption key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2162,7 +2162,7 @@ class BotHandlersLite(AITranslateMixin):
                 app_ids = list_app_ids()
                 if not app_ids:
                     await update.message.reply_text(
-                        "❌ Нет сохранённых индивидуальных ключей."
+                        "❌ No saved individual keys."
                     )
                     return
 
@@ -2180,25 +2180,25 @@ class BotHandlersLite(AITranslateMixin):
 
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 await update.message.reply_text(
-                    "🗑️ Выберите сервис для УДАЛЕНИЯ ключа шифрования:",
+                    "🗑️ Select a service to DELETE the encryption key:",
                     reply_markup=reply_markup,
                 )
             except ImportError:
-                await update.message.reply_text("❌ Модуль app_keys не найден.")
+                await update.message.reply_text("❌ app_keys module not found.")
 
         except Exception as e:
             logger.error(f"Error in del_encryption_key_command: {e}")
-            await update.message.reply_text("Ошибка при удалении ключа шифрования.")
+            await update.message.reply_text("Failed to delete encryption key.")
 
     async def gen_chacha_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /gen_chacha_key - сгенерировать ключ ChaCha20-Poly1305."""
+        """/gen_chacha_key command — generate a ChaCha20-Poly1305 key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2208,41 +2208,41 @@ class BotHandlersLite(AITranslateMixin):
             key_hex = key_bytes.hex()
             key_base64 = base64.b64encode(key_bytes).decode("utf-8")
 
-            message = f"""✅ Ключ для ChaCha20-Poly1305 сгенерирован!
+            message = f"""✅ ChaCha20-Poly1305 key generated!
 
-🔐 Ключ (hex, 64 символа):
+🔐 Key (hex, 64 characters):
 `{key_hex}`
 
-🔐 Ключ (base64):
+🔐 Key (base64):
 `{key_base64}`
 
-🔧 Алгоритм: secrets.token_bytes(32) → 256-битный ключ
-📊 Размер: 32 байта (256 бит)
+🔧 Algorithm: secrets.token_bytes(32) → 256-bit key
+📊 Size: 32 bytes (256 bits)
 
 💡 ChaCha20-Poly1305:
-• Современная альтернатива AES-256-GCM
-• Отличная производительность на ARM/мобильных
-• Используется в WireGuard, Signal, TLS 1.3
+• Modern alternative to AES-256-GCM
+• Excellent performance on ARM/mobile
+• Used in WireGuard, Signal, TLS 1.3
 
-⚠️ Это тестовая команда"""
+⚠️ This is a test command"""
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in gen_chacha_key_command: {e}")
             await update.message.reply_text(
-                "Ошибка при генерации ключа ChaCha20-Poly1305."
+                "Failed to generate ChaCha20-Poly1305 key."
             )
 
     async def gen_pqc_key_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /gen_pqc_key - сгенерировать ключ для Post-Quantum Cryptography."""
+        """/gen_pqc_key command — generate a Post-Quantum Cryptography key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -2252,167 +2252,167 @@ class BotHandlersLite(AITranslateMixin):
             key_hex = key_bytes.hex()
             key_base64 = base64.b64encode(key_bytes).decode("utf-8")
 
-            message = f"""✅ Ключ для Post-Quantum Cryptography сгенерирован!
+            message = f"""✅ Post-Quantum Cryptography key generated!
 
-🔐 Ключ (hex, 96 символов):
+🔐 Key (hex, 96 characters):
 `{key_hex}`
 
-🔐 Ключ (base64):
+🔐 Key (base64):
 `{key_base64}`
 
-🔧 Размер: 48 байт (384 бит) - для CRYSTALS-Kyber-768
-🛡️ Уровень безопасности: NIST Level 3
+🔧 Size: 48 bytes (384 bits) - for CRYSTALS-Kyber-768
+🛡️ Security level: NIST Level 3
 
 💡 Post-Quantum Cryptography (PQC):
-• Защита от квантовых компьютеров
-• CRYSTALS-Kyber - стандарт NIST
+• Protection against quantum computers
+• CRYSTALS-Kyber - NIST standard
 
-⚠️ Это тестовая команда"""
+⚠️ This is a test command"""
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in gen_pqc_key_command: {e}")
-            await update.message.reply_text("Ошибка при генерации PQC ключа.")
+            await update.message.reply_text("Failed to generate PQC key.")
 
-    # === УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ ===
+    # === USER MANAGEMENT ===
 
     async def admin_setcity(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /setcity - установить город для пользователя."""
+        """/setcity command — set a city for a user."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
         args = context.args or []
         if len(args) < 2:
-            await update.message.reply_text("Использование: /setcity <user_id> <city>")
+            await update.message.reply_text("Usage: /setcity <user_id> <city>")
             return
 
         try:
             target_id = int(args[0])
         except ValueError:
-            await update.message.reply_text("Неверный user_id")
+            await update.message.reply_text("Invalid user_id")
             return
 
         city = " ".join(args[1:]).strip()
         if not city:
-            await update.message.reply_text("Город не может быть пустым")
+            await update.message.reply_text("City cannot be empty")
             return
 
         set_user_city(target_id, city)
-        await update.message.reply_text(f"✅ Город установлен для {target_id}: {city}")
+        await update.message.reply_text(f"✅ City set for {target_id}: {city}")
 
     async def admin_setgreeting(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /setgreeting - установить приветствие для пользователя."""
+        """/setgreeting command — set a greeting for a user."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
         args = context.args or []
         if len(args) < 2:
             await update.message.reply_text(
-                "Использование: /setgreeting <user_id> <text>"
+                "Usage: /setgreeting <user_id> <text>"
             )
             return
 
         try:
             target_id = int(args[0])
         except ValueError:
-            await update.message.reply_text("Неверный user_id")
+            await update.message.reply_text("Invalid user_id")
             return
 
         greeting = " ".join(args[1:]).strip()
         if not greeting:
-            await update.message.reply_text("Приветствие не может быть пустым")
+            await update.message.reply_text("Greeting cannot be empty")
             return
 
         set_user_greeting(target_id, greeting)
-        await update.message.reply_text(f"✅ Приветствие установлено для {target_id}")
+        await update.message.reply_text(f"✅ Greeting set for {target_id}")
 
     async def admin_special_add(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /special_add - добавить особого пользователя."""
+        """/special_add command — add a special user."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
         args = context.args or []
         if len(args) != 1:
-            await update.message.reply_text("Использование: /special_add <user_id>")
+            await update.message.reply_text("Usage: /special_add <user_id>")
             return
 
         try:
             target_id = int(args[0])
         except ValueError:
-            await update.message.reply_text("Неверный user_id")
+            await update.message.reply_text("Invalid user_id")
             return
 
         add_special_user(target_id)
         menu_note = ""
         try:
             await set_special_bot_menu(context.bot, target_id)
-            menu_note = "\nМеню команд special обновлено: /my_profile добавлен."
+            menu_note = "\nSpecial command menu updated: /my_profile added."
         except Exception as exc:
             logger.warning("special menu setup failed for %s: %s", target_id, exc)
-            menu_note = "\n⚠️ Не удалось обновить меню команд сразу; обновится после рестарта бота."
+            menu_note = "\n⚠️ Could not refresh the command menu immediately; it will update after a bot restart."
         await update.message.reply_text(
-            f"✅ Пользователь {target_id} добавлен в особые{menu_note}"
+            f"✅ User {target_id} added to special{menu_note}"
         )
 
     async def admin_special_remove(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /special_remove - удалить особого пользователя."""
+        """/special_remove command — remove a special user."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
         args = context.args or []
         if len(args) != 1:
-            await update.message.reply_text("Использование: /special_remove <user_id>")
+            await update.message.reply_text("Usage: /special_remove <user_id>")
             return
 
         try:
             target_id = int(args[0])
         except ValueError:
-            await update.message.reply_text("Неверный user_id")
+            await update.message.reply_text("Invalid user_id")
             return
 
         remove_special_user(target_id)
         menu_note = ""
         try:
             await clear_chat_bot_menu(context.bot, target_id)
-            menu_note = "\nПерсональное меню special сброшено."
+            menu_note = "\nPersonal special menu cleared."
         except Exception as exc:
             logger.warning("special menu clear failed for %s: %s", target_id, exc)
-            menu_note = "\n⚠️ Не удалось сбросить меню команд сразу; обновится после рестарта бота."
+            menu_note = "\n⚠️ Could not reset the command menu immediately; it will update after a bot restart."
         await update.message.reply_text(
-            f"✅ Пользователь {target_id} удалён из особых{menu_note}"
+            f"✅ User {target_id} removed from special{menu_note}"
         )
 
     async def admin_list_users(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /list_users — администраторы (ADMIN_USER_IDS), особые (special_user_ids), остальные из базы."""
+        """/list_users command — admins (ADMIN_USER_IDS), special users (special_user_ids), others from the database."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.effective_message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
@@ -2439,7 +2439,7 @@ class BotHandlersLite(AITranslateMixin):
                 parts.append(f"🕒 {escape_markdown(prefs['last_seen'][:10])}")
             return " \\- ".join(parts)
 
-        lines = [f"*Администраторы* \\({len(admin_ids)}\\)*:*"]
+        lines = [f"*Administrators* \\({len(admin_ids)}\\)*:*"]
         if admin_ids:
             for uid in admin_ids:
                 prefs = users.get(uid, {})
@@ -2448,7 +2448,7 @@ class BotHandlersLite(AITranslateMixin):
             lines.append("\\-")
 
         special_only = [uid for uid in special if uid not in admin_set]
-        lines.append(f"\n*Особые пользователи* \\({len(special_only)}\\)*:*")
+        lines.append(f"\n*Special users* \\({len(special_only)}\\)*:*")
         if special_only:
             for uid in special_only:
                 prefs = users.get(uid, {})
@@ -2461,7 +2461,7 @@ class BotHandlersLite(AITranslateMixin):
             for uid, p in users.items()
             if uid not in special_set and uid not in admin_set
         }
-        lines.append(f"\n*Обычные пользователи* \\({len(regular)}\\)*:*")
+        lines.append(f"\n*Regular users* \\({len(regular)}\\)*:*")
         if regular:
             for uid, prefs in sorted(
                 regular.items(), key=lambda kv: kv[1].get("last_seen", ""), reverse=True
@@ -2474,17 +2474,17 @@ class BotHandlersLite(AITranslateMixin):
             [
                 [
                     InlineKeyboardButton(
-                        "📒 Журнал",
+                        "📒 Journal",
                         callback_data="lu_log",
                     ),
                     InlineKeyboardButton(
-                        "⭐ Статус special",
+                        "⭐ Special status",
                         callback_data="lu_tog",
                     ),
                 ],
                 [
                     InlineKeyboardButton(
-                        "🧩 Профили по протоколам",
+                        "🧩 Profiles by protocol",
                         callback_data="lu_pr",
                     ),
                 ],
@@ -2500,7 +2500,7 @@ class BotHandlersLite(AITranslateMixin):
     _LIST_USERS_PROTOCOL_PAGE = 10
 
     def _list_users_special_candidates(self) -> list[int]:
-        """Все известные user_id из storage, кроме админов (special для них не кликаем здесь)."""
+        """All known user_id values from storage except admins (special is not clickable here for them)."""
         special, users = storage_list_users()
         admin_set = {int(x) for x in self.config.admin_user_ids}
         uids = sorted(set(users.keys()) | set(special))
@@ -2508,11 +2508,11 @@ class BotHandlersLite(AITranslateMixin):
 
     def _list_users_protocol_candidates(self) -> list[int]:
         """
-        Кандидаты для создания профилей по протоколам: ТОЛЬКО admin + special.
-        «Обычные» пользователи здесь не показываются — для них создание/
-        удаление/ротация профиля запрещены на уровне UI и обработчиков.
-        Если такого пользователя действительно надо снабдить профилем —
-        сначала переведите его в `special` через `/special_add <id>`.
+        Candidates for creating profiles by protocol: admin + special ONLY.
+        Regular users are not shown here — create/
+        delete/rotate of a profile is blocked at the UI and handler level.
+        If that user really needs a profile —
+        first move them to `special` via `/special_add <id>`.
         """
         special, _users = storage_list_users()
         admin_set = {
@@ -2522,9 +2522,9 @@ class BotHandlersLite(AITranslateMixin):
 
     def _is_profile_target_eligible(self, uid: int) -> bool:
         """
-        Можно ли управлять профилями для данного TG ID (создавать /
-        удалять / ротировать секреты). Разрешено только админу и
-        special-пользователям; для обычных — запрещено.
+        Whether profiles can be managed for this TG ID (create /
+        delete / rotate secrets). Allowed only for admin and
+        special users; forbidden for regular users.
         """
         return self._is_privileged(uid)
 
@@ -2541,14 +2541,14 @@ class BotHandlersLite(AITranslateMixin):
         chunk = candidates[page * page_size : (page + 1) * page_size]
 
         lines = [
-            "⭐ Переключение статуса special",
+            "⭐ Toggle special status",
             "",
-            "Выберите пользователя. Админы (ADMIN_USER_IDS) здесь не показываются.",
-            f"Страница {page + 1}/{total_pages}, всего: {n}.",
+            "Select a user. Admins (ADMIN_USER_IDS) are not shown here.",
+            f"Page {page + 1}/{total_pages}, total: {n}.",
             "",
         ]
         if not chunk:
-            lines.append("Нет пользователей для выбора.")
+            lines.append("No users to select.")
 
         rows: list[list[InlineKeyboardButton]] = []
         for uid in chunk:
@@ -2573,7 +2573,7 @@ class BotHandlersLite(AITranslateMixin):
             nav_row.append(InlineKeyboardButton("▶️", callback_data=f"lu_p:{page + 1}"))
         if nav_row:
             rows.append(nav_row)
-        rows.append([InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")])
+        rows.append([InlineKeyboardButton("✖️ Close", callback_data="lu_x")])
 
         text = "\n".join(lines)
         return text, InlineKeyboardMarkup(rows)
@@ -2587,26 +2587,26 @@ class BotHandlersLite(AITranslateMixin):
         ln = (info.get("last_name") or "").strip()
         name = (fn + (" " + ln if ln else "")).strip() or "—"
         is_sp = uid in special_set
-        role = "особый (special)" if is_sp else "обычный"
+        role = "special" if is_sp else "regular"
 
         text = (
             f"👤 {uid}\n"
-            f"Имя: {name}\n"
+            f"Name: {name}\n"
             f"Username: {un}\n"
-            f"Сейчас: {role}\n\n"
-            "Выберите действие:"
+            f"Currently: {role}\n\n"
+            "Choose an action:"
         )
         if is_sp:
             row_action = [
                 InlineKeyboardButton(
-                    "⬇️ Убрать из особых",
+                    "⬇️ Remove from special",
                     callback_data=f"lu_out:{uid}:{page}",
                 )
             ]
         else:
             row_action = [
                 InlineKeyboardButton(
-                    "⬆️ В особые",
+                    "⬆️ Add to special",
                     callback_data=f"lu_in:{uid}:{page}",
                 )
             ]
@@ -2615,11 +2615,11 @@ class BotHandlersLite(AITranslateMixin):
                 row_action,
                 [
                     InlineKeyboardButton(
-                        "◀️ К списку",
+                        "◀️ To list",
                         callback_data=f"lu_p:{page}",
                     )
                 ],
-                [InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")],
+                [InlineKeyboardButton("✖️ Close", callback_data="lu_x")],
             ]
         )
         await query.message.edit_text(text, reply_markup=kb)
@@ -2627,17 +2627,17 @@ class BotHandlersLite(AITranslateMixin):
     async def _after_special_toggle(
         self, query, uid: int, page: int, *, added: bool
     ) -> None:
-        action = "добавлен в особые" if added else "убран из особых"
-        text = f"✅ Пользователь {uid} {action}."
+        action = "added to special" if added else "removed from special"
+        text = f"✅ User {uid} {action}."
         kb = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "◀️ К списку",
+                        "◀️ To list",
                         callback_data=f"lu_p:{page}",
                     )
                 ],
-                [InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")],
+                [InlineKeyboardButton("✖️ Close", callback_data="lu_x")],
             ]
         )
         await query.message.edit_text(text, reply_markup=kb)
@@ -2650,8 +2650,8 @@ class BotHandlersLite(AITranslateMixin):
         return f"{raw[:2]}...{raw[-2:]}"
 
     def _build_protocol_profile_name(self, proto_key: str, uid: int) -> str:
-        # Mieru — greenfield: канон с самого начала по plan_Mieru.md §7
-        # (`Mieru_ID<first2>_<last2>`), без legacy-имени `Mieruxx...yy`.
+        # Mieru — greenfield: canonical names from the start per plan_Mieru.md §7
+        # (`Mieru_ID<first2>_<last2>`), without the legacy `Mieruxx...yy` name.
         if proto_key == "mieru":
             try:
                 return provision_manager.make_client_name("mieru", int(uid))
@@ -2671,11 +2671,11 @@ class BotHandlersLite(AITranslateMixin):
     def _xui_find_vless_client(
         self, client_obj, uid: int
     ) -> tuple[bool, dict, str, int]:
-        """Найти VLESS-клиента в панели 3x-ui по UID.
+        """Find a VLESS client in the 3x-ui panel by UID.
 
-        Сначала каноническое имя (`Vless_ID<first2>_<last2>`, как у /provision),
-        затем legacy (`Vless82...09`). Просматривает default_inbound и при
-        необходимости legacy bot_inbound_id.
+        First the canonical name (`Vless_ID<first2>_<last2>`, as in /provision),
+        then legacy (`Vless82...09`). Scans default_inbound and, if needed,
+        the legacy bot_inbound_id.
         """
         cfg = xui_manager.load_config()
         default_id = int(cfg.get("default_inbound_id") or 0)
@@ -2705,10 +2705,10 @@ class BotHandlersLite(AITranslateMixin):
 
     def _list_users_addable_protocols_live(self) -> list[tuple[str, str]]:
         """
-        Протоколы, которые:
-        1) поддержаны автоматизацией в боте,
-        2) реально работают (🟢 в live_status),
-        3) умеют выдавать add_client в текущем коде.
+        Protocols that:
+        1) are supported by bot automation,
+        2) are actually running (🟢 in live_status),
+        3) can issue add_client in the current code.
         """
         supported = {
             "vless_reality",
@@ -2728,8 +2728,8 @@ class BotHandlersLite(AITranslateMixin):
     def _build_protocol_user_picker(
         self, page: int
     ) -> tuple[str, InlineKeyboardMarkup]:
-        # ВАЖНО: для управления профилями берём только admin + special.
-        # Обычные пользователи сюда не попадают (политика: сначала /special_add).
+        # IMPORTANT: profile management uses admin + special only.
+        # Regular users are excluded (policy: /special_add first).
         candidates = self._list_users_protocol_candidates()
         n = len(candidates)
         page_size = self._LIST_USERS_PROTOCOL_PAGE
@@ -2738,16 +2738,16 @@ class BotHandlersLite(AITranslateMixin):
         chunk = candidates[page * page_size : (page + 1) * page_size]
 
         lines = [
-            "🧩 Создание профиля по протоколу",
+            "🧩 Create a profile by protocol",
             "",
-            "Шаг 1/2: выберите пользователя.",
-            "Показываются только admin и special.",
-            "Чтобы добавить обычного пользователя — сначала /special_add <id>.",
-            f"Страница {page + 1}/{total_pages}, всего: {n}.",
+            "Step 1/2: select a user.",
+            "Only admin and special are shown.",
+            "To add a regular user — first /special_add <id>.",
+            f"Page {page + 1}/{total_pages}, total: {n}.",
             "",
         ]
         if not chunk:
-            lines.append("Нет admin/special пользователей для выбора.")
+            lines.append("No admin/special users to select.")
 
         special, users = storage_list_users()
         special_set = set(special)
@@ -2778,7 +2778,7 @@ class BotHandlersLite(AITranslateMixin):
             )
         if nav_row:
             rows.append(nav_row)
-        rows.append([InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")])
+        rows.append([InlineKeyboardButton("✖️ Close", callback_data="lu_x")])
         return "\n".join(lines), InlineKeyboardMarkup(rows)
 
     _PROTO_SHORT_LABELS: dict[str, str] = {
@@ -2791,11 +2791,11 @@ class BotHandlersLite(AITranslateMixin):
     }
 
     def _protocol_client_exists_for_user(self, proto_key: str, uid: int) -> bool:
-        """Есть ли у пользователя клиент (canon / 3x-ui / legacy).
+        """Whether the user has a client (canon / 3x-ui / legacy).
 
-        Важно: не опираемся только на ``profiles_for_user`` — он смотрит
-        ``is_enabled()`` в JSON и пропускает Hy2, когда сервис уже live,
-        а флаг ``enabled`` ещё false. Из-за этого UI врал «профиль не найден».
+        Important: do not rely only on ``profiles_for_user`` — it looks at
+        ``is_enabled()`` in JSON and skips Hy2 when the service is already live
+        but the ``enabled`` flag is still false. That made the UI lie with “profile not found”.
         """
         proto_canon_map = {
             "vless_reality": "vless",
@@ -2813,7 +2813,7 @@ class BotHandlersLite(AITranslateMixin):
             except Exception:
                 canon_name = ""
 
-        # 1) Канон-имя — основной источник после /provision и кнопок Create.
+        # 1) Canonical name — primary source after /provision and Create buttons.
         if canon_name:
             if proto_key == "vless_reality" and self._xui_is_active():
                 try:
@@ -2845,10 +2845,10 @@ class BotHandlersLite(AITranslateMixin):
                             exc,
                         )
 
-        # 2) Legacy-имя карточки /user (Vless52...49, Hysteria252...49).
+        # 2) Legacy /user card name (Vless52...49, Hysteria252...49).
         legacy_name = self._build_protocol_profile_name(proto_key, uid)
         if proto_key == "vless_reality":
-            # При активной 3x-ui legacy host-Xray не считаем «есть профиль».
+            # When 3x-ui is active, legacy host-Xray does not count as “has profile”.
             if not self._xui_is_active():
                 try:
                     if vless_manager.get_client(legacy_name) is not None:
@@ -2877,24 +2877,24 @@ class BotHandlersLite(AITranslateMixin):
         rows: list[list[InlineKeyboardButton]] = []
         special, _users = storage_list_users()
         is_special_target = uid in set(special)
-        # Если кто-то всё-таки попал сюда с обычным uid (например, через старую
-        # клавиатуру) — не показываем кнопки управления, объясняем правило.
+        # If a regular uid still lands here (e.g. via an old
+        # keyboard) — hide management buttons and explain the rule.
         if not self._is_profile_target_eligible(uid):
             text = (
-                f"👤 Пользователь: {uid}\n"
-                "⛔ Создание профилей запрещено: пользователь не admin и не special.\n\n"
-                "Чтобы выдать профиль, сначала переведите его в special:\n"
+                f"👤 User: {uid}\n"
+                "⛔ Profile creation is forbidden: the user is not admin or special.\n\n"
+                "To issue a profile, first move them to special:\n"
                 f"`/special_add {uid}`"
             )
             kb = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "◀️ К выбору пользователя",
+                            "◀️ Back to user picker",
                             callback_data=f"lu_prp:{page}",
                         )
                     ],
-                    [InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")],
+                    [InlineKeyboardButton("✖️ Close", callback_data="lu_x")],
                 ]
             )
             return text, kb
@@ -2902,23 +2902,23 @@ class BotHandlersLite(AITranslateMixin):
         for key, display in protocols:
             exists = self._protocol_client_exists_for_user(key, uid)
             short = self._PROTO_SHORT_LABELS.get(key, display)
-            # Одна строка на протокол: статус в подписи кнопки (раньше
-            # отдельная «· … профиль не найден ·» выглядела как второй VLESS).
+            # One row per protocol: status is in the button label (previously
+            # a separate “· … profile not found ·” looked like a second VLESS).
             if exists:
                 row = [
                     InlineKeyboardButton(
-                        f"✅ {short}: есть",
+                        f"✅ {short}: present",
                         callback_data=f"lu_prc:{key}:{uid}:{page}",
                     ),
                     InlineKeyboardButton(
-                        "♻️ Заменить",
+                        "♻️ Replace",
                         callback_data=f"lu_prr:{key}:{uid}:{page}",
                     ),
                 ]
             else:
                 row = [
                     InlineKeyboardButton(
-                        f"➕ {short}: создать",
+                        f"➕ {short}: create",
                         callback_data=f"lu_prc:{key}:{uid}:{page}",
                     )
                 ]
@@ -2926,13 +2926,13 @@ class BotHandlersLite(AITranslateMixin):
 
         if not rows:
             rows.append(
-                [InlineKeyboardButton("Обновить", callback_data=f"lu_pru:{uid}:{page}")]
+                [InlineKeyboardButton("Refresh", callback_data=f"lu_pru:{uid}:{page}")]
             )
         else:
             rows.append(
                 [
                     InlineKeyboardButton(
-                        "🔄 Обновить статусы",
+                        "🔄 Refresh statuses",
                         callback_data=f"lu_pru:{uid}:{page}",
                     )
                 ]
@@ -2941,29 +2941,29 @@ class BotHandlersLite(AITranslateMixin):
         rows.append(
             [
                 InlineKeyboardButton(
-                    "◀️ К выбору пользователя", callback_data=f"lu_prp:{page}"
+                    "◀️ Back to user picker", callback_data=f"lu_prp:{page}"
                 )
             ]
         )
-        rows.append([InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")])
+        rows.append([InlineKeyboardButton("✖️ Close", callback_data="lu_x")])
 
         if protocols:
             text = (
-                f"👤 Пользователь: {uid}\n"
-                "Шаг 2/2: один протокол — одна строка кнопок "
-                "(больше нет дубля «статус отдельной кнопкой»).\n\n"
-                "✅ есть / ➕ создать — ищем Vless_ID… / Hys_ID… "
-                "(и legacy-имя, если есть).\n"
-                "Сервис Hy2 может быть 🟢, а клиента у пользователя "
-                "ещё нет — тогда жмите «создать» или "
+                f"👤 User: {uid}\n"
+                "Step 2/2: one protocol — one button row "
+                "(no more duplicate “status as a separate button”).\n\n"
+                "✅ present / ➕ create — looking for Vless_ID… / Hys_ID… "
+                "(and a legacy name, if any).\n"
+                "The Hy2 service may be 🟢 while the user still has no client "
+                "— then tap “create” or "
                 f"/provision {uid}.\n"
-                f"Special: {'да' if is_special_target else 'нет'}."
+                f"Special: {'yes' if is_special_target else 'no'}."
             )
         else:
             text = (
-                f"👤 Пользователь: {uid}\n"
-                "Сейчас нет протоколов со статусом 🟢, поддержанных для автосоздания.\n"
-                "Поднимите протокол и повторите."
+                f"👤 User: {uid}\n"
+                "There are currently no 🟢 protocols supported for auto-create.\n"
+                "Bring the protocol up and try again."
             )
         return text, InlineKeyboardMarkup(rows)
 
@@ -2976,15 +2976,15 @@ class BotHandlersLite(AITranslateMixin):
         *,
         replace_existing: bool = False,
     ) -> bool:
-        # Политика: профили создаются только для admin/special.
-        # Серверный гейт нужен в дополнение к UI-фильтру, чтобы устаревшая
-        # клавиатура или прямой callback не могли «пробить» это правило.
+        # Policy: profiles are created only for admin/special.
+        # A server-side gate is needed on top of the UI filter so that a stale
+        # keyboard or a raw callback cannot bypass this rule.
         if not self._is_profile_target_eligible(uid):
             try:
                 await query.message.reply_text(
-                    f"⛔ Создание профиля для пользователя {uid} запрещено.\n"
-                    "Профили выдаются только админам и special-пользователям.\n"
-                    f"Чтобы выдать профиль, сначала: /special_add {uid}"
+                    f"⛔ Creating a profile for user {uid} is forbidden.\n"
+                    "Profiles are issued only to admins and special users.\n"
+                    f"To issue a profile, first: /special_add {uid}"
                 )
             except Exception:
                 pass
@@ -2995,18 +2995,18 @@ class BotHandlersLite(AITranslateMixin):
                 proto_key,
             )
             return False
-        # Stage 3: единый routing с canon-naming.
+        # Stage 3: unified routing with canon-naming.
         #
-        # - VLESS на VPS с 3x-ui → xui_manager.provision_named_client
-        #   (создаёт клиента в bot-managed inbound, имя `Vless_ID*_*`).
-        # - VLESS без xui → legacy vless_manager.add_client (host-Xray).
-        # - Остальные протоколы (Hys/Mtp/Tuic/AnyTLS/XHTTP) — всегда
-        #   через свои `*_manager.add_client(canon_name)`. Это то, что
-        #   делает provision_manager изнутри.
+        # - VLESS on a VPS with 3x-ui → xui_manager.provision_named_client
+        #   (creates a client in the bot-managed inbound, name `Vless_ID*_*`).
+        # - VLESS without xui → legacy vless_manager.add_client (host-Xray).
+        # - Other protocols (Hys/Mtp/Tuic/AnyTLS/XHTTP) — always
+        #   via their `*_manager.add_client(canon_name)`. That is what
+        #   provision_manager does internally.
         #
-        # Канон-имя имеет формат `<Prefix>_ID<first2>_<last2>`. Раньше
-        # picker использовал legacy `<Proto>_uid_suffix` (`Vless82...09`),
-        # которое не пересекалось с тем, что создавалось через /provision.
+        # Canonical name format is `<Prefix>_ID<first2>_<last2>`. Previously
+        # the picker used legacy `<Proto>_uid_suffix` (`Vless82...09`),
+        # which did not overlap with what /provision created.
         proto_canon_map = {
             "vless_reality": "vless",
             "hysteria2": "hysteria2",
@@ -3031,7 +3031,7 @@ class BotHandlersLite(AITranslateMixin):
             xui_active = self._xui_is_active()
 
             if proto_key == "vless_reality" and xui_active:
-                # Bot-managed inbound на 3x-ui (clone от default_inbound).
+                # Bot-managed inbound on 3x-ui (clone of default_inbound).
                 if replace_existing:
                     rm_ok, rm_msg = xui_manager.remove_named_client(name)
                     details.append(f"[replace via xui] {rm_msg}")
@@ -3039,7 +3039,7 @@ class BotHandlersLite(AITranslateMixin):
                 details.append(f"[xui] {msg}")
                 uri_for_qr = uri
             elif proto_key == "vless_reality":
-                # Bare host-Xray (legacy путь).
+                # Bare host-Xray (legacy path).
                 if replace_existing:
                     _rm_ok, rm_msg = vless_manager.remove_client(name)
                     details.append(f"[replace] {rm_msg}")
@@ -3088,7 +3088,7 @@ class BotHandlersLite(AITranslateMixin):
                 ok, msg, _client = mtproto_manager.add_client(name)
                 details.append(msg)
             else:
-                details.append(f"Неизвестный протокол: {proto_key}")
+                details.append(f"Unknown protocol: {proto_key}")
                 ok = False
         except Exception as exc:
             logger.error(
@@ -3097,11 +3097,11 @@ class BotHandlersLite(AITranslateMixin):
                 uid,
                 exc,
             )
-            details.append(f"Ошибка: {exc}")
+            details.append(f"Error: {exc}")
             ok = False
 
-        # Если для VLESS-Reality через xui мы получили готовый URI —
-        # отправим QR этим же сообщением, чтобы UX был как у /provision.
+        # If we got a ready URI for VLESS-Reality via xui —
+        # send the QR in the same message so UX matches /provision.
         if ok and uri_for_qr:
             try:
                 await self._reply_qr_for_link(query.message, uri_for_qr, name)
@@ -3109,34 +3109,34 @@ class BotHandlersLite(AITranslateMixin):
                 logger.warning("post-create QR send failed: %s", exc)
 
         status = (
-            "✅ Профиль заменён"
+            "✅ Profile replaced"
             if (ok and replace_existing)
-            else ("✅ Профиль создан" if ok else "❌ Не удалось создать профиль")
+            else ("✅ Profile created" if ok else "❌ Failed to create profile")
         )
         text = (
             f"{status}\n"
-            f"Пользователь: {uid}\n"
-            f"Протокол: {proto_key}\n"
-            f"Имя профиля: {name}\n\n" + "\n".join(details[:6])
+            f"User: {uid}\n"
+            f"Protocol: {proto_key}\n"
+            f"Profile name: {name}\n\n" + "\n".join(details[:6])
         )
         kb = InlineKeyboardMarkup(
             [
                 [
                     InlineKeyboardButton(
-                        "➕ Добавить ещё протокол", callback_data=f"lu_pru:{uid}:{page}"
+                        "➕ Add another protocol", callback_data=f"lu_pru:{uid}:{page}"
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        "◀️ К выбору пользователя", callback_data=f"lu_prp:{page}"
+                        "◀️ Back to user picker", callback_data=f"lu_prp:{page}"
                     )
                 ],
-                [InlineKeyboardButton("✖️ Закрыть", callback_data="lu_x")],
+                [InlineKeyboardButton("✖️ Close", callback_data="lu_x")],
             ]
         )
-        # edit_text может упасть если оригинальное сообщение нельзя
-        # править (слишком старое, Markdown-парс на новом тексте,
-        # rate-limit). Fallback — отправить новым сообщением.
+        # edit_text may fail if the original message cannot
+        # be edited (too old, Markdown parse on the new text,
+        # rate-limit). Fallback — send a new message.
         try:
             await query.message.edit_text(text, reply_markup=kb)
         except Exception as edit_exc:
@@ -3162,10 +3162,10 @@ class BotHandlersLite(AITranslateMixin):
 
     def _vless_link_via_xui(self, uid: int) -> tuple[bool, str, str, str]:
         """
-        Получить VLESS-Reality URI клиента из 3x-ui (если интеграция включена).
+        Get a VLESS-Reality client URI from 3x-ui (if integration is enabled).
 
-        Возвращает (ok, message, link, email_в_панели). Ищет клиента по канону
-        `Vless_ID*_*`, затем по legacy-имени карточки `/user`.
+        Returns (ok, message, link, panel_email). Looks up the client by canonical name
+        `Vless_ID*_*`, then by the legacy `/user` card name.
         """
         try:
             if not xui_manager.is_enabled():
@@ -3195,12 +3195,12 @@ class BotHandlersLite(AITranslateMixin):
 
     def _build_user_protocol_profile_lookup(self, uid: int) -> dict:
         """
-        Найти профиль пользователя по стандартному шаблону имени.
-        Сейчас поддерживаем self-service для VLESS и Hysteria2.
+        Find a user profile by the standard name template.
+        Currently self-service is supported for VLESS and Hysteria2.
 
-        Для VLESS: если включена интеграция с 3x-ui (`/xui_setup`), ссылка
-        строится из inbound панели (это и есть тот Xray, что реально работает
-        на 443). Иначе fallback в локальный `vless_config.json` бота.
+        For VLESS: if 3x-ui integration is enabled (`/xui_setup`), the link
+        is built from the panel inbound (that is the Xray that actually runs
+        on 443). Otherwise fall back to the bot local `vless_config.json`.
         """
         out: dict = {}
         v_name = self._build_protocol_profile_name("vless_reality", uid)
@@ -3211,7 +3211,7 @@ class BotHandlersLite(AITranslateMixin):
             out["vless_reality"] = {
                 "name": v_xui_email or v_name,
                 "ok": True,
-                "message": "ссылка из 3x-ui (рабочий inbound панели)",
+                "message": "link from 3x-ui (working panel inbound)",
                 "url": xui_link,
                 "source": "xui",
             }
@@ -3222,8 +3222,8 @@ class BotHandlersLite(AITranslateMixin):
                 if xui_active:
                     ok = False
                     msg = (
-                        "неактивный/тестовый legacy-профиль: на этом VPS "
-                        "рабочий VLESS обслуживает 3x-ui"
+                        "inactive/test legacy profile: on this VPS "
+                        "working VLESS is served by 3x-ui"
                     )
                     link = ""
                 else:
@@ -3247,17 +3247,17 @@ class BotHandlersLite(AITranslateMixin):
             }
         return out
 
-    # === Карточка пользователя (/user <id> + распознавание голого числа) ===
+    # === User card (/user <id> + bare-number recognition) ===
     #
-    # Цель: админ вводит TG ID и сразу получает меню по всем профилям этого
-    # пользователя (VLESS-Reality, Hysteria2, MTProto, NaiveProxy) с
-    # возможностью создать / удалить / ротировать секрет / получить QR.
-    # Имена клиентов детерминированно строятся по `_build_protocol_profile_name`,
-    # отдельной БД owner-маппинга не вводим.
+    # Goal: admin enters a TG ID and immediately gets a menu of all profiles for that
+    # user (VLESS-Reality, Hysteria2, MTProto, NaiveProxy) with
+    # create / delete / rotate secret / get QR.
+    # Client names are built deterministically via `_build_protocol_profile_name`;
+    # no separate owner-mapping DB is introduced.
     #
-    # NaiveProxy — спец-режим: на сервере один общий `basic_auth`, поэтому
-    # действия отличаются (ротация меняет учётку для всех, создания
-    # отдельных клиентов нет).
+    # NaiveProxy is a special mode: one shared `basic_auth` on the server, so
+    # actions differ (rotation changes credentials for everyone; creating
+    # per-user clients is not supported).
 
     _USER_CARD_PROTOCOLS: tuple[tuple[str, str, str], ...] = (
         ("vless_reality", "🛡", "VLESS-Reality"),
@@ -3276,16 +3276,16 @@ class BotHandlersLite(AITranslateMixin):
             return "admin"
         if uid in special_set:
             return "special"
-        return "обычный"
+        return "regular"
 
     def _user_protocol_state(self, proto_key: str, uid: int) -> dict:
         """
-        Определить, есть ли профиль данного пользователя в данном протоколе,
-        и подготовить отображаемые поля. Возвращает dict с ключами:
-            name      — детерминированное имя профиля
+        Determine whether this user has a profile in this protocol,
+        and prepare display fields. Returns a dict with keys:
+            name      — deterministic profile name
             exists    — bool
-            active    — bool, можно ли считать профиль рабочим источником
-            details   — короткая строка для текста карточки (без секретов)
+            active    — bool, whether the profile can be treated as a working source
+            details   — short string for the card text (no secrets)
         """
         name = self._build_protocol_profile_name(proto_key, uid)
         info = {
@@ -3304,58 +3304,58 @@ class BotHandlersLite(AITranslateMixin):
                     info["exists"] = True
                     info["source"] = "vless_config"
                     created = client.get("created_at", "")
-                    created_label = f"создан {created[:10]}" if created else "создан"
+                    created_label = f"created {created[:10]}" if created else "created"
                     if xui_active:
                         info["details"] = (
-                            f"{created_label}; неактивный/тестовый legacy-профиль "
-                            "(локальный xray бота, не 3x-ui)"
+                            f"{created_label}; inactive/test legacy profile "
+                            "(bot local xray, not 3x-ui)"
                         )
                     else:
                         info["active"] = True
                         info["details"] = created_label
                 elif xui_active:
-                    info["details"] = "рабочий VLESS выдаётся через 3x-ui ниже"
+                    info["details"] = "working VLESS is issued via 3x-ui below"
             elif proto_key == "hysteria2":
                 client = hysteria2_manager.get_client(name)
                 if client:
                     info["exists"] = True
                     info["active"] = True
                     created = client.get("created_at", "")
-                    info["details"] = f"создан {created[:10]}" if created else "создан"
+                    info["details"] = f"created {created[:10]}" if created else "created"
             elif proto_key == "mtproto":
                 client = mtproto_manager.get_client(name)
                 if client:
                     info["exists"] = True
                     info["active"] = True
                     created = client.get("created_at", "")
-                    info["details"] = f"создан {created[:10]}" if created else "создан"
+                    info["details"] = f"created {created[:10]}" if created else "created"
             elif proto_key == "mieru":
-                # Mieru: per-user клиенты с canonical-именем Mieru_ID82_09.
+                # Mieru: per-user clients with canonical name Mieru_ID82_09.
                 client = mieru_manager.get_client(name)
                 if client:
                     info["exists"] = True
                     info["active"] = True
                     created = client.get("created_at", "")
-                    info["details"] = f"создан {created[:10]}" if created else "создан"
+                    info["details"] = f"created {created[:10]}" if created else "created"
             elif proto_key == "naiveproxy":
-                # NaiveProxy: per-user клиентов нет. Покажем общую учётку как информацию.
+                # NaiveProxy: no per-user clients. Show the shared credentials as info.
                 raw = naiveproxy_manager.get_status()
                 username = raw.get("username") or ""
                 if username:
                     info["exists"] = True
                     info["active"] = True
                     info["name"] = username
-                    info["details"] = "общая учётка (один basic_auth для всех)"
+                    info["details"] = "shared credentials (one basic_auth for everyone)"
                 else:
                     info["details"] = (
-                        "basic_auth не настроен (используйте /naive_gen_creds)"
+                        "basic_auth is not configured (use /naive_gen_creds)"
                     )
         except Exception as exc:
             logger.warning("_user_protocol_state(%s, %s): %s", proto_key, uid, exc)
         return info
 
     def _user_card_compose(self, uid: int) -> tuple[str, InlineKeyboardMarkup]:
-        """Собрать текст карточки пользователя и инлайн-клавиатуру действий."""
+        """Build user-card text and the action inline keyboard."""
 
         def he(x) -> str:
             if x is None:
@@ -3372,19 +3372,19 @@ class BotHandlersLite(AITranslateMixin):
         city = info.get("city") or "—"
         last_seen = (info.get("last_seen") or "")[:10] or "—"
         role = self._user_role_label(uid)
-        # Политика выдачи профилей: только admin/special.
+        # Profile-issuance policy: admin/special only.
         eligible = self._is_profile_target_eligible(uid)
 
-        # Live-проверка протоколов: показываем «✅ Vlessxx..yy» только если
-        # серверный процесс реально работает; иначе профиль может быть в JSON,
-        # но клиенты его всё равно не используют.
+        # Live protocol check: show “✅ Vlessxx..yy” only if
+        # the server process is actually running; otherwise the profile may be in JSON
+        # but clients still will not use it.
         xui_present = False
         try:
             snapshot = live_status.gather_full_snapshot()
             live_by_key = {st.key: st for st in snapshot.get("protocols", [])}
             xui = snapshot.get("xui_panel")
             if xui is not None:
-                # «Присутствует» = реально работает либо хотя бы установлен.
+                # “Present” = actually running or at least installed.
                 xui_present = (
                     xui.process_alive is True
                     or xui.configured is True
@@ -3393,45 +3393,45 @@ class BotHandlersLite(AITranslateMixin):
         except Exception:
             live_by_key = {}
 
-        # HTML: MarkdownV2 ломался на «.» в датах/путях и на esc() внутри `code`.
+        # HTML: MarkdownV2 broke on “.” in dates/paths and on esc() inside `code`.
         lines: list[str] = [
-            "👤 <b>Карточка пользователя</b>",
+            "👤 <b>User card</b>",
             "",
             f"<b>ID:</b> <code>{he(uid)}</code>",
-            f"<b>Имя:</b> {he(full_name)}",
+            f"<b>Name:</b> {he(full_name)}",
             f"<b>Username:</b> {he('@' + username if username else '—')}",
-            f"<b>Город:</b> {he(city)}",
+            f"<b>City:</b> {he(city)}",
             f"<b>Last seen:</b> {he(last_seen)}",
-            f"<b>Роль:</b> {he(role)}",
+            f"<b>Role:</b> {he(role)}",
         ]
         if not eligible:
             lines.append(
-                "<b>Доступ к профилям:</b> "
-                + he("🔒 запрещён (только для admin/special)")
+                "<b>Profile access:</b> "
+                + he("🔒 forbidden (admin/special only)")
             )
             lines.append("")
             lines.append(
                 he(
-                    "Чтобы выдать этому пользователю профиль, сначала переведите "
-                    "его в special: /special_add "
+                    "To issue a profile to this user, first move "
+                    "them to special: /special_add "
                 )
                 + f"<code>{he(uid)}</code>"
             )
         if xui_present:
-            # Не блокируем создание VLESS через бота, но громко поясняем,
-            # что у бота свой Xray (`/usr/local/etc/xray`), а у 3x-ui свой,
-            # и что клиенты, добавленные ботом, в панели НЕ появятся.
+            # Do not block VLESS creation via the bot, but explain loudly
+            # that the bot has its own Xray (`/usr/local/etc/xray`) and 3x-ui has its own,
+            # and that clients added by the bot will NOT appear in the panel.
             lines.append("")
             lines.append(
-                "⚠️ На VPS обнаружена 3x-ui. Бот пишет VLESS-клиентов в "
-                "свой <code>/usr/local/etc/xray</code>, 3x-ui — в свой "
+                "⚠️ 3x-ui was found on the VPS. The bot writes VLESS clients to "
+                "its <code>/usr/local/etc/xray</code>, 3x-ui — to its own "
                 "<code>/etc/x-ui/x-ui.db</code>. "
-                "Клиенты бота и панели НЕ пересекаются."
+                "Bot clients and panel clients do NOT overlap."
             )
 
-        # Если у админа настроена интеграция через API 3x-ui — показываем
-        # отдельный блок «через 3x-ui» с собственным набором кнопок. Для
-        # карточки проверяем только наличие клиента без раскрытия секретов.
+        # If the admin has 3x-ui API integration configured — show
+        # a separate “via 3x-ui” block with its own buttons. For
+        # the card we only check whether a client exists, without revealing secrets.
         xui_on = False
         xui_inbound_id = 0
         xui_user_exists = False
@@ -3453,7 +3453,7 @@ class BotHandlersLite(AITranslateMixin):
             logger.warning("_user_card_compose: xui status failed: %s", exc)
 
         lines.append("")
-        lines.append("<b>Профили:</b>")
+        lines.append("<b>Profiles:</b>")
 
         rows: list[list[InlineKeyboardButton]] = []
         for proto_key, icon, display in self._USER_CARD_PROTOCOLS:
@@ -3473,16 +3473,16 @@ class BotHandlersLite(AITranslateMixin):
                 if state["details"]:
                     line += f" — {he(state['details'])}"
             else:
-                line += "❌ нет профиля"
+                line += "❌ no profile"
                 if state["details"]:
                     line += f" — {he(state['details'])}"
             lines.append(line)
 
-            # Кнопки протокола ниже — формируем по разному в зависимости от
-            # того, есть ли профиль и какой это протокол.
+            # Protocol buttons below are built differently depending on
+            # whether a profile exists and which protocol it is.
             if proto_key == "naiveproxy":
-                # У NaiveProxy один общий basic_auth: можно только показать
-                # текущую учётку и ротировать её (затронет всех).
+                # NaiveProxy has one shared basic_auth: we can only show
+                # the current credentials and rotate them (affects everyone).
                 if state["exists"]:
                     naive_row = [
                         InlineKeyboardButton(
@@ -3490,15 +3490,15 @@ class BotHandlersLite(AITranslateMixin):
                             callback_data=f"uc_qr:{uid}:{proto_key}",
                         )
                     ]
-                    # Глобальная ротация затрагивает всех клиентов сразу,
-                    # поэтому даже право «admin/special-only» она не отменяет;
-                    # но мы всё равно скрываем её для не-eligible получателей,
-                    # чтобы не плодить «случайных» поводов крутить общий
-                    # пароль с карточки обычного пользователя.
+                    # Global rotation affects all clients at once,
+                    # so it does not cancel even the admin/special-only right;
+                    # but we still hide it from ineligible recipients
+                    # so we do not create accidental reasons to rotate the shared
+                    # password from a regular-user card.
                     if eligible:
                         naive_row.append(
                             InlineKeyboardButton(
-                                "♻️ Сменить общий пароль",
+                                "♻️ Change shared password",
                                 callback_data=f"uc_rot:{uid}:{proto_key}",
                             )
                         )
@@ -3508,7 +3508,7 @@ class BotHandlersLite(AITranslateMixin):
                         rows.append(
                             [
                                 InlineKeyboardButton(
-                                    f"⚙️ Настроить {display}",
+                                    f"⚙️ Configure {display}",
                                     callback_data=f"uc_setup:{uid}:{proto_key}",
                                 )
                             ]
@@ -3517,28 +3517,28 @@ class BotHandlersLite(AITranslateMixin):
                         rows.append(
                             [
                                 InlineKeyboardButton(
-                                    "🔒 только для admin/special",
+                                    "🔒 admin/special only",
                                     callback_data=f"uc_locked:{uid}:{proto_key}",
                                 )
                             ]
                         )
                 continue
 
-            # VLESS / Hy2 / MTProto: per-client модель.
+            # VLESS / Hy2 / MTProto: per-client model.
             if state["exists"]:
                 if proto_key == "vless_reality" and not state.get("active"):
                     row = []
                     if eligible:
                         row.append(
                             InlineKeyboardButton(
-                                "🧹 Удалить тестовый",
+                                "🧹 Delete test",
                                 callback_data=f"uc_del:{uid}:{proto_key}",
                             )
                         )
                     else:
                         row.append(
                             InlineKeyboardButton(
-                                "🔒 только для admin/special",
+                                "🔒 admin/special only",
                                 callback_data=f"uc_locked:{uid}:{proto_key}",
                             )
                         )
@@ -3551,17 +3551,17 @@ class BotHandlersLite(AITranslateMixin):
                         callback_data=f"uc_qr:{uid}:{proto_key}",
                     )
                 ]
-                # Ротация и удаление профиля — тоже только для admin/special.
+                # Profile rotation and deletion are also admin/special only.
                 if eligible:
                     row.append(
                         InlineKeyboardButton(
-                            "♻️ Ротация",
+                            "♻️ Rotate",
                             callback_data=f"uc_rot:{uid}:{proto_key}",
                         )
                     )
                     row.append(
                         InlineKeyboardButton(
-                            "❌ Удалить",
+                            "❌ Delete",
                             callback_data=f"uc_del:{uid}:{proto_key}",
                         )
                     )
@@ -3571,7 +3571,7 @@ class BotHandlersLite(AITranslateMixin):
                     rows.append(
                         [
                             InlineKeyboardButton(
-                                "🔒 только для admin/special",
+                                "🔒 admin/special only",
                                 callback_data=f"uc_locked:{uid}:{proto_key}",
                             )
                         ]
@@ -3580,17 +3580,17 @@ class BotHandlersLite(AITranslateMixin):
                     rows.append(
                         [
                             InlineKeyboardButton(
-                                "🛠 Рабочий VLESS — в 3x-ui ниже",
+                                "🛠 Working VLESS — in 3x-ui below",
                                 callback_data="uc_xui_hint",
                             )
                         ]
                     )
                 elif live and live.live is True:
-                    # Создание клиента — только если протокол реально работает на VPS.
+                    # Create a client only if the protocol is actually running on the VPS.
                     rows.append(
                         [
                             InlineKeyboardButton(
-                                f"➕ Создать {display}",
+                                f"➕ Create {display}",
                                 callback_data=f"uc_create:{uid}:{proto_key}",
                             )
                         ]
@@ -3599,23 +3599,23 @@ class BotHandlersLite(AITranslateMixin):
                     rows.append(
                         [
                             InlineKeyboardButton(
-                                f"⚠️ {display} не запущен",
+                                f"⚠️ {display} is not running",
                                 callback_data="uc_nolive",
                             )
                         ]
                     )
 
-        # Блок «VLESS через 3x-ui» — добавляем только когда интеграция
-        # действительно настроена и включена. Для не-eligible пользователей
-        # показываем только информационную строку, кнопок управления нет
-        # (та же политика, что и для VLESS-Reality бота).
+        # “VLESS via 3x-ui” block — add only when integration
+        # is actually configured and enabled. For ineligible users
+        # show only an info line, no management buttons
+        # (same policy as for bot VLESS-Reality).
         if xui_on:
             xui_state = (
-                f"✅ рабочий клиент <code>{he(xui_user_name)}</code> · inbound #{he(xui_inbound_id)}"
+                f"✅ working client <code>{he(xui_user_name)}</code> · inbound #{he(xui_inbound_id)}"
                 if xui_user_exists
-                else f"настроена · inbound #{he(xui_inbound_id)} · клиент ещё не найден"
+                else f"configured · inbound #{he(xui_inbound_id)} · client not found yet"
             )
-            lines.append(f"🛠 <b>VLESS через 3x-ui:</b> " + xui_state)
+            lines.append(f"🛠 <b>VLESS via 3x-ui:</b> " + xui_state)
             xui_btns: list[InlineKeyboardButton] = []
             if eligible:
                 xui_btns.append(
@@ -3626,20 +3626,20 @@ class BotHandlersLite(AITranslateMixin):
                 )
                 xui_btns.append(
                     InlineKeyboardButton(
-                        "➕ В 3x-ui",
+                        "➕ To 3x-ui",
                         callback_data=f"uc_xc:{uid}",
                     )
                 )
                 xui_btns.append(
                     InlineKeyboardButton(
-                        "❌ Из 3x-ui",
+                        "❌ From 3x-ui",
                         callback_data=f"uc_xd:{uid}",
                     )
                 )
             else:
                 xui_btns.append(
                     InlineKeyboardButton(
-                        "🔒 только для admin/special",
+                        "🔒 admin/special only",
                         callback_data=f"uc_locked:{uid}:xui",
                     )
                 )
@@ -3647,8 +3647,8 @@ class BotHandlersLite(AITranslateMixin):
 
         rows.append(
             [
-                InlineKeyboardButton("🔄 Обновить", callback_data=f"uc_back:{uid}"),
-                InlineKeyboardButton("✖️ Закрыть", callback_data="uc_x"),
+                InlineKeyboardButton("🔄 Refresh", callback_data=f"uc_back:{uid}"),
+                InlineKeyboardButton("✖️ Close", callback_data="uc_x"),
             ]
         )
 
@@ -3662,7 +3662,7 @@ class BotHandlersLite(AITranslateMixin):
         message_id: int,
         key: tuple[int, int],
     ) -> None:
-        """Удалить карточку через USER_CARD_TTL_SECONDS; отмена перезапускает отсчёт."""
+        """Delete the card after USER_CARD_TTL_SECONDS; cancel restarts the countdown."""
         my_task = asyncio.current_task()
         try:
             await asyncio.sleep(self.USER_CARD_TTL_SECONDS)
@@ -3682,7 +3682,7 @@ class BotHandlersLite(AITranslateMixin):
                 self._user_card_ttl_tasks.pop(key, None)
 
     def _reschedule_user_card_ttl(self, msg) -> None:
-        """Сброс таймера автоудаления карточки: каждое успешное отображение/обновление +3 мин."""
+        """Reset the auto-delete timer: each successful show/refresh adds +3 min."""
         if msg is None:
             return
         key = (msg.chat_id, msg.message_id)
@@ -3704,10 +3704,10 @@ class BotHandlersLite(AITranslateMixin):
         *,
         edit: bool = False,
     ) -> None:
-        """Отрисовать карточку пользователя.
+        """Render the user card.
 
-        target: либо update.message (новая отправка), либо CallbackQuery.message
-                (редактирование существующего сообщения).
+        target: either update.message (new send) or CallbackQuery.message
+                (edit an existing message).
         """
         text, kb = self._user_card_compose(uid)
         card_msg = None
@@ -3736,47 +3736,47 @@ class BotHandlersLite(AITranslateMixin):
     async def user_card_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /user <id> — открывает карточку пользователя."""
+        """/user <id> command — opens the user card."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /user <telegram_id>\n"
-                    "Пример: /user 8288584609\n\n"
-                    "Подсказка: можно просто отправить TG ID числом — бот распознает.",
+                    "Usage: /user <telegram_id>\n"
+                    "Example: /user 8288584609\n\n"
+                    "Tip: you can just send a numeric TG ID — the bot will recognize it.",
                 )
                 return
             try:
                 uid = int(args[0].strip())
             except (TypeError, ValueError):
-                await update.message.reply_text("❌ TG ID должен быть числом.")
+                await update.message.reply_text("❌ TG ID must be a number.")
                 return
             self._track_user(user)
             await self._show_user_card(update.message, uid, edit=False)
         except Exception as exc:
             logger.error("user_card_command: %s", exc)
-            await update.message.reply_text(f"Ошибка: {exc}")
+            await update.message.reply_text(f"Error: {exc}")
 
     async def admin_raw_id_message(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         """
-        Распознать «голое число» от админа в чате как TG ID и открыть карточку.
+        Treat a bare number from an admin in chat as a TG ID and open the card.
 
-        Срабатывает только для админов и только когда сообщение содержит
-        строго цифры (regex навешен на хендлере). Игнорируется для других
-        пользователей и не мешает обычному чату.
+        Fires only for admins and only when the message contains
+        digits only (regex is on the handler). Ignored for other
+        users and does not interfere with normal chat.
         """
         try:
             user = update.effective_user
             if not user or not self._is_admin(user.id):
-                return  # тихо игнорируем
+                return  # silently ignore
             text = (update.message.text or "").strip()
             if not text.isdigit():
                 return
@@ -3784,8 +3784,8 @@ class BotHandlersLite(AITranslateMixin):
                 uid = int(text)
             except ValueError:
                 return
-            # TG user IDs обычно 5–15 цифр; отсечём слишком короткие/длинные
-            # числа, чтобы не путать с другими цифровыми посылками.
+            # TG user IDs are usually 5–15 digits; drop numbers that are too short/long
+            # so they are not confused with other numeric payloads.
             if not (4 <= len(text) <= 15):
                 return
             self._track_user(user)
@@ -3793,24 +3793,24 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as exc:
             logger.error("admin_raw_id_message: %s", exc)
 
-    # === Действия в карточке ===
+    # === Card actions ===
 
     @staticmethod
     def _legacy_vless_reexport_text() -> str:
-        """Подсказка перевыдать URI/QR после смены параметров, попадающих в ссылку."""
+        """Hint to re-issue URI/QR after changing parameters that go into the link."""
         return (
-            "\n\n📲 Затем перевыдайте клиентам свежие URI/QR:\n"
-            "/profiles <id>   или   /my_profile   или   /vless_qr <имя>"
+            "\n\n📲 Then re-issue fresh URI/QR to clients:\n"
+            "/profiles <id>   or   /my_profile   or   /vless_qr <name>"
         )
 
     @staticmethod
     def _legacy_vless_host_restart_text(*, port: int | None = None) -> str:
-        """Что сделать на VPS / в боте после записи Xray-конфига (apply без restart)."""
+        """What to do on the VPS / in the bot after writing the Xray config (apply without restart)."""
         lines = [
             "",
-            "⚠️ Конфиг записан, но Xray ещё слушает старый. Дальше:",
+            "⚠️ Config written, but Xray is still serving the old one. Next:",
             "",
-            "На VPS (SSH / Tabby):",
+            "On the VPS (SSH / Tabby):",
             "systemctl restart xray",
             "systemctl status xray --no-pager",
         ]
@@ -3818,25 +3818,25 @@ class BotHandlersLite(AITranslateMixin):
             lines.append(f"ufw allow {int(port)}/tcp")
         lines += [
             "",
-            "Или из бота: /xray_restart",
+            "Or from the bot: /xray_restart",
         ]
         return "\n".join(lines) + BotHandlersLite._legacy_vless_reexport_text()
 
     async def _legacy_vless_apply_followup(
         self, update: Update, *, port: int | None = None
     ) -> None:
-        """Применить JSON → host Xray и показать SSH/бот next-steps.
+        """Apply JSON → host Xray and show SSH/bot next-steps.
 
-        Дополнительно автоматически сносит все ранее выданные ссылки/QR у всех
-        пользователей: после смены параметров, попадающих в vless://-ссылку,
-        старые ссылки невалидны и не должны нигде оставаться."""
+        Also automatically purges all previously issued links/QR for all
+        users: after changing parameters that go into the vless:// link,
+        old links are invalid and must not remain anywhere."""
         apply_ok, apply_msg = vless_manager.apply_xray_config()
         purged = await self._purge_all_profile_messages(update.get_bot())
         follow = self._legacy_vless_host_restart_text(port=port)
         if purged:
             follow += (
-                f"\n\n🧹 Старые ссылки/QR удалены у всех ({purged}). "
-                "Свежие выдайте заново: /profiles <id> или /my_profile."
+                f"\n\n🧹 Old links/QR purged for everyone ({purged}). "
+                "Re-issue fresh ones: /profiles <id> or /my_profile."
             )
         await update.message.reply_text(apply_msg + follow)
         if not apply_ok:
@@ -3844,25 +3844,25 @@ class BotHandlersLite(AITranslateMixin):
 
     @staticmethod
     def _hy2_apply_followup_text(*, port: int | None = None) -> str:
-        """Next-steps после hy2_set_*: JSON ещё не в /etc/hysteria."""
+        """Next-steps after hy2_set_*: JSON is not in /etc/hysteria yet."""
         lines = [
             "",
-            "➡️ Дальше в боте: /hy2_apply",
-            "(запишет config.yaml и перезапустит hysteria-server)",
+            "➡️ Next in the bot: /hy2_apply",
+            "(will write config.yaml and restart hysteria-server)",
         ]
         if port is not None:
-            lines.append(f"На VPS при смене порта: ufw allow {int(port)}/udp")
+            lines.append(f"On the VPS after a port change: ufw allow {int(port)}/udp")
         lines += [
             "",
-            "Затем перевыдайте URI/QR: /profiles <id>  или  /my_profile  или  /hy2_qr <имя>",
+            "Then re-issue URI/QR: /profiles <id>  or  /my_profile  or  /hy2_qr <name>",
         ]
         return "\n".join(lines)
 
     async def _user_card_action_create(self, query, uid: int, proto_key: str) -> None:
-        """Создать клиента в нужном протоколе с детерминированным именем."""
+        """Create a client in the chosen protocol with a deterministic name."""
         if not self._is_profile_target_eligible(uid):
             await query.answer(
-                "⛔ Профили доступны только admin/special. Сначала /special_add.",
+                "⛔ Profiles are admin/special only. First /special_add.",
                 show_alert=True,
             )
             return
@@ -3882,24 +3882,24 @@ class BotHandlersLite(AITranslateMixin):
             elif proto_key == "mieru":
                 ok, msg, _ = mieru_manager.add_client(name=name, owner_id=int(uid))
                 if ok:
-                    msg += "\nℹ️ Чтобы серверный mita увидел нового клиента: /mieru_apply reload"
+                    msg += "\nℹ️ For the server mita to see the new client: /mieru_apply reload"
             else:
-                msg = "Создание для этого протокола не поддерживается"
+                msg = "Creation is not supported for this protocol"
         except Exception as exc:
             logger.error("uc_create %s/%s: %s", proto_key, uid, exc)
-            msg = f"Ошибка: {exc}"
+            msg = f"Error: {exc}"
         await query.message.reply_text(
-            msg or ("✅ Создан" if ok else "❌ Не удалось создать")
+            msg or ("✅ Created" if ok else "❌ Failed to create")
         )
         await self._show_user_card(query.message, uid, edit=True)
 
     async def _user_card_action_delete(
         self, query, uid: int, proto_key: str, confirmed: bool
     ) -> None:
-        """Удаление клиента: первый клик — подтверждение, второй — действие."""
+        """Delete a client: first tap is confirm, second is the action."""
         if not self._is_profile_target_eligible(uid):
             await query.answer(
-                "⛔ Управление профилем доступно только для admin/special.",
+                "⛔ Profile management is admin/special only.",
                 show_alert=True,
             )
             return
@@ -3909,21 +3909,21 @@ class BotHandlersLite(AITranslateMixin):
                 [
                     [
                         InlineKeyboardButton(
-                            "✅ Да, удалить",
+                            "✅ Yes, delete",
                             callback_data=f"uc_delok:{uid}:{proto_key}",
                         ),
                         InlineKeyboardButton(
-                            "↩️ Отмена",
+                            "↩️ Cancel",
                             callback_data=f"uc_back:{uid}",
                         ),
                     ]
                 ]
             )
             await query.message.edit_text(
-                "❗️ Удалить профиль "
+                "❗️ Delete profile "
                 f"<code>{html.escape(name)}</code> ({html.escape(proto_key)}) "
-                f"для пользователя <code>{html.escape(str(uid))}</code>?\n\n"
-                "После удаления клиент перестанет подключаться. Это нельзя отменить.",
+                f"for user <code>{html.escape(str(uid))}</code>?\n\n"
+                "After deletion the client will stop connecting. This cannot be undone.",
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb,
             )
@@ -3944,14 +3944,14 @@ class BotHandlersLite(AITranslateMixin):
             elif proto_key == "mieru":
                 ok, msg = mieru_manager.remove_client(name)
                 if ok:
-                    msg += "\nℹ️ Чтобы серверный mita забыл клиента: /mieru_apply reload"
+                    msg += "\nℹ️ For the server mita to forget the client: /mieru_apply reload"
             else:
-                msg = "Удаление для этого протокола не поддерживается"
+                msg = "Deletion is not supported for this protocol"
         except Exception as exc:
             logger.error("uc_delok %s/%s: %s", proto_key, uid, exc)
-            msg = f"Ошибка: {exc}"
+            msg = f"Error: {exc}"
         await query.message.reply_text(
-            msg or ("✅ Удалён" if ok else "❌ Не удалось удалить")
+            msg or ("✅ Deleted" if ok else "❌ Failed to delete")
         )
         await self._show_user_card(query.message, uid, edit=True)
 
@@ -3959,12 +3959,12 @@ class BotHandlersLite(AITranslateMixin):
         self, query, uid: int, proto_key: str, confirmed: bool
     ) -> None:
         """
-        Ротация секрета: создаёт нового клиента с тем же именем, но новым
-        UUID/паролем/secret. Для NaiveProxy — глобальная смена basic_auth.
+        Secret rotation: creates a new client with the same name but a new
+        UUID/password/secret. For NaiveProxy — a global basic_auth change.
         """
         if not self._is_profile_target_eligible(uid):
             await query.answer(
-                "⛔ Ротация секрета доступна только для admin/special.",
+                "⛔ Secret rotation is admin/special only.",
                 show_alert=True,
             )
             return
@@ -3973,28 +3973,28 @@ class BotHandlersLite(AITranslateMixin):
             warn = ""
             if proto_key == "naiveproxy":
                 warn = (
-                    "\n\n⚠️ NaiveProxy использует общий basic_auth для всех "
-                    "клиентов. Эта ротация затронет ВСЕХ пользователей, "
-                    "не только этого."
+                    "\n\n⚠️ NaiveProxy uses a shared basic_auth for all "
+                    "clients. This rotation will affect ALL users, "
+                    "not only this one."
                 )
             kb = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "✅ Да, ротировать",
+                            "✅ Yes, rotate",
                             callback_data=f"uc_rotok:{uid}:{proto_key}",
                         ),
                         InlineKeyboardButton(
-                            "↩️ Отмена",
+                            "↩️ Cancel",
                             callback_data=f"uc_back:{uid}",
                         ),
                     ]
                 ]
             )
             await query.message.edit_text(
-                "♻️ Сгенерировать новый секрет для "
+                "♻️ Generate a new secret for "
                 f"<code>{html.escape(name)}</code> ({html.escape(proto_key)})?\n\n"
-                "Старый секрет перестанет работать после ротации." + warn,
+                "The old secret will stop working after rotation." + warn,
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb,
             )
@@ -4006,12 +4006,12 @@ class BotHandlersLite(AITranslateMixin):
                 ok, msg, _ = naiveproxy_manager.generate_credentials()
                 if ok:
                     msg += (
-                        "\n\nЧтобы новые креды реально применились на сервере, "
-                        "выполните `/naive_apply`."
+                        "\n\nFor the new credentials to actually apply on the server, "
+                        "run `/naive_apply`."
                     )
             else:
-                # Для VLESS/Hy2/MTProto: remove → add сохраняет имя, но рождает новый секрет.
-                # Сначала удалим, потом создадим. Если первый шаг не удался — выходим.
+                # For VLESS/Hy2/MTProto: remove → add keeps the name but mints a new secret.
+                # Delete first, then create. If the first step fails — exit.
                 if proto_key == "vless_reality":
                     rm_ok, rm_msg = vless_manager.remove_client(name)
                 elif proto_key == "hysteria2":
@@ -4021,9 +4021,9 @@ class BotHandlersLite(AITranslateMixin):
                 elif proto_key == "mieru":
                     rm_ok, rm_msg = mieru_manager.remove_client(name)
                 else:
-                    rm_ok, rm_msg = False, "Неизвестный протокол"
+                    rm_ok, rm_msg = False, "Unknown protocol"
                 if not rm_ok:
-                    msg = f"Не удалось удалить старый секрет: {rm_msg}"
+                    msg = f"Failed to delete the old secret: {rm_msg}"
                 else:
                     if proto_key == "vless_reality":
                         ok, add_msg, _ = vless_manager.add_client(name)
@@ -4042,25 +4042,25 @@ class BotHandlersLite(AITranslateMixin):
                         )
                         if ok:
                             add_msg += (
-                                "\nℹ️ Чтобы новый секрет применился на mita: "
+                                "\nℹ️ For the new secret to apply on mita: "
                                 "/mieru_apply reload"
                             )
                     else:
                         ok, add_msg, _ = mtproto_manager.add_client(name)
-                    msg = ("♻️ Секрет ротирован\n" + add_msg) if ok else add_msg
+                    msg = ("♻️ Secret rotated\n" + add_msg) if ok else add_msg
         except Exception as exc:
             logger.error("uc_rotok %s/%s: %s", proto_key, uid, exc)
-            msg = f"Ошибка ротации: {exc}"
+            msg = f"Rotation error: {exc}"
         await query.message.reply_text(
-            msg or ("✅ Готово" if ok else "❌ Не удалось ротировать")
+            msg or ("✅ Done" if ok else "❌ Failed to rotate")
         )
         await self._show_user_card(query.message, uid, edit=True)
 
     async def _user_card_action_xui_create(self, query, uid: int) -> None:
-        """Создать VLESS-клиента в 3x-ui (default inbound) с email = profile name."""
+        """Create a VLESS client in 3x-ui (default inbound) with email = profile name."""
         if not self._is_profile_target_eligible(uid):
             await query.answer(
-                "⛔ Профили доступны только admin/special.", show_alert=True
+                "⛔ Profiles are admin/special only.", show_alert=True
             )
             return
         client_obj, err = xui_manager.make_client_or_error()
@@ -4071,8 +4071,8 @@ class BotHandlersLite(AITranslateMixin):
         inbound_id = int(snap.get("default_inbound_id") or 0)
         if not inbound_id:
             await query.message.reply_text(
-                "❌ В /xui_status не выбран inbound по умолчанию.\n"
-                "Используйте /xui_set_inbound <id>."
+                "❌ /xui_status has no default inbound selected.\n"
+                "Use /xui_set_inbound <id>."
             )
             return
         try:
@@ -4083,7 +4083,7 @@ class BotHandlersLite(AITranslateMixin):
         if ok:
             uuid_short = (created.get("id") or "")[:8]
             await query.message.reply_text(
-                f"✅ Клиент создан в 3x-ui (inbound #{inbound_id}).\n"
+                f"✅ Client created in 3x-ui (inbound #{inbound_id}).\n"
                 f"email: <code>{html.escape(email)}</code>\n"
                 f"uuid: <code>{html.escape(uuid_short)}…</code>",
                 parse_mode=ParseMode.HTML,
@@ -4091,8 +4091,8 @@ class BotHandlersLite(AITranslateMixin):
         elif msg == "exists":
             uuid_short = (created.get("id") or "")[:8]
             await query.message.reply_text(
-                "ℹ️ Клиент "
-                f"<code>{html.escape(email)}</code> уже существует в 3x-ui "
+                "ℹ️ Client "
+                f"<code>{html.escape(email)}</code> already exists in 3x-ui "
                 f"(uuid <code>{html.escape(uuid_short)}…</code>).",
                 parse_mode=ParseMode.HTML,
             )
@@ -4103,10 +4103,10 @@ class BotHandlersLite(AITranslateMixin):
     async def _user_card_action_xui_delete(
         self, query, uid: int, confirmed: bool
     ) -> None:
-        """Удалить VLESS-клиента из 3x-ui по email."""
+        """Delete a VLESS client from 3x-ui by email."""
         if not self._is_profile_target_eligible(uid):
             await query.answer(
-                "⛔ Управление профилями только для admin/special.", show_alert=True
+                "⛔ Profile management is admin/special only.", show_alert=True
             )
             return
         try:
@@ -4118,20 +4118,20 @@ class BotHandlersLite(AITranslateMixin):
                 [
                     [
                         InlineKeyboardButton(
-                            "✅ Да, удалить",
+                            "✅ Yes, delete",
                             callback_data=f"uc_xdok:{uid}",
                         ),
                         InlineKeyboardButton(
-                            "↩️ Отмена",
+                            "↩️ Cancel",
                             callback_data=f"uc_back:{uid}",
                         ),
                     ]
                 ]
             )
             await query.message.edit_text(
-                "❗️ Удалить клиента "
-                f"<code>{html.escape(email_hint)}</code> из 3x-ui (default inbound)?\n\n"
-                "Действие нельзя отменить.",
+                "❗️ Delete client "
+                f"<code>{html.escape(email_hint)}</code> from 3x-ui (default inbound)?\n\n"
+                "This action cannot be undone.",
                 parse_mode=ParseMode.HTML,
                 reply_markup=kb,
             )
@@ -4144,17 +4144,17 @@ class BotHandlersLite(AITranslateMixin):
         inbound_id = int(snap.get("default_inbound_id") or 0)
         if not inbound_id:
             await query.message.reply_text(
-                "❌ В /xui_status не выбран inbound по умолчанию."
+                "❌ /xui_status has no default inbound selected."
             )
             return
-        # 3x-ui требует UUID, не email — найдём клиента (канон, затем legacy).
+        # 3x-ui requires UUID, not email — find the client (canon, then legacy).
         found, c, email_used, inbound_resolved = self._xui_find_vless_client(
             client_obj, uid
         )
         if not found:
             await query.message.reply_text(
-                "ℹ️ Клиент "
-                f"<code>{html.escape(str(email_used))}</code> в 3x-ui не найден — возможно, уже удалён.",
+                "ℹ️ Client "
+                f"<code>{html.escape(str(email_used))}</code> was not found in 3x-ui — maybe already deleted.",
                 parse_mode=ParseMode.HTML,
             )
             await self._show_user_card(query.message, uid, edit=True)
@@ -4162,7 +4162,7 @@ class BotHandlersLite(AITranslateMixin):
         ok, msg = client_obj.del_client(inbound_resolved, str(c.get("id") or ""))
         if ok:
             await query.message.reply_text(
-                f"✅ Клиент <code>{html.escape(str(email_used))}</code> удалён из 3x-ui.",
+                f"✅ Client <code>{html.escape(str(email_used))}</code> deleted from 3x-ui.",
                 parse_mode=ParseMode.HTML,
             )
         else:
@@ -4170,7 +4170,7 @@ class BotHandlersLite(AITranslateMixin):
         await self._show_user_card(query.message, uid, edit=True)
 
     async def _user_card_action_xui_qr(self, query, uid: int) -> None:
-        """Отправить VLESS-URI и QR клиента из 3x-ui (или explanation)."""
+        """Send a VLESS URI and QR from 3x-ui (or an explanation)."""
         client_obj, err = xui_manager.make_client_or_error()
         if client_obj is None:
             await query.message.reply_text(f"❌ {err}")
@@ -4179,7 +4179,7 @@ class BotHandlersLite(AITranslateMixin):
         inbound_id = int(snap.get("default_inbound_id") or 0)
         if not inbound_id:
             await query.message.reply_text(
-                "❌ Не выбран inbound по умолчанию (см. /xui_set_inbound)."
+                "❌ No default inbound selected (see /xui_set_inbound)."
             )
             return
         found, client, email_used, inbound_resolved = self._xui_find_vless_client(
@@ -4187,8 +4187,8 @@ class BotHandlersLite(AITranslateMixin):
         )
         if not found:
             await query.message.reply_text(
-                f"ℹ️ Клиент {email_used} в 3x-ui не найден.\n"
-                f"Сначала «➕ В 3x-ui» или выполните /provision {uid}"
+                f"ℹ️ Client {email_used} was not found in 3x-ui.\n"
+                f"First tap “➕ To 3x-ui” or run /provision {uid}"
             )
             return
         ok_ib, msg_ib, inbound = client_obj.get_inbound(inbound_resolved)
@@ -4201,11 +4201,11 @@ class BotHandlersLite(AITranslateMixin):
         )
         if not ok:
             await query.message.reply_text(
-                f"❌ Не удалось собрать ссылку: {msg}\n"
-                "Скопируйте ссылку/QR прямо из самой панели 3x-ui."
+                f"❌ Failed to build the link: {msg}\n"
+                "Copy the link/QR directly from the 3x-ui panel."
             )
             return
-        # HTML: legacy Markdown ломался на '_' в email (Vless_ID82_09) и на URI.
+        # HTML: legacy Markdown broke on '_' in email (Vless_ID82_09) and on URIs.
         await query.message.reply_text(
             "📲 VLESS via 3x-ui "
             f"(<code>{html.escape(str(email_used))}</code>)\n"
@@ -4227,7 +4227,7 @@ class BotHandlersLite(AITranslateMixin):
             logger.warning("xui qr render failed: %s", exc)
 
     async def _user_card_action_qr(self, query, uid: int, proto_key: str) -> None:
-        """Отправить QR/URI клиента."""
+        """Send a client QR/URI."""
         name = self._build_protocol_profile_name(proto_key, uid)
         try:
             if proto_key == "vless_reality":
@@ -4243,7 +4243,7 @@ class BotHandlersLite(AITranslateMixin):
                     await query.message.reply_text(f"❌ {exc}")
                     return
                 await query.message.reply_text(
-                    "🌐 NaiveProxy URI (общий для всех клиентов):\n"
+                    "🌐 NaiveProxy URI (shared by all clients):\n"
                     f"<code>{html.escape(uri)}</code>",
                     parse_mode=ParseMode.HTML,
                 )
@@ -4251,14 +4251,14 @@ class BotHandlersLite(AITranslateMixin):
                 await self._reply_mieru_qr(query.message, name)
             else:
                 await query.message.reply_text(
-                    "❌ QR/URI для этого протокола не поддерживается"
+                    "❌ QR/URI is not supported for this protocol"
                 )
         except Exception as exc:
             logger.error("uc_qr %s/%s: %s", proto_key, uid, exc)
-            await query.message.reply_text(f"Ошибка при подготовке QR: {exc}")
+            await query.message.reply_text(f"Failed to prepare QR: {exc}")
 
     async def _handle_user_card_callbacks(self, query, data: str) -> bool:
-        """Маршрутизатор callback'ов карточки пользователя (`uc_*`)."""
+        """Router for user-card callbacks (`uc_*`)."""
         if not data.startswith("uc_"):
             return False
         try:
@@ -4266,33 +4266,33 @@ class BotHandlersLite(AITranslateMixin):
                 try:
                     await query.message.delete()
                 except Exception:
-                    await query.message.edit_text("✖️ Закрыто.")
+                    await query.message.edit_text("✖️ Closed.")
                 return True
 
             if data == "uc_nolive":
                 await query.answer(
-                    "Протокол не запущен на этом VPS. Сначала поднимите сервис, потом /diag.",
+                    "The protocol is not running on this VPS. Bring the service up first, then /diag.",
                     show_alert=True,
                 )
                 return True
 
             if data == "uc_xui_hint":
                 await query.answer(
-                    "Этот VLESS выдаётся через блок 3x-ui: используйте QR (3x-ui) или ➕ В 3x-ui.",
+                    "This VLESS is issued via the 3x-ui block: use QR (3x-ui) or ➕ To 3x-ui.",
                     show_alert=True,
                 )
                 return True
 
             if data.startswith("uc_locked:"):
-                # Кликнули по «🔒 только для admin/special» — поясняем правило.
+                # Tapped “🔒 admin/special only” — explain the rule.
                 await query.answer(
-                    "Профили выдаются только админам и special-пользователям. "
-                    "Сначала /special_add <id>.",
+                    "Profiles are issued only to admins and special users. "
+                    "First /special_add <id>.",
                     show_alert=True,
                 )
                 return True
 
-            # 3x-ui actions: формат `uc_x<c|d|dok|q>:<uid>` (без proto_key).
+            # 3x-ui actions: format `uc_x<c|d|dok|q>:<uid>` (no proto_key).
             if (
                 data.startswith("uc_xc:")
                 or data.startswith("uc_xd:")
@@ -4354,79 +4354,79 @@ class BotHandlersLite(AITranslateMixin):
                 )
                 return True
             if head == "uc_setup":
-                # Подсказка для не-настроенных протоколов: показать оператору
-                # точные команды для setup'а, а не пытаться сделать всё через UI.
+                # Hint for unconfigured protocols: show the operator
+                # the exact setup commands instead of trying to do everything in the UI.
                 hints = {
                     "naiveproxy": (
-                        "🌐 NaiveProxy ещё не настроен. Базовый сценарий:\n\n"
-                        "1) <code>/naive_set_domain ваш_домен</code>\n"
+                        "🌐 NaiveProxy is not configured yet. Basic playbook:\n\n"
+                        "1) <code>/naive_set_domain your_domain</code>\n"
                         "2) <code>/naive_gen_creds</code>\n"
                         "3) <code>/naive_apply</code>\n\n"
-                        "Домен должен смотреть на этот VPS, Cloudflare proxy — OFF."
+                        "The domain must point at this VPS; Cloudflare proxy — OFF."
                     ),
                 }
                 await query.message.reply_text(
-                    hints.get(proto_key, "Сначала настройте протокол через его меню."),
+                    hints.get(proto_key, "Configure the protocol via its menu first."),
                     parse_mode=ParseMode.HTML,
                 )
                 return True
         except Exception as exc:
             logger.error("_handle_user_card_callbacks(%r): %s", data, exc)
             try:
-                await query.message.reply_text(f"❌ Ошибка: {exc}")
+                await query.message.reply_text(f"❌ Error: {exc}")
             except Exception:
                 pass
             return True
         return False
 
-    # === Интеграция с 3x-ui (внешняя панель управления Xray) ===
+    # === 3x-ui integration (external Xray control panel) ===
     #
-    # Бот опционально умеет ходить в REST API панели 3x-ui (см.
-    # `xui_manager.py`). Креды (URL, логин, пароль, default inbound) админ
-    # вводит через ConversationHandler ниже. Пароль:
-    #   * **никогда** не печатается в чат бота;
-    #   * сразу после получения сообщение с паролем удаляется (если у бота
-    #     достаточно прав в этом чате);
-    #   * хранится только в xui_config.json в виде AES-256-GCM,
-    #     зашифрованного через `SecureMessenger` тем же ключом, что и
-    #     остальные секреты проекта (`ENCRYPTION_KEY` / `API_SECRET_KEY`).
+    # The bot can optionally call the 3x-ui panel REST API (see
+    # `xui_manager.py`). Credentials (URL, login, password, default inbound) are
+    # entered by admin via the ConversationHandler below. Password:
+    #   * is **never** printed in the bot chat;
+    #   * the password message is deleted immediately after receipt (if the bot
+    #     has enough rights in this chat);
+    #   * is stored only in xui_config.json as AES-256-GCM,
+    #     encrypted via `SecureMessenger` with the same key as
+    #     the rest of the project secrets (`ENCRYPTION_KEY` / `API_SECRET_KEY`).
     #
-    # Без этих кредов всё, что делает бот, — детектирует факт наличия
-    # 3x-ui (`live_status._xui_panel_status`) и показывает мягкое
-    # предупреждение в /user-карточке. Полный CRUD клиентов работает
-    # только после `/xui_setup`.
+    # Without these credentials the bot only detects whether
+    # 3x-ui is present (`live_status._xui_panel_status`) and shows a soft
+    # warning on the /user card. Full client CRUD works
+    # only after `/xui_setup`.
 
-    # State'ы для ConversationHandler /xui_setup. Целочисленные значения
-    # фиксированы внутри объекта класса — bot.py читает их при сборке
-    # ConversationHandler.
+    # ConversationHandler states for /xui_setup. Integer values
+    # are fixed on the class object — bot.py reads them when building
+    # the ConversationHandler.
     XUI_URL, XUI_USER, XUI_PWD, XUI_VERIFY, XUI_INBOUND = range(5)
 
     async def xui_setup_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """`/xui_setup` — старт пошаговой настройки. Только админ."""
+        """`/xui_setup` — start the step-by-step setup. Admin only."""
         from telegram.ext import ConversationHandler
 
         user = update.effective_user
         if not user or not self._is_admin(user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return ConversationHandler.END
 
         if not xui_manager.encryption_available():
             await update.message.reply_text(
-                "❌ В `.env` не задан `ENCRYPTION_KEY` (или `API_SECRET_KEY`).\n"
-                "Без него пароль 3x-ui нечем шифровать. Сначала добавьте ключ "
-                "в `.env`, перезапустите бот, потом запускайте `/xui_setup`.",
+                "❌ `.env` has no `ENCRYPTION_KEY` (or `API_SECRET_KEY`).\n"
+                "Without it the 3x-ui password cannot be encrypted. Add a key "
+                "to `.env`, restart the bot, then run `/xui_setup`.",
                 parse_mode=ParseMode.MARKDOWN,
             )
             return ConversationHandler.END
 
         context.user_data["xui_setup"] = {}
         await update.message.reply_text(
-            "🛠 Настройка интеграции с 3x-ui (1/4)\n\n"
-            "Введите URL панели одним сообщением. Пример:\n"
+            "🛠 3x-ui integration setup (1/4)\n\n"
+            "Send the panel URL in one message. Example:\n"
             "`https://195.238.122.137:35421/mxmurl`\n\n"
-            "Допускаются и `http://`, и `https://`. Хвостовой `/` можно "
-            "не ставить — он будет убран.\n\n"
-            "Если передумали — `/xui_cancel`.",
+            "`http://` and `https://` are both allowed. A trailing `/` can "
+            "be omitted — it will be stripped.\n\n"
+            "If you changed your mind — `/xui_cancel`.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return self.XUI_URL
@@ -4436,35 +4436,35 @@ class BotHandlersLite(AITranslateMixin):
         ok, normalized, msg = xui_manager.normalize_base_url(raw)
         if not ok:
             await update.message.reply_text(
-                f"❌ {msg}\nПовторите ввод или /xui_cancel."
+                f"❌ {msg}\nTry again or /xui_cancel."
             )
             return self.XUI_URL
         context.user_data.setdefault("xui_setup", {})["base_url"] = normalized
-        # Detect mesh-IP (Tailscale/Headscale CGNAT). Бот в bridge-mode
-        # не видит mesh — предупреждаем СРАЗУ, чтобы admin успел
-        # переключить network_mode до того, как введёт пароль.
+        # Detect mesh-IP (Tailscale/Headscale CGNAT). The bot in bridge-mode
+        # cannot see the mesh — warn IMMEDIATELY so admin can
+        # switch network_mode before entering the password.
         mesh_warning = ""
         try:
             if xui_manager.url_host_is_mesh_ip(normalized):
                 mesh_warning = (
-                    "\n\n⚠️ Этот URL — <b>mesh-IP</b> "
-                    "(Tailscale/Headscale, 100.64/10 или ULA).\n"
-                    "Бот в Docker по умолчанию на bridge-сети и "
-                    "<b>не увидит</b> mesh-интерфейс хоста.\n\n"
-                    "Если login на следующем шаге упадёт с "
+                    "\n\n⚠️ This URL is a <b>mesh-IP</b> "
+                    "(Tailscale/Headscale, 100.64/10 or ULA).\n"
+                    "The bot in Docker defaults to the bridge network and "
+                    "will <b>not see</b> the host mesh interface.\n\n"
+                    "If login on the next step fails with "
                     "<i>network: connection refused / timeout</i>, "
-                    "переключите контейнер в host-сеть:\n"
+                    "switch the container to host networking:\n"
                     "<code>compose.yaml → telegram-helper → "
                     "network_mode: host</code> "
-                    "(удалите блок <code>ports:</code>)\n"
-                    "и пересоберите: "
+                    "(remove the <code>ports:</code> block)\n"
+                    "and recreate: "
                     "<code>docker compose up -d --force-recreate</code>."
                 )
         except Exception:
             pass
         await update.message.reply_text(
-            f"✅ URL принят: <code>{html.escape(normalized)}</code>\n\n"
-            "Шаг 2/4. Введите <b>логин</b> администратора панели." + mesh_warning,
+            f"✅ URL accepted: <code>{html.escape(normalized)}</code>\n\n"
+            "Step 2/4. Enter the panel admin <b>login</b>." + mesh_warning,
             parse_mode=ParseMode.HTML,
         )
         return self.XUI_USER
@@ -4473,15 +4473,15 @@ class BotHandlersLite(AITranslateMixin):
         name = (update.message.text or "").strip()
         if not name:
             await update.message.reply_text(
-                "Логин пуст. Введите ещё раз или /xui_cancel."
+                "Login is empty. Enter it again or /xui_cancel."
             )
             return self.XUI_USER
         context.user_data.setdefault("xui_setup", {})["username"] = name
         await update.message.reply_text(
-            "Шаг 3/4. Введите *пароль* одной строкой.\n\n"
-            "⚠️ Сразу после получения сообщение с паролем будет удалено "
-            "(если у бота достаточно прав в этом чате). В чате он не "
-            "сохраняется и в логах не появляется.",
+            "Step 3/4. Enter the *password* as a single line.\n\n"
+            "⚠️ Right after receipt the password message will be deleted "
+            "(if the bot has enough rights in this chat). It is not stored in chat "
+            "and does not appear in logs.",
             parse_mode=ParseMode.MARKDOWN,
         )
         return self.XUI_PWD
@@ -4489,8 +4489,8 @@ class BotHandlersLite(AITranslateMixin):
     async def xui_setup_pwd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         pwd = update.message.text or ""
         chat_id = update.effective_chat.id
-        # СРАЗУ пытаемся удалить сообщение с паролем. Это лучшая защита —
-        # если права позволяют, пароль не остаётся в истории чата.
+        # IMMEDIATELY try to delete the password message. This is the best protection —
+        # if permissions allow, the password does not stay in chat history.
         try:
             await update.message.delete()
         except Exception as exc:
@@ -4498,7 +4498,7 @@ class BotHandlersLite(AITranslateMixin):
 
         if not pwd:
             await context.bot.send_message(
-                chat_id, "Пароль пуст. Введите ещё раз или /xui_cancel."
+                chat_id, "Password is empty. Enter it again or /xui_cancel."
             )
             return self.XUI_PWD
 
@@ -4508,25 +4508,25 @@ class BotHandlersLite(AITranslateMixin):
             [
                 [
                     InlineKeyboardButton(
-                        "🔓 self-signed (не проверять TLS)",
+                        "🔓 self-signed (do not verify TLS)",
                         callback_data="xui_vfy_no",
                     )
                 ],
                 [
                     InlineKeyboardButton(
-                        "🔒 валидный TLS (проверять)",
+                        "🔒 valid TLS (verify)",
                         callback_data="xui_vfy_yes",
                     )
                 ],
-                [InlineKeyboardButton("✖️ Отмена", callback_data="xui_vfy_cancel")],
+                [InlineKeyboardButton("✖️ Cancel", callback_data="xui_vfy_cancel")],
             ]
         )
         await context.bot.send_message(
             chat_id,
-            "Пароль принят и зашифрован в памяти.\n\n"
-            "Шаг 4/4. Проверять ли TLS-сертификат панели?\n"
-            "Для self-signed (типичный случай 3x-ui на IP) — выбирайте "
-            "первый вариант.",
+            "Password accepted and encrypted in memory.\n\n"
+            "Step 4/4. Verify the panel TLS certificate?\n"
+            "For self-signed (typical 3x-ui on an IP) — pick "
+            "the first option.",
             reply_markup=kb,
         )
         return self.XUI_VERIFY
@@ -4542,13 +4542,13 @@ class BotHandlersLite(AITranslateMixin):
 
         if query.data == "xui_vfy_cancel":
             context.user_data.pop("xui_setup", None)
-            await query.message.edit_text("Отменено. Креды не сохранены.")
+            await query.message.edit_text("Cancelled. Credentials were not saved.")
             return ConversationHandler.END
 
         verify_tls = query.data == "xui_vfy_yes"
         setup["verify_tls"] = verify_tls
 
-        # Делаем тестовый login + получаем список inbound'ов в одном шаге.
+        # Do a test login + fetch the inbound list in one step.
         client = xui_manager.XUIClient(
             base_url=setup.get("base_url", ""),
             username=setup.get("username", ""),
@@ -4557,9 +4557,9 @@ class BotHandlersLite(AITranslateMixin):
         )
         ok, msg = client.login()
         if not ok:
-            # Если ошибка похожа на сетевую (connection refused/timed out
-            # / no route / network) И URL — mesh-IP, дадим точную
-            # инструкцию о host-networking, иначе обычный совет.
+            # If the error looks like a network issue (connection refused/timed out
+            # / no route / network) AND the URL is a mesh-IP, give a precise
+            # host-networking instruction, otherwise a generic hint.
             base_url = setup.get("base_url", "")
             is_network_err = bool(
                 msg
@@ -4582,31 +4582,31 @@ class BotHandlersLite(AITranslateMixin):
                 pass
             if is_network_err and is_mesh:
                 hint = (
-                    "🛰 URL ведёт на <b>mesh-IP</b> "
-                    "(Tailscale/Headscale, 100.64/10 или ULA), "
-                    "и бот не смог достучаться. "
-                    "Скорее всего, контейнер на bridge-сети и не видит "
-                    "mesh-интерфейс хоста.\n\n"
-                    "<b>Фикс:</b> переключите контейнер в host-сеть.\n"
-                    "В <code>compose.yaml</code> у сервиса "
-                    "<code>telegram-helper</code> добавьте:\n"
+                    "🛰 The URL points at a <b>mesh-IP</b> "
+                    "(Tailscale/Headscale, 100.64/10 or ULA), "
+                    "and the bot could not reach it. "
+                    "Most likely the container is on the bridge network and cannot see "
+                    "the host mesh interface.\n\n"
+                    "<b>Fix:</b> switch the container to host networking.\n"
+                    "In <code>compose.yaml</code> for the "
+                    "<code>telegram-helper</code> service add:\n"
                     "<pre>    network_mode: host</pre>"
-                    "и удалите блок <code>ports:</code> (он не нужен и "
-                    "конфликтует с host-mode). Пересоберите:\n"
+                    "and remove the <code>ports:</code> block (it is unused and "
+                    "conflicts with host-mode). Recreate:\n"
                     "<pre>docker compose up -d --force-recreate "
                     "telegram-helper</pre>"
-                    "После этого повторите <code>/xui_setup</code> с тем же URL."
+                    "Then retry <code>/xui_setup</code> with the same URL."
                 )
                 await query.message.edit_text(
-                    f"❌ Логин в 3x-ui не удался: <code>{html.escape(str(msg))}</code>\n\n"
+                    f"❌ 3x-ui login failed: <code>{html.escape(str(msg))}</code>\n\n"
                     + hint,
                     parse_mode=ParseMode.HTML,
                 )
             else:
                 await query.message.edit_text(
-                    f"❌ Логин в 3x-ui не удался: <code>{html.escape(str(msg))}</code>\n\n"
-                    "Проверьте URL/логин/пароль и запустите "
-                    "<code>/xui_setup</code> заново.",
+                    f"❌ 3x-ui login failed: <code>{html.escape(str(msg))}</code>\n\n"
+                    "Check URL/login/password and run "
+                    "<code>/xui_setup</code> again.",
                     parse_mode=ParseMode.HTML,
                 )
             context.user_data.pop("xui_setup", None)
@@ -4615,17 +4615,17 @@ class BotHandlersLite(AITranslateMixin):
         ok, msg, inbounds = client.list_inbounds()
         if not ok:
             await query.message.edit_text(
-                f"❌ Не удалось получить список inbound'ов: {msg}\n\n"
-                "Проверьте права админа панели и запустите /xui_setup заново."
+                f"❌ Failed to get the inbound list: {msg}\n\n"
+                "Check panel admin rights and run /xui_setup again."
             )
             context.user_data.pop("xui_setup", None)
             return ConversationHandler.END
 
         if not inbounds:
             await query.message.edit_text(
-                "⚠️ Панель не вернула ни одного inbound'а.\n\n"
-                "Сначала создайте VLESS-Reality inbound в 3x-ui, потом "
-                "повторите /xui_setup."
+                "⚠️ The panel returned no inbounds.\n\n"
+                "First create a VLESS-Reality inbound in 3x-ui, then "
+                "retry /xui_setup."
             )
             context.user_data.pop("xui_setup", None)
             return ConversationHandler.END
@@ -4641,13 +4641,13 @@ class BotHandlersLite(AITranslateMixin):
             ib_port = ib.get("port", "?")
             label = f"#{ib_id} {ib_proto}:{ib_port} — {ib_name}"[:60]
             rows.append([InlineKeyboardButton(label, callback_data=f"xui_ib:{ib_id}")])
-        rows.append([InlineKeyboardButton("✖️ Отмена", callback_data="xui_ib_cancel")])
+        rows.append([InlineKeyboardButton("✖️ Cancel", callback_data="xui_ib_cancel")])
 
         await query.message.edit_text(
-            f"✅ Логин успешен, найдено inbound'ов: {len(inbounds)}.\n\n"
-            f"Выберите inbound по умолчанию — в него бот будет добавлять "
-            f"VLESS-клиентов из карточки `/user`. Для VLESS-Reality "
-            f"берите соответствующий VLESS inbound.",
+            f"✅ Login succeeded, inbounds found: {len(inbounds)}.\n\n"
+            f"Pick the default inbound — the bot will add "
+            f"VLESS clients from the `/user` card into it. For VLESS-Reality "
+            f"pick the matching VLESS inbound.",
             reply_markup=InlineKeyboardMarkup(rows),
         )
         return self.XUI_INBOUND
@@ -4661,14 +4661,14 @@ class BotHandlersLite(AITranslateMixin):
         await query.answer()
         if query.data == "xui_ib_cancel":
             context.user_data.pop("xui_setup", None)
-            await query.message.edit_text("Отменено. Креды не сохранены.")
+            await query.message.edit_text("Cancelled. Credentials were not saved.")
             return ConversationHandler.END
         if not query.data.startswith("xui_ib:"):
             return self.XUI_INBOUND
         try:
             inbound_id = int(query.data.split(":", 1)[1])
         except (ValueError, IndexError):
-            await query.answer("Неверный inbound ID", show_alert=True)
+            await query.answer("Invalid inbound ID", show_alert=True)
             return self.XUI_INBOUND
 
         setup = context.user_data.get("xui_setup", {})
@@ -4679,25 +4679,25 @@ class BotHandlersLite(AITranslateMixin):
             verify_tls=bool(setup.get("verify_tls", False)),
             default_inbound_id=inbound_id,
         )
-        # Чистим пароль из user_data (даже если сохранение упало).
+        # Clear the password from user_data (even if save failed).
         setup["password"] = ""
         url = setup.get("base_url", "")
         username = setup.get("username", "")
         context.user_data.pop("xui_setup", None)
 
         if not ok:
-            await query.message.edit_text(f"❌ Не удалось сохранить: {save_msg}")
+            await query.message.edit_text(f"❌ Failed to save: {save_msg}")
             return ConversationHandler.END
 
-        # HTML-режим стабильнее Markdown legacy — Markdown ломается на
-        # подчёркиваниях в `/xui_status`, `xui_config.json` и т.д.
+        # HTML mode is more stable than legacy Markdown — Markdown breaks on
+        # underscores in `/xui_status`, `xui_config.json`, etc.
         await query.message.edit_text(
-            "✅ 3x-ui интеграция настроена\n\n"
+            "✅ 3x-ui integration configured\n\n"
             f"URL: <code>{html.escape(url)}</code>\n"
-            f"Логин: <code>{html.escape(username)}</code> "
-            "(пароль зашифрован в xui_config.json)\n"
-            f"Inbound по умолчанию: #{inbound_id}\n\n"
-            "Команды: /xui_status · /xui_list · /xui_disable · /xui_clear",
+            f"Login: <code>{html.escape(username)}</code> "
+            "(password encrypted in xui_config.json)\n"
+            f"Default inbound: #{inbound_id}\n\n"
+            "Commands: /xui_status · /xui_list · /xui_disable · /xui_clear",
             parse_mode=ParseMode.HTML,
         )
         return ConversationHandler.END
@@ -4709,32 +4709,32 @@ class BotHandlersLite(AITranslateMixin):
 
         context.user_data.pop("xui_setup", None)
         if update.message:
-            await update.message.reply_text("Отменено. Креды 3x-ui не сохранены.")
+            await update.message.reply_text("Cancelled. 3x-ui credentials were not saved.")
         return ConversationHandler.END
 
     async def xui_status_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/xui_status` — состояние интеграции (без секретов)."""
+        """`/xui_status` — integration state (no secrets)."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         snap = xui_manager.status_summary()
         if not snap["configured"]:
             await update.message.reply_text(
-                "⚪ 3x-ui интеграция не настроена. Запустите /xui_setup."
+                "⚪ 3x-ui integration is not configured. Run /xui_setup."
             )
             return
-        head = "🟢 включена" if snap["enabled"] else "🔴 выключена"
+        head = "🟢 on" if snap["enabled"] else "🔴 off"
         text = (
-            f"🛠 <b>3x-ui интеграция:</b> {head}\n\n"
+            f"🛠 <b>3x-ui integration:</b> {head}\n\n"
             f"URL: <code>{html.escape(snap['base_url'])}</code>\n"
-            f"Логин: <code>{html.escape(snap['username_masked'])}</code>\n"
+            f"Login: <code>{html.escape(snap['username_masked'])}</code>\n"
             f"TLS verify: {snap['verify_tls']}\n"
-            f"Inbound по умолчанию: #{snap['default_inbound_id']}\n"
-            f"Настроено: {html.escape(snap['configured_at'] or '—')}"
+            f"Default inbound: #{snap['default_inbound_id']}\n"
+            f"Configured: {html.escape(snap['configured_at'] or '—')}"
         )
-        # Лайв-проверка связи с панелью.
+        # Live connectivity check with the panel.
         if snap["enabled"]:
             client, err = xui_manager.make_client_or_error()
             if client is None:
@@ -4743,26 +4743,26 @@ class BotHandlersLite(AITranslateMixin):
                 ok, msg = client.login()
                 if ok:
                     ok2, _msg2, inbounds = client.list_inbounds()
-                    text += "\n\n✅ Связь с панелью OK" + (
-                        f", inbound'ов: {len(inbounds)}" if ok2 else ""
+                    text += "\n\n✅ Panel connectivity OK" + (
+                        f", inbounds: {len(inbounds)}" if ok2 else ""
                     )
                     if msg and "auto-fallback" in msg:
-                        # login() уже переписал base_url в xui_config.json
+                        # login() already rewrote base_url in xui_config.json
                         text += (
-                            "\n🔄 URL панели автоматически переключён с "
-                            "mesh на loopback (Tailscale был недоступен).\n"
-                            f"Сейчас: <code>{html.escape(client.base_url)}</code>"
+                            "\n🔄 Panel URL automatically switched from "
+                            "mesh to loopback (Tailscale was unavailable).\n"
+                            f"Now: <code>{html.escape(client.base_url)}</code>"
                         )
                 else:
-                    text += f"\n\n❌ Логин не удаётся: {html.escape(msg or '')}"
+                    text += f"\n\n❌ Login failed: {html.escape(msg or '')}"
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
 
     async def xui_list_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/xui_list` — список inbound'ов (для выбора /xui_set_inbound)."""
+        """`/xui_list` — inbound list (for /xui_set_inbound)."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         client, err = xui_manager.make_client_or_error()
         if client is None:
@@ -4770,7 +4770,7 @@ class BotHandlersLite(AITranslateMixin):
             return
         ok, msg = client.login()
         if not ok:
-            await update.message.reply_text(f"❌ Логин: {msg}")
+            await update.message.reply_text(f"❌ Login: {msg}")
             return
         ok, msg, inbounds = client.list_inbounds()
         if not ok:
@@ -4778,12 +4778,12 @@ class BotHandlersLite(AITranslateMixin):
             return
         if not inbounds:
             await update.message.reply_text(
-                "Inbound'ов нет. Создайте их в самой панели 3x-ui."
+                "No inbounds. Create them in the 3x-ui panel itself."
             )
             return
         snap = xui_manager.status_summary()
         default_id = snap["default_inbound_id"]
-        lines = ["🛠 <b>Inbound'ы 3x-ui:</b>", ""]
+        lines = ["🛠 <b>3x-ui inbounds:</b>", ""]
         for ib in inbounds:
             ib_id = ib.get("id", "?")
             mark = " ⭐" if ib_id == default_id else ""
@@ -4794,32 +4794,32 @@ class BotHandlersLite(AITranslateMixin):
                 f"• #{ib_id}{mark} — <code>{proto}</code>:<code>{port}</code> — {remark}"
             )
         lines.append("")
-        lines.append("Сменить дефолтный: <code>/xui_set_inbound &lt;id&gt;</code>")
+        lines.append("Change default: <code>/xui_set_inbound &lt;id&gt;</code>")
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
     async def xui_set_inbound_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/xui_set_inbound <id>` — выбрать inbound по умолчанию."""
+        """`/xui_set_inbound <id>` — set the default inbound."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             await update.message.reply_text(
-                "Использование: <code>/xui_set_inbound &lt;id&gt;</code>\n"
-                "Список: /xui_list",
+                "Usage: <code>/xui_set_inbound &lt;id&gt;</code>\n"
+                "List: /xui_list",
                 parse_mode=ParseMode.HTML,
             )
             return
         try:
             inbound_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ ID должен быть числом.")
+            await update.message.reply_text("❌ ID must be a number.")
             return
         ok, msg = xui_manager.set_default_inbound(inbound_id)
         if ok:
-            await update.message.reply_text(f"✅ Inbound по умолчанию: #{inbound_id}")
+            await update.message.reply_text(f"✅ Default inbound: #{inbound_id}")
         else:
             await update.message.reply_text(f"❌ {msg}")
 
@@ -4827,83 +4827,83 @@ class BotHandlersLite(AITranslateMixin):
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         ok, msg = xui_manager.set_enabled(True)
         await update.message.reply_text(
-            "✅ 3x-ui интеграция включена" if ok else f"❌ {msg}"
+            "✅ 3x-ui integration enabled" if ok else f"❌ {msg}"
         )
 
     async def xui_disable_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         ok, msg = xui_manager.set_enabled(False)
         await update.message.reply_text(
-            "🔴 3x-ui интеграция выключена (креды сохранены)" if ok else f"❌ {msg}"
+            "🔴 3x-ui integration disabled (credentials kept)" if ok else f"❌ {msg}"
         )
 
     async def xui_clear_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/xui_clear` — стереть креды панели после подтверждения."""
+        """`/xui_clear` — wipe panel credentials after confirmation."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args or args[0].strip().upper() != "YES":
             await update.message.reply_text(
-                "❗️ Это удалит сохранённые URL/логин/пароль 3x-ui из "
+                "❗️ This will delete saved 3x-ui URL/login/password from "
                 "<code>xui_config.json</code>.\n\n"
-                "Подтвердите: <code>/xui_clear YES</code>",
+                "Confirm: <code>/xui_clear YES</code>",
                 parse_mode=ParseMode.HTML,
             )
             return
         ok, msg = xui_manager.clear_credentials()
         await update.message.reply_text(
-            "🗑 Креды 3x-ui удалены. Запустите /xui_setup, когда понадобится."
+            "🗑 3x-ui credentials deleted. Run /xui_setup when needed."
             if ok
             else f"❌ {msg}"
         )
 
     # === Bot-managed provisioning ===
-    # Канон имён клиентов: <Prefix>_ID<first2>_<last2> от Telegram-ID.
-    # Обрабатываются все включённые протоколы, кроме NaiveProxy
-    # (single-cred модель). VLESS-Reality pending → решается в Phase 2.
+    # Canonical client names: <Prefix>_ID<first2>_<last2> from Telegram-ID.
+    # All enabled protocols are processed except NaiveProxy
+    # (single-cred model). VLESS-Reality pending → handled in Phase 2.
 
     def _picker_privileged_and_regular_counts(self) -> tuple[int, int]:
-        """Счётчики для подсказки picker'а: admin∪special vs обычные."""
+        """Counters for the picker hint: admin∪special vs regular."""
         special_ids, users_data = storage_list_users()
         privileged = set(self.config.resolved_admin_user_ids()) | set(special_ids)
         regular_n = sum(1 for uid in users_data if int(uid) not in privileged)
         return len(privileged), regular_n
 
     def _picker_scope_hint_html(self) -> str:
-        """Пояснить, почему в кнопках нет обычных пользователей."""
+        """Explain why regular users are not in the buttons."""
         priv_n, regular_n = self._picker_privileged_and_regular_counts()
         return (
-            f"ℹ️ В кнопках только <b>admin + special</b> "
-            f"(сейчас {priv_n}).\n"
-            f"Обычных в базе: <b>{regular_n}</b> — им VPN-профили не "
-            f"выдаются, пока не сделаете "
-            f"<code>/special_add &lt;id&gt;</code>, затем "
+            f"ℹ️ Buttons show only <b>admin + special</b> "
+            f"(currently {priv_n}).\n"
+            f"Regular users in the DB: <b>{regular_n}</b> — they get no VPN profiles "
+            f"until you run "
+            f"<code>/special_add &lt;id&gt;</code>, then "
             f"<code>/provision &lt;id&gt;</code>.\n"
-            f"Все ID смотрите в <code>/list_users</code>; вручную тоже "
-            f"можно: <code>/profiles &lt;id&gt;</code>."
+            f"See all IDs in <code>/list_users</code>; you can also "
+            f"run <code>/profiles &lt;id&gt;</code> manually."
         )
 
     def _build_user_picker_kb(self, action_prefix: str) -> InlineKeyboardMarkup:
-        """InlineKeyboard со списком известных TG-ID (admin ∪ special).
+        """InlineKeyboard with known TG IDs (admin ∪ special).
 
-        Каждая кнопка — `Имя Фамилия (ID)` или `@username (ID)` из
-        `users.json`. callback_data: `{action_prefix}:{uid}` либо
-        `{action_prefix}:cancel`. Используется как «autocomplete» для
-        команд `/provision`, `/profiles`, `/clean_user` без аргумента.
+        Each button is `First Last (ID)` or `@username (ID)` from
+        `users.json`. callback_data: `{action_prefix}:{uid}` or
+        `{action_prefix}:cancel`. Used as autocomplete for
+        `/provision`, `/profiles`, `/clean_user` with no argument.
 
-        Обычные пользователи намеренно не включаются: bot-managed профили
-        выдаются только privileged-ролям (см. `_picker_scope_hint_html`).
+        Regular users are intentionally excluded: bot-managed profiles
+        are issued only to privileged roles (see `_picker_scope_hint_html`).
         """
         special_ids, users_data = storage_list_users()
         target_ids = sorted(
@@ -4932,30 +4932,30 @@ class BotHandlersLite(AITranslateMixin):
         rows.append(
             [
                 InlineKeyboardButton(
-                    "📒 Все пользователи (/list_users)",
+                    "📒 All users (/list_users)",
                     callback_data=f"{action_prefix}:list_users",
                 )
             ]
         )
         rows.append(
-            [InlineKeyboardButton("✖ Отмена", callback_data=f"{action_prefix}:cancel")]
+            [InlineKeyboardButton("✖ Cancel", callback_data=f"{action_prefix}:cancel")]
         )
         return InlineKeyboardMarkup(rows)
 
     async def provision_picker_callback(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Callback для inline-picker'ов команд провизионинга.
+        """Callback for provisioning-command inline pickers.
 
-        Обрабатывает три префикса:
-            prov_pick:<uid>   запустить provision_user(<uid>)
-            prof_pick:<uid>   показать profiles_for_user(<uid>)
-            clean_pick:<uid>  выполнить clean_user(<uid>) (клик и есть
-                              подтверждение — кнопка с предупреждением)
-        Плюс `<prefix>:cancel` → «Отменено».
+        Handles three prefixes:
+            prov_pick:<uid>   run provision_user(<uid>)
+            prof_pick:<uid>   show profiles_for_user(<uid>)
+            clean_pick:<uid>  run clean_user(<uid>) (the tap is the
+                              confirmation — the button already warns)
+        Plus `<prefix>:cancel` → “Cancelled”.
 
-        Только для админа: не-админам ничего не отвечает (safe-fail —
-        callback зарегистрирован в bot.py до общего handler'а).
+        Admin only: non-admins get no reply (safe-fail —
+        the callback is registered in bot.py before the generic handler).
         """
         query = update.callback_query
         await query.answer()
@@ -4967,16 +4967,16 @@ class BotHandlersLite(AITranslateMixin):
         action_prefix, payload = data.split(":", 1)
         if payload == "cancel":
             try:
-                await query.message.edit_text("Отменено.")
+                await query.message.edit_text("Cancelled.")
             except Exception:
                 pass
             return
         if payload == "list_users":
-            # Кнопка-подсказка из picker'а: обычные не в списке кнопок.
+            # Hint button from the picker: regular users are not in the button list.
             try:
                 await query.message.edit_text(
-                    "📒 Чтобы увидеть <b>обычных</b> пользователей "
-                    "(и все роли), откройте:\n"
+                    "📒 To see <b>regular</b> users "
+                    "(and all roles), open:\n"
                     "<code>/list_users</code>\n\n"
                     + self._picker_scope_hint_html(),
                     parse_mode=ParseMode.HTML,
@@ -4991,7 +4991,7 @@ class BotHandlersLite(AITranslateMixin):
 
         try:
             await query.message.edit_text(
-                f"⏳ Выполняю для <code>{target_id}</code>…",
+                f"⏳ Running for <code>{target_id}</code>…",
                 parse_mode=ParseMode.HTML,
             )
         except Exception:
@@ -5006,7 +5006,7 @@ class BotHandlersLite(AITranslateMixin):
             text = self._format_provision_results(
                 target_id,
                 results,
-                header="🛠 <b>Провизионинг для TG-ID:</b>",
+                header="🛠 <b>Provisioning for TG ID:</b>",
                 mode="provision",
             )
             text += self._vless_firewall_hint()
@@ -5020,14 +5020,14 @@ class BotHandlersLite(AITranslateMixin):
             text = self._format_provision_results(
                 target_id,
                 profiles,
-                header="📋 <b>Профили TG-ID:</b>",
+                header="📋 <b>Profiles for TG ID:</b>",
                 mode="profiles",
             )
             none_existing = not any(p.get("exists") for p in profiles.values())
             if none_existing:
                 text += (
-                    f"\n\nПрофили не созданы. "
-                    f"Запустите <code>/provision {target_id}</code>."
+                    f"\n\nNo profiles created. "
+                    f"Run <code>/provision {target_id}</code>."
                 )
             edited = await query.message.edit_text(text, parse_mode=ParseMode.HTML)
             self._schedule_admin_msg_ttl(edited, user_id=target_id)
@@ -5050,7 +5050,7 @@ class BotHandlersLite(AITranslateMixin):
             text = self._format_provision_results(
                 target_id,
                 results,
-                header="🗑 <b>Очистка TG-ID:</b>",
+                header="🗑 <b>Cleanup for TG ID:</b>",
                 mode="clean",
             )
             await query.message.edit_text(text, parse_mode=ParseMode.HTML)
@@ -5058,50 +5058,50 @@ class BotHandlersLite(AITranslateMixin):
 
     @staticmethod
     def _xui_is_active() -> bool:
-        """3x-ui интеграция настроена И включена. Используется legacy
-        VLESS-командами как роутинг-флаг: если активна — данные тянем
-        из панели, локальный `vless_config.json` показываем как fallback."""
+        """3x-ui integration is configured AND enabled. Used by legacy
+        VLESS commands as a routing flag: if active — pull data
+        from the panel and show local `vless_config.json` as fallback."""
         try:
             return xui_manager.is_configured() and xui_manager.is_enabled()
         except Exception:
             return False
 
     async def _legacy_per_client_guard(self, update: Update) -> bool:
-        """Per-client legacy команды (`/<proto>_add_client`,
-        `/<proto>_del_client`, `/<proto>_qr <name>`) для Hys/Mtp/Tuic/
-        AnyTLS/XHTTP всегда редиректят на единый bot-managed flow.
+        """Per-client legacy commands (`/<proto>_add_client`,
+        `<proto>_del_client`, `/<proto>_qr <name>`) for Hys/Mtp/Tuic/
+        AnyTLS/XHTTP always redirect to the unified bot-managed flow.
 
-        После Stage 3 это снимает «два пути на одни данные»: один
-        источник правды для per-user провизионинга — `provision_manager`
-        с canonical-именами `<Prefix>_ID<first2>_<last2>`. Per-inbound
-        конфиг (`/<proto>_set_*`, `/<proto>_gen_*`, `/<proto>_status`,
-        `/<proto>_export`) не трогаем — это легитимный путь admin'а.
+        After Stage 3 this removes “two paths to the same data”: one
+        source of truth for per-user provisioning — `provision_manager`
+        with canonical names `<Prefix>_ID<first2>_<last2>`. Per-inbound
+        config (`/<proto>_set_*`, `/<proto>_gen_*`, `/<proto>_status`,
+        `<proto>_export`) is left alone — that is a legitimate admin path.
         """
         text = (
-            "🛑 Per-client операции теперь идут через единый "
-            "<b>bot-managed flow</b> с canonical-именами.\n\n"
-            "• <code>/provision &lt;user_id&gt;</code> — создать профили "
-            "во всех включённых протоколах сразу\n"
-            "• <code>/profiles &lt;user_id&gt;</code> — посмотреть URL и QR\n"
-            "• <code>/clean_user &lt;user_id&gt; YES</code> — удалить\n"
-            "• <code>/email_profile &lt;user_id&gt;</code> — отправить на email\n\n"
-            "Список всех bot-managed клиентов протокола (read-only) "
-            "по-прежнему доступен через <code>/&lt;proto&gt;_list_clients</code>."
+            "🛑 Per-client operations now go through the unified "
+            "<b>bot-managed flow</b> with canonical names.\n\n"
+            "• <code>/provision &lt;user_id&gt;</code> — create profiles "
+            "in all enabled protocols at once\n"
+            "• <code>/profiles &lt;user_id&gt;</code> — view URL and QR\n"
+            "• <code>/clean_user &lt;user_id&gt; YES</code> — delete\n"
+            "• <code>/email_profile &lt;user_id&gt;</code> — send by email\n\n"
+            "A read-only list of all bot-managed clients for the protocol "
+            "is still available via <code>/&lt;proto&gt;_list_clients</code>."
         )
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
         return True
 
     async def _legacy_vless_guard(self, update: Update, action_kind: str) -> bool:
-        """Если xui активен — отправляет redirect-сообщение под `action_kind`
-        и возвращает True. Caller должен сразу `return`, если True.
+        """If xui is active — send a redirect message for `action_kind`
+        and return True. The caller must `return` immediately if True.
 
         action_kind:
-          'config'   — настройка inbound'а (server/port/keys/sni/fingerprint/...)
-                       — делается напрямую в панели 3x-ui;
-          'client'   — управление клиентами (add/del) — через
-                       /provision и /clean_user;
-          'service'  — on/off/test/sync/reset/qr — реальный xray
-                       запускает 3x-ui, не bot.
+          'config'   — inbound setup (server/port/keys/sni/fingerprint/...)
+                       — done directly in the 3x-ui panel;
+          'client'   — client management (add/del) — via
+                       /provision and /clean_user;
+          'service'  — on/off/test/sync/reset/qr — the real xray
+                       is started by 3x-ui, not the bot.
         """
         if not self._xui_is_active():
             return False
@@ -5110,40 +5110,40 @@ class BotHandlersLite(AITranslateMixin):
         except Exception:
             base_url = ""
         url_html = (
-            f"<code>{html.escape(base_url)}</code>" if base_url else "<i>не задан</i>"
+            f"<code>{html.escape(base_url)}</code>" if base_url else "<i>not set</i>"
         )
         if action_kind == "config":
             text = (
-                "🛑 Эта команда правит локальный <code>vless_config.json</code> "
-                "бота (legacy host-Xray flow).\n\n"
-                "На этом VPS активна <b>3x-ui интеграция</b> — все inbound-"
-                "настройки (server/port/UUID/Reality keys/SNI/fingerprint) "
-                "делайте <b>напрямую в панели</b>: " + url_html + "\n\n"
-                "Состояние: /vless_status · /xui_status · /xui_list"
+                "🛑 This command edits the local <code>vless_config.json</code> "
+                "of the bot (legacy host-Xray flow).\n\n"
+                "On this VPS <b>3x-ui integration</b> is active — all inbound "
+                "settings (server/port/UUID/Reality keys/SNI/fingerprint) "
+                "should be done <b>directly in the panel</b>: " + url_html + "\n\n"
+                "Status: /vless_status · /xui_status · /xui_list"
             )
         elif action_kind == "client":
             text = (
-                "🛑 Управление клиентами на этом VPS идёт через "
-                "<b>bot-managed flow</b> (3x-ui интеграция активна).\n\n"
-                "• <code>/provision &lt;user_id&gt;</code> — создать профиль\n"
-                "• <code>/profiles &lt;user_id&gt;</code> — посмотреть существующие\n"
-                "• <code>/clean_user &lt;user_id&gt; YES</code> — удалить\n"
-                "• <code>/email_profile &lt;user_id&gt;</code> — отправить на email\n\n"
-                "Список всех bot-managed клиентов: /vless_list_clients"
+                "🛑 Client management on this VPS goes through the "
+                "<b>bot-managed flow</b> (3x-ui integration is active).\n\n"
+                "• <code>/provision &lt;user_id&gt;</code> — create a profile\n"
+                "• <code>/profiles &lt;user_id&gt;</code> — view existing ones\n"
+                "• <code>/clean_user &lt;user_id&gt; YES</code> — delete\n"
+                "• <code>/email_profile &lt;user_id&gt;</code> — send by email\n\n"
+                "List of all bot-managed clients: /vless_list_clients"
             )
         else:  # service
             text = (
-                "🛑 Эта команда управляет локальным <code>xray.service</code> "
-                "бота (legacy host-Xray). На этом VPS реальный xray "
-                "запущен <b>панелью 3x-ui</b>: " + url_html + "\n\n"
-                "Управляйте сервисом через панель / 3x-ui CLI на сервере."
+                "🛑 This command manages the local <code>xray.service</code> "
+                "of the bot (legacy host-Xray). On this VPS the real xray "
+                "is run by the <b>3x-ui panel</b>: " + url_html + "\n\n"
+                "Manage the service via the panel / 3x-ui CLI on the server."
             )
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
         return True
 
     @staticmethod
     def _count_inbound_clients(inbound) -> int:
-        """Количество клиентов в inbound (settings — JSON-string)."""
+        """Client count in the inbound (settings is a JSON string)."""
         try:
             s = inbound.get("settings") or "{}"
             if isinstance(s, str):
@@ -5155,10 +5155,10 @@ class BotHandlersLite(AITranslateMixin):
 
     @staticmethod
     def _count_canon_clients(inbound) -> int:
-        """Сколько в inbound клиентов с canonical-именем
-        (`<Prefix>_ID<two>_<two>` от bot-managed flow). Используется в
-        overview, чтобы admin видел разделение manual / bot-managed
-        в одной таблице."""
+        """How many inbound clients have a canonical name
+        (`<Prefix>_ID<two>_<two>` from the bot-managed flow). Used in
+        the overview so admin can see the manual / bot-managed split
+        in one table."""
         import re
 
         canon_re = re.compile(r"^(Vless|Hys|Mtp|Tuic|Any|Xh)_ID\d{2}_\d{2}$")
@@ -5178,23 +5178,23 @@ class BotHandlersLite(AITranslateMixin):
             return 0
 
     async def _send_vless_xui_overview(self, update: Update, intent: str = "status"):
-        """Отправляет HTML-сообщение «реальное состояние VLESS-Reality
-        через 3x-ui» — для legacy `/vless_status` и `/vless_export`,
-        чтобы admin видел актуальную картину панели вместо локального
+        """Send an HTML message “real VLESS-Reality state
+        via 3x-ui” — for legacy `/vless_status` and `/vless_export`,
+        so admin sees the live panel picture instead of the local
         `vless_config.json`.
 
-        intent='status' → акцент на состояние / inbound'ы / навигацию.
-        intent='export' → акцент на per-user выгрузку (`/provision`,
+        intent='status' → focus on state / inbounds / navigation.
+        intent='export' → focus on per-user export (`/provision`,
                           `/profiles`, `/email_profile`).
         """
         cfg = xui_manager.load_config()
         base_url = cfg.get("base_url", "")
         default_id = int(cfg.get("default_inbound_id") or 0)
-        # Legacy bot_inbound_id от старой схемы (Variant A) — может ещё
-        # висеть в панели, показываем как «orphan» если найдём.
+        # Legacy bot_inbound_id from the old scheme (Variant A) — may still
+        # sit in the panel; show it as “orphan” if found.
         legacy_bot_id = int(cfg.get("bot_inbound_id") or 0)
 
-        # Live-данные с панели — best effort
+        # Live data from the panel — best effort
         inbound_lines: list = []
         live_ok = False
         try:
@@ -5215,8 +5215,8 @@ class BotHandlersLite(AITranslateMixin):
                                 f"  • #{default_id} "
                                 f"<code>{html.escape(ib.get('remark') or '')}</code> "
                                 f"port={ib.get('port', '?')}: "
-                                f"{total_clients} клиентов "
-                                f"(<i>{manual_clients} ручных + {canon_clients} bot-managed</i>)"
+                                f"{total_clients} clients "
+                                f"(<i>{manual_clients} manual + {canon_clients} bot-managed</i>)"
                             )
                         if (
                             legacy_bot_id
@@ -5229,27 +5229,27 @@ class BotHandlersLite(AITranslateMixin):
                                 f"  • #{legacy_bot_id} "
                                 f"<code>{html.escape(ib.get('remark') or '')}</code> "
                                 f"port={ib.get('port', '?')} "
-                                f"<i>(legacy от старой схемы клон-inbound, "
-                                f"можно удалить вручную)</i>: {n} клиентов"
+                                f"<i>(legacy clone-inbound from the old scheme, "
+                                f"can be deleted manually)</i>: {n} clients"
                             )
         except Exception as exc:
             logger.warning("vless_xui_overview live failed: %s", exc)
 
         header_emoji = "🛡" if intent == "status" else "📤"
         header_text = (
-            "VLESS-Reality (через 3x-ui)"
+            "VLESS-Reality (via 3x-ui)"
             if intent == "status"
-            else "VLESS-Reality экспорт (через 3x-ui)"
+            else "VLESS-Reality export (via 3x-ui)"
         )
         lines = [
             f"{header_emoji} <b>{header_text}</b>",
             "",
-            f"Источник: панель 3x-ui — <code>{html.escape(base_url)}</code>",
+            f"Source: 3x-ui panel — <code>{html.escape(base_url)}</code>",
         ]
         if not live_ok:
             lines.append(
-                "⚠️ Не удалось получить live-данные с панели — показываю "
-                "только cached config из <code>xui_config.json</code>."
+                "⚠️ Failed to get live data from the panel — showing "
+                "cached config from <code>xui_config.json</code> only."
             )
 
         if inbound_lines:
@@ -5258,42 +5258,42 @@ class BotHandlersLite(AITranslateMixin):
             lines.extend(inbound_lines)
             lines.append("")
             lines.append(
-                "<i>Bot-managed клиенты пишутся в default_inbound (на :443) "
-                "с canonical-именами (<code>Vless_ID*_*</code>). Manual "
-                "клиенты админа (произвольные имена) бот не трогает.</i>"
+                "<i>Bot-managed clients are written to default_inbound (on :443) "
+                "with canonical names (<code>Vless_ID*_*</code>). Manual "
+                "admin clients (arbitrary names) are not touched by the bot.</i>"
             )
 
         if intent == "status":
             lines.append("")
             lines.append(
-                "Управление: /xui_status · /xui_list · /provision · "
+                "Manage: /xui_status · /xui_list · /provision · "
                 "/profiles · /clean_user"
             )
         else:  # export
             lines.append("")
-            lines.append("📤 <b>Получить клиентский профиль:</b>")
-            lines.append("• <code>/provision &lt;user_id&gt;</code> — создать новый")
+            lines.append("📤 <b>Get a client profile:</b>")
+            lines.append("• <code>/provision &lt;user_id&gt;</code> — create a new one")
             lines.append(
-                "• <code>/profiles &lt;user_id&gt;</code> — посмотреть существующий"
+                "• <code>/profiles &lt;user_id&gt;</code> — view an existing one"
             )
             lines.append(
-                "• <code>/email_profile &lt;user_id&gt;</code> — отправить на email"
+                "• <code>/email_profile &lt;user_id&gt;</code> — send by email"
             )
 
         lines.append("")
         lines.append(
-            "<i>Ниже — локальный <code>vless_config.json</code> бота "
-            "(legacy host-Xray, на этом VPS не используется при наличии "
-            "3x-ui-интеграции).</i>"
+            "<i>Below is the bot local <code>vless_config.json</code> "
+            "(legacy host-Xray, unused on this VPS when "
+            "3x-ui integration is present).</i>"
         )
 
         await update.message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
 
     def _vless_firewall_hint(self) -> str:
-        """No-op после Variant B: bot пишет canonical-клиентов в default
-        inbound (обычно :443, который уже открыт под VLESS-Reality).
-        Отдельного bot-managed inbound на нестандартном порту больше
-        нет — firewall-подсказка не нужна."""
+        """No-op after Variant B: the bot writes canonical clients into the default
+        inbound (usually :443, already open for VLESS-Reality).
+        A separate bot-managed inbound on a non-standard port is no
+        longer used — no firewall hint is needed."""
         return ""
 
     @staticmethod
@@ -5306,31 +5306,31 @@ class BotHandlersLite(AITranslateMixin):
             return ""
         if not vless.get("ok"):
             return (
-                "\n\n⚠️ <b>Legacy VLESS не применён полностью.</b>\n"
-                "Проверьте сообщение выше, затем по SSH:\n"
+                "\n\n⚠️ <b>Legacy VLESS was not fully applied.</b>\n"
+                "Check the message above, then over SSH:\n"
                 "<code>xray run -test -config /usr/local/etc/xray/config.json</code>\n"
                 "<code>systemctl status xray --no-pager</code>"
             )
         if mode == "clean" and not vless.get("removed"):
             return ""
         return (
-            "\n\nℹ️ <b>Legacy VLESS применён, Xray перезапущен автоматически.</b>\n"
-            "После выдачи/замены профиля переимпортируйте свежую ссылку в клиенте "
-            "(Karing и др.). Если трафика нет, проверьте live-log:\n"
+            "\n\nℹ️ <b>Legacy VLESS applied, Xray restarted automatically.</b>\n"
+            "After issuing/replacing a profile, re-import the fresh link in the client "
+            "(Karing and others). If there is no traffic, check the live log:\n"
             "<code>journalctl -u xray -f --no-pager</code>"
         )
 
     async def _send_qrs_for_results(self, message, results, user_id: int = 0) -> list:
-        """Для каждого результата с готовым URI — отправить QR-картинку
-        отдельным сообщением (по одной на протокол) и **запланировать
-        авто-удаление через 15 минут** (через `_schedule_admin_msg_ttl`).
+        """For each result with a ready URI — send a QR image
+        as a separate message (one per protocol) and **schedule
+        auto-delete in 15 minutes** (via `_schedule_admin_msg_ttl`).
 
-        Используется в `/provision <id>` и `/profiles <id>` (и их picker-
-        callback'ах) чтобы admin сразу увидел рабочий QR. В пакетном
-        `/provision_all` намеренно не зовётся — там это спамом было бы.
+        Used in `/provision <id>` and `/profiles <id>` (and their picker
+        callbacks) so admin immediately sees a working QR. Intentionally
+        not called from batch `/provision_all` — that would be spam.
 
-        Возвращает список отправленных Message (или пустой список) —
-        caller может тоже что-то с ними сделать.
+        Returns a list of sent Message objects (or an empty list) —
+        the caller may also do something with them.
         """
         sent_messages: list = []
         if not results:
@@ -5354,23 +5354,23 @@ class BotHandlersLite(AITranslateMixin):
         self, target_id: int, results, header: str, mode: str
     ) -> str:
         """
-        mode='provision' — показывает уже-был/создан/ошибка
-        mode='profiles'  — read-only показывает есть/нет
-        mode='clean'     — удалён/не было/ошибка
+        mode='provision' — shows already-existed/created/error
+        mode='profiles'  — read-only shows present/absent
+        mode='clean'     — deleted/was-not-there/error
         """
         lines = [f"{header} <code>{target_id}</code>", ""]
         if not results:
             lines.extend(
                 [
-                    "⚠️ Нет результатов по протоколам.",
+                    "⚠️ No protocol results.",
                     "",
-                    "Проверьте:",
-                    "• <code>/xui_status</code> — настроена ли 3x-ui интеграция",
-                    "• <code>/xui_list</code> — выбран ли inbound по умолчанию",
-                    "• <code>/diag</code> — какие транспорты реально live",
+                    "Check:",
+                    "• <code>/xui_status</code> — whether 3x-ui integration is configured",
+                    "• <code>/xui_list</code> — whether a default inbound is selected",
+                    "• <code>/diag</code> — which transports are actually live",
                     "",
-                    "Для старого VPS с локальной 3x-ui после деплоя обычно нужно "
-                    "заново выполнить <code>/xui_setup</code>.",
+                    "On an older VPS with local 3x-ui, after deploy you usually need "
+                    "to run <code>/xui_setup</code> again.",
                 ]
             )
             return "\n".join(lines)
@@ -5381,20 +5381,20 @@ class BotHandlersLite(AITranslateMixin):
             emoji = "✅" if ok else ("⚪" if mode == "profiles" else "❌")
             if mode == "provision":
                 if r.get("ok") and r.get("existed"):
-                    label = "уже был"
+                    label = "already existed"
                 elif r.get("ok"):
-                    label = "создан"
+                    label = "created"
                 else:
-                    label = "ошибка"
+                    label = "error"
             elif mode == "profiles":
-                label = "есть" if r.get("exists") else "нет"
+                label = "present" if r.get("exists") else "absent"
             else:  # clean
                 if r.get("ok") and r.get("removed"):
-                    label = "удалён"
+                    label = "deleted"
                 elif r.get("ok"):
-                    label = "не было"
+                    label = "was not there"
                 else:
-                    label = "ошибка"
+                    label = "error"
             lines.append(f"{emoji} <b>{proto}</b>: <code>{name_html}</code> ({label})")
             uri = r.get("uri")
             if uri:
@@ -5405,8 +5405,8 @@ class BotHandlersLite(AITranslateMixin):
         if any_uri and mode in ("provision", "profiles"):
             lines.append("")
             lines.append(
-                "📋 <i>Тапни на URL чтобы скопировать в буфер. "
-                "Или /email_profile &lt;id&gt; — отправить на email.</i>"
+                "📋 <i>Tap the URL to copy it. "
+                "Or /email_profile &lt;id&gt; — send by email.</i>"
             )
         hint = self._legacy_vless_restart_hint(results, mode)
         if hint:
@@ -5416,18 +5416,18 @@ class BotHandlersLite(AITranslateMixin):
     async def provision_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/provision <user_id>` — провизионить клиентов в bot-managed inbound'ах."""
+        """`/provision <user_id>` — provision clients in bot-managed inbounds."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             kb = self._build_user_picker_kb("prov_pick")
             await update.message.reply_text(
-                "🛠 <b>Кому провизионить?</b>\n"
-                "Выбери из списка или введи вручную: "
+                "🛠 <b>Who to provision?</b>\n"
+                "Pick from the list or type manually: "
                 "<code>/provision &lt;id&gt;</code>. "
-                "Пакетно: /provision_all.\n\n"
+                "Batch: /provision_all.\n\n"
                 + self._picker_scope_hint_html(),
                 reply_markup=kb,
                 parse_mode=ParseMode.HTML,
@@ -5436,20 +5436,20 @@ class BotHandlersLite(AITranslateMixin):
         try:
             target_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ user_id должен быть числом.")
+            await update.message.reply_text("❌ user_id must be a number.")
             return
 
         enabled = provision_manager.list_enabled_protocols()
         if not enabled:
             await update.message.reply_text(
-                "⚠️ На VPS ни один протокол не помечен enabled. "
-                "Проверьте /diag и /start."
+                "⚠️ No protocol on the VPS is marked enabled. "
+                "Check /diag and /start."
             )
             return
 
         results = provision_manager.provision_user(target_id, enabled_protocols=enabled)
-        # Новый /provision = сброс счётчика просмотров /my_profile
-        # (даём пользователю свежие 3 просмотра).
+        # A new /provision = reset the /my_profile view counter
+        # (give the user 3 fresh views).
         try:
             storage_reset_my_profile_views(target_id)
         except Exception as exc:
@@ -5457,43 +5457,43 @@ class BotHandlersLite(AITranslateMixin):
         text = self._format_provision_results(
             target_id,
             results,
-            header="🛠 <b>Провизионинг для TG-ID:</b>",
+            header="🛠 <b>Provisioning for TG ID:</b>",
             mode="provision",
         )
         text += self._vless_firewall_hint()
         sent_text = await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-        # 15-мин TTL на text+QR — чтобы рабочие URL/QR не висели в чате
-        # бессрочно. То же что в /my_profile, но без счётчика просмотров.
+        # 15-min TTL on text+QR — so working URL/QR do not sit in chat
+        # forever. Same as /my_profile, but without a view counter.
         self._schedule_admin_msg_ttl(sent_text, user_id=target_id)
-        # QR на каждый протокол с готовым URI — чтобы admin мог сразу
-        # переслать пользователю / показать с экрана.
+        # QR for each protocol with a ready URI — so admin can immediately
+        # forward it to the user / show it from the screen.
         await self._send_qrs_for_results(update.message, results, user_id=target_id)
 
     async def provision_all_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/provision_all` — провизионить всех special + admin одной командой."""
+        """`/provision_all` — provision all special + admin in one command."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         special_ids, _users_data = storage_list_users()
         target_ids = sorted(set(self.config.admin_user_ids) | set(special_ids))
         if not target_ids:
             await update.message.reply_text(
-                "В списках admin / special нет ни одного пользователя."
+                "There are no users in the admin / special lists."
             )
             return
         enabled = provision_manager.list_enabled_protocols()
         if not enabled:
             await update.message.reply_text(
-                "⚠️ На VPS ни один протокол не помечен enabled."
+                "⚠️ No protocol on the VPS is marked enabled."
             )
             return
         await update.message.reply_text(
-            f"🛠 Провизионинг {len(target_ids)} пользователей × "
-            f"{len(enabled)} протоколов…"
+            f"🛠 Provisioning {len(target_ids)} users × "
+            f"{len(enabled)} protocols…"
         )
-        summary_lines = ["<b>Готово.</b>", ""]
+        summary_lines = ["<b>Done.</b>", ""]
         legacy_vless_changed = False
         for tid in target_ids:
             results = provision_manager.provision_user(tid)
@@ -5513,14 +5513,14 @@ class BotHandlersLite(AITranslateMixin):
                 1 for r in results.values() if r.get("ok") and not r.get("existed")
             )
             summary_lines.append(
-                f"• <code>{tid}</code>: {ok_cnt}/{len(results)} ok ({new_cnt} новых)"
+                f"• <code>{tid}</code>: {ok_cnt}/{len(results)} ok ({new_cnt} new)"
             )
         summary_lines.append("")
-        summary_lines.append("Деталь по одному: <code>/profiles &lt;id&gt;</code>")
+        summary_lines.append("Per-user details: <code>/profiles &lt;id&gt;</code>")
         if legacy_vless_changed:
             summary_lines.append("")
             summary_lines.append(
-                "⚠️ Legacy VLESS изменён. По SSH выполните: "
+                "⚠️ Legacy VLESS changed. Over SSH run: "
                 "<code>systemctl restart xray</code>"
             )
         text = "\n".join(summary_lines) + self._vless_firewall_hint()
@@ -5529,16 +5529,16 @@ class BotHandlersLite(AITranslateMixin):
     async def profiles_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/profiles <user_id>` — показать существующие bot-managed профили."""
+        """`/profiles <user_id>` — show existing bot-managed profiles."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             kb = self._build_user_picker_kb("prof_pick")
             await update.message.reply_text(
-                "📋 <b>Чьи профили показать?</b>\n"
-                "Выбери из списка или введи вручную: "
+                "📋 <b>Whose profiles to show?</b>\n"
+                "Pick from the list or type manually: "
                 "<code>/profiles &lt;id&gt;</code>.\n\n"
                 + self._picker_scope_hint_html(),
                 reply_markup=kb,
@@ -5548,25 +5548,25 @@ class BotHandlersLite(AITranslateMixin):
         try:
             target_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ user_id должен быть числом.")
+            await update.message.reply_text("❌ user_id must be a number.")
             return
 
         profiles = provision_manager.profiles_for_user(target_id)
         text = self._format_provision_results(
             target_id,
             profiles,
-            header="📋 <b>Профили TG-ID:</b>",
+            header="📋 <b>Profiles for TG ID:</b>",
             mode="profiles",
         )
         none_existing = not any(p.get("exists") for p in profiles.values())
         if none_existing:
             text += (
-                f"\n\nПрофили не созданы. "
-                f"Запустите <code>/provision {target_id}</code>."
+                f"\n\nNo profiles created. "
+                f"Run <code>/provision {target_id}</code>."
             )
         sent_text = await update.message.reply_text(text, parse_mode=ParseMode.HTML)
-        # 15-мин TTL на text+QR. Если профилей нет — сообщение всё равно
-        # удалится по таймеру (там нет URL'ов, но за консистентностью).
+        # 15-min TTL on text+QR. If there are no profiles the message is still
+        # deleted by the timer (no URLs there, but for consistency).
         self._schedule_admin_msg_ttl(sent_text, user_id=target_id)
         if not none_existing:
             await self._send_qrs_for_results(
@@ -5576,19 +5576,19 @@ class BotHandlersLite(AITranslateMixin):
     async def clean_user_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/clean_user <user_id> YES` — снести bot-managed клиентов TG-ID."""
+        """`/clean_user <user_id> YES` — wipe bot-managed clients for a TG ID."""
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             kb = self._build_user_picker_kb("clean_pick")
             await update.message.reply_text(
-                "🗑 <b>Кого очистить?</b>\n"
-                "Удалит <b>только</b> bot-managed клиентов с канон-именами "
+                "🗑 <b>Who to clean?</b>\n"
+                "Will delete <b>only</b> bot-managed clients with canonical names "
                 "(<code>Vless_ID*_*</code>, <code>Hys_ID*_*</code>, …); "
-                "ручные клиенты не трогаются. <b>Клик = подтверждение</b>.\n\n"
-                "Текстом тоже работает: "
+                "manual clients are not touched. <b>Tap = confirmation</b>.\n\n"
+                "Text also works: "
                 "<code>/clean_user &lt;id&gt; YES</code>.\n\n"
                 + self._picker_scope_hint_html(),
                 reply_markup=kb,
@@ -5598,11 +5598,11 @@ class BotHandlersLite(AITranslateMixin):
         try:
             target_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ user_id должен быть числом.")
+            await update.message.reply_text("❌ user_id must be a number.")
             return
         if len(args) < 2 or args[1].strip().upper() != "YES":
             await update.message.reply_text(
-                "❗️ Подтвердите вторым словом <code>YES</code>:\n"
+                "❗️ Confirm with a second word <code>YES</code>:\n"
                 f"<code>/clean_user {target_id} YES</code>",
                 parse_mode=ParseMode.HTML,
             )
@@ -5610,7 +5610,7 @@ class BotHandlersLite(AITranslateMixin):
 
         await self._delete_tracked_profile_messages(context.bot, target_id)
         results = provision_manager.clean_user(target_id)
-        # При ручном /clean_user сбрасываем состояние /my_profile тоже.
+        # A manual /clean_user also resets /my_profile state.
         try:
             storage_reset_my_profile_views(target_id)
             storage_clear_my_profile_messages(target_id)
@@ -5619,7 +5619,7 @@ class BotHandlersLite(AITranslateMixin):
         text = self._format_provision_results(
             target_id,
             results,
-            header="🗑 <b>Очистка TG-ID:</b>",
+            header="🗑 <b>Cleanup for TG ID:</b>",
             mode="clean",
         )
         await update.message.reply_text(text, parse_mode=ParseMode.HTML)
@@ -5629,29 +5629,29 @@ class BotHandlersLite(AITranslateMixin):
     async def setemail_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/setemail <user_id> <email>` — привязать email к TG-ID.
+        """`/setemail <user_id> <email>` — bind an email to a TG ID.
 
-        Email с заблокированных TLD (по умолчанию .ru/.su,
-        настраивается через SMTP_BLOCKED_TLDS в .env) отвергается.
-        Без второго аргумента — показать или сбросить (если 'clear').
+        Email from blocked TLDs (default .ru/.su,
+        configurable via SMTP_BLOCKED_TLDS in .env) is rejected.
+        With no second argument — show or reset (if 'clear').
         """
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             await update.message.reply_text(
-                "Использование:\n"
+                "Usage:\n"
                 "<code>/setemail &lt;telegram_user_id&gt; &lt;email&gt;</code>\n"
-                "<code>/setemail &lt;telegram_user_id&gt; clear</code> — сбросить\n"
-                "<code>/setemail &lt;telegram_user_id&gt;</code> — показать текущий",
+                "<code>/setemail &lt;telegram_user_id&gt; clear</code> — reset\n"
+                "<code>/setemail &lt;telegram_user_id&gt;</code> — show current",
                 parse_mode=ParseMode.HTML,
             )
             return
         try:
             target_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ user_id должен быть числом.")
+            await update.message.reply_text("❌ user_id must be a number.")
             return
         if len(args) == 1:
             current = storage_get_user_email(target_id)
@@ -5663,7 +5663,7 @@ class BotHandlersLite(AITranslateMixin):
                 )
             else:
                 await update.message.reply_text(
-                    f"📭 У <code>{target_id}</code> email не задан.",
+                    f"📭 No email set for <code>{target_id}</code>.",
                     parse_mode=ParseMode.HTML,
                 )
             return
@@ -5671,20 +5671,20 @@ class BotHandlersLite(AITranslateMixin):
         if value.lower() == "clear":
             storage_remove_user_email(target_id)
             await update.message.reply_text(
-                f"🗑 Email для <code>{target_id}</code> удалён.",
+                f"🗑 Email for <code>{target_id}</code> deleted.",
                 parse_mode=ParseMode.HTML,
             )
             return
         ok, err = email_manager.validate_email(value)
         if not ok:
             await update.message.reply_text(
-                f"❌ Email отвергнут: {html.escape(err)}",
+                f"❌ Email rejected: {html.escape(err)}",
                 parse_mode=ParseMode.HTML,
             )
             return
         storage_set_user_email(target_id, value)
         await update.message.reply_text(
-            f"✅ Email сохранён для <code>{target_id}</code>: "
+            f"✅ Email saved for <code>{target_id}</code>: "
             f"<code>{html.escape(email_manager.normalize_email(value))}</code>",
             parse_mode=ParseMode.HTML,
         )
@@ -5692,52 +5692,52 @@ class BotHandlersLite(AITranslateMixin):
     async def email_profile_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """`/email_profile <user_id>` — отправить bot-managed профили на
-        привязанный email пользователя. Перед этим нужен исходящий канал
-        (SMTP в .env или `GMAIL_OAUTH_CREDENTIALS`) и `/setemail <uid> <email>`.
+        """`/email_profile <user_id>` — send bot-managed profiles to
+        the user's bound email. First you need an outbound channel
+        (SMTP in .env or `GMAIL_OAUTH_CREDENTIALS`) and `/setemail <uid> <email>`.
 
-        Опционально вторым аргументом можно передать email напрямую,
-        не сохраняя его в users.json — `/email_profile <uid> <email>`.
+        Optionally pass an email as a second argument
+        without saving it in users.json — `/email_profile <uid> <email>`.
         """
         if not self._is_admin(update.effective_user.id):
-            await update.message.reply_text("⛔ Только для администратора.")
+            await update.message.reply_text("⛔ Admin only.")
             return
         args = context.args or []
         if not args:
             await update.message.reply_text(
-                "Использование: <code>/email_profile &lt;telegram_user_id&gt; "
+                "Usage: <code>/email_profile &lt;telegram_user_id&gt; "
                 "[email]</code>\n"
-                "Без email — берётся из <code>/setemail</code>.",
+                "With no email — taken from <code>/setemail</code>.",
                 parse_mode=ParseMode.HTML,
             )
             return
         try:
             target_id = int(args[0].strip())
         except (TypeError, ValueError):
-            await update.message.reply_text("❌ user_id должен быть числом.")
+            await update.message.reply_text("❌ user_id must be a number.")
             return
 
         if not email_manager.is_configured():
             await update.message.reply_text(
-                "⚠️ Исходящая почта не настроена. Задайте либо "
+                "⚠️ Outbound email is not configured. Set either "
                 "<code>GMAIL_OAUTH_CREDENTIALS</code> (JSON Desktop OAuth), "
-                "либо SMTP: SMTP_HOST / SMTP_USER / SMTP_PASS "
-                "(+ SMTP_PORT, SMTP_USE_TLS, SMTP_FROM) в "
-                "<code>.env</code>, затем перезапуск/пересбор контейнера.",
+                "or SMTP: SMTP_HOST / SMTP_USER / SMTP_PASS "
+                "(+ SMTP_PORT, SMTP_USE_TLS, SMTP_FROM) in "
+                "<code>.env</code>, then restart/recreate the container.",
                 parse_mode=ParseMode.HTML,
             )
             return
 
-        # Email — из аргумента или из storage.
+        # Email — from the argument or from storage.
         if len(args) >= 2:
             to_email = args[1].strip()
         else:
             to_email = storage_get_user_email(target_id) or ""
         if not to_email:
             await update.message.reply_text(
-                f"📭 У <code>{target_id}</code> email не привязан.\n"
-                f"Привяжите: <code>/setemail {target_id} &lt;email&gt;</code> "
-                f"или передайте вторым аргументом: "
+                f"📭 No email bound for <code>{target_id}</code>.\n"
+                f"Bind it: <code>/setemail {target_id} &lt;email&gt;</code> "
+                f"or pass it as a second argument: "
                 f"<code>/email_profile {target_id} &lt;email&gt;</code>",
                 parse_mode=ParseMode.HTML,
             )
@@ -5746,12 +5746,12 @@ class BotHandlersLite(AITranslateMixin):
         ok_v, err_v = email_manager.validate_email(to_email)
         if not ok_v:
             await update.message.reply_text(
-                f"❌ Email отвергнут: {html.escape(err_v)}",
+                f"❌ Email rejected: {html.escape(err_v)}",
                 parse_mode=ParseMode.HTML,
             )
             return
 
-        # Собираем bot-managed профили этого пользователя.
+        # Collect bot-managed profiles for this user.
         try:
             profiles = provision_manager.profiles_for_user(target_id)
         except Exception as exc:
@@ -5764,13 +5764,13 @@ class BotHandlersLite(AITranslateMixin):
         }
         if not existing:
             await update.message.reply_text(
-                f"📭 У <code>{target_id}</code> нет bot-managed профилей.\n"
-                f"Сначала: <code>/provision {target_id}</code>",
+                f"📭 <code>{target_id}</code> has no bot-managed profiles.\n"
+                f"First: <code>/provision {target_id}</code>",
                 parse_mode=ParseMode.HTML,
             )
             return
 
-        # Генерируем QR-PNG'и для каждого URI.
+        # Generate QR PNGs for each URI.
         try:
             qr_images = {
                 proto: email_manager.render_qr_png(p["uri"])
@@ -5778,7 +5778,7 @@ class BotHandlersLite(AITranslateMixin):
             }
 
             await update.message.reply_text(
-                f"📤 Отправляю на <code>{html.escape(to_email)}</code>…",
+                f"📤 Sending to <code>{html.escape(to_email)}</code>…",
                 parse_mode=ParseMode.HTML,
             )
             ok, msg = email_manager.send_profile_email(
@@ -5790,29 +5790,29 @@ class BotHandlersLite(AITranslateMixin):
             if ok:
                 await self._delete_tracked_profile_messages(context.bot, target_id)
                 await update.message.reply_text(
-                    f"✅ Письмо отправлено на <code>{html.escape(to_email)}</code> "
-                    f"({len(existing)} профилей, QR во вложении). "
-                    f"Старые сообщения с URL/QR в чате удалены.",
+                    f"✅ Email sent to <code>{html.escape(to_email)}</code> "
+                    f"({len(existing)} profiles, QR attached). "
+                    f"Old chat messages with URL/QR were deleted.",
                     parse_mode=ParseMode.HTML,
                 )
             else:
                 await update.message.reply_text(
-                    f"❌ Не удалось отправить: {html.escape(msg)}",
+                    f"❌ Failed to send: {html.escape(msg)}",
                     parse_mode=ParseMode.HTML,
                 )
         except Exception as exc:
             logger.exception("email_profile: send failed for uid=%s", target_id)
             await update.message.reply_text(
-                f"❌ Ошибка отправки: <code>{html.escape(str(exc))}</code>\n"
-                f"<i>См. лог контейнера: docker logs … --tail 80</i>",
+                f"❌ Send error: <code>{html.escape(str(exc))}</code>\n"
+                f"<i>See container logs: docker logs … --tail 80</i>",
                 parse_mode=ParseMode.HTML,
             )
 
     # === /my_profile auto-delete & view-limit support ===
 
-    MY_PROFILE_TTL_SECONDS = 15 * 60  # 15 минут
-    MY_PROFILE_VIEW_LIMIT = 3  # 3 успешных просмотра, на 4-й — снос
-    USER_CARD_TTL_SECONDS = 3 * 60  # карточка /user у админа — с чата через 3 мин
+    MY_PROFILE_TTL_SECONDS = 15 * 60  # 15 minutes
+    MY_PROFILE_VIEW_LIMIT = 3  # 3 successful views; the 4th wipes them
+    USER_CARD_TTL_SECONDS = 3 * 60  # admin /user card — removed from chat after 3 min
 
     async def _delete_message_after_delay(
         self,
@@ -5822,14 +5822,14 @@ class BotHandlersLite(AITranslateMixin):
         user_id: int = 0,
         delay_seconds: int = MY_PROFILE_TTL_SECONDS,
     ):
-        """Фоновая задача: удалить сообщение через delay_seconds.
+        """Background task: delete the message after delay_seconds.
 
-        Идемпотентно — если сообщение уже удалено вручную / через cleanup,
-        игнорируем ошибку. Если `user_id != 0`, дополнительно убираем
-        запись из `users.json[<uid>].my_profile_messages` (нужно для
-        self-service flow, чтобы 3-й вызов /my_profile нашёл что удалять).
-        Для admin-флоу (provision/profiles) передаём `user_id=0` —
-        storage не трогаем.
+        Idempotent — if the message was already deleted manually / via cleanup,
+        ignore the error. If `user_id != 0`, also remove
+        the record from `users.json[<uid>].my_profile_messages` (needed for
+        the self-service flow so the 3rd /my_profile call finds something to delete).
+        For the admin flow (provision/profiles) pass `user_id=0` —
+        do not touch storage.
         """
         try:
             await asyncio.sleep(delay_seconds)
@@ -5853,7 +5853,7 @@ class BotHandlersLite(AITranslateMixin):
     def _schedule_message_ttl(
         self, msg, *, delay_seconds: int, user_id: int = 0
     ) -> None:
-        """Запланировать удаление сообщения через delay_seconds (без storage)."""
+        """Schedule message deletion after delay_seconds (no storage)."""
         if msg is None:
             return
         try:
@@ -5870,11 +5870,11 @@ class BotHandlersLite(AITranslateMixin):
             logger.warning("schedule_message_ttl failed: %s", exc)
 
     def _schedule_admin_msg_ttl(self, msg, user_id: int = 0) -> None:
-        """Шорткат для admin-флоу (provision/profiles/picker-callback):
-        запланировать авто-удаление сообщения через MY_PROFILE_TTL_SECONDS.
-        Если передан user_id, message_id сохраняется в users.json, чтобы
-        последующий /clean_user или /my_profile мог снести ссылку/QR даже
-        после перезапуска контейнера."""
+        """Shortcut for the admin flow (provision/profiles/picker-callback):
+        schedule auto-delete of the message after MY_PROFILE_TTL_SECONDS.
+        If user_id is passed, message_id is stored in users.json so that
+        a later /clean_user or /my_profile can wipe the link/QR even
+        after a container restart."""
         if user_id:
             self._track_and_schedule_delete(msg, user_id)
             return
@@ -5883,7 +5883,7 @@ class BotHandlersLite(AITranslateMixin):
         )
 
     def _track_and_schedule_delete(self, sent_msg, user_id: int):
-        """Записать message_id в storage и завести фоновую задачу авто-удаления."""
+        """Store message_id and start a background auto-delete task."""
         if sent_msg is None:
             return
         chat_id = sent_msg.chat_id
@@ -5899,7 +5899,7 @@ class BotHandlersLite(AITranslateMixin):
         )
 
     async def _delete_tracked_profile_messages(self, bot, user_id: int) -> None:
-        """Удалить все записанные URL/QR сообщения для user_id и очистить storage."""
+        """Delete all recorded URL/QR messages for user_id and clear storage."""
         prev_msgs = storage_get_my_profile_messages(user_id)
         for m in prev_msgs:
             try:
@@ -5909,13 +5909,13 @@ class BotHandlersLite(AITranslateMixin):
         storage_clear_my_profile_messages(user_id)
 
     async def _purge_all_profile_messages(self, bot) -> int:
-        """Снести ВСЕ ранее отправленные URL/QR сообщения у всех пользователей.
+        """Wipe ALL previously sent URL/QR messages for all users.
 
-        Вызывается после смены параметров, попадающих в ссылку (порт, SNI,
-        fingerprint, short_id, сервер, Reality-ключи, UUID): старые vless://
-        ссылки и QR становятся невалидными и не должны больше показываться
-        никому — ни админу, ни пользователям. Свежие ссылки/QR бот
-        перегенерирует из обновлённого конфига при следующем /profiles или
+        Called after changing parameters that go into the link (port, SNI,
+        fingerprint, short_id, server, Reality keys, UUID): old vless://
+        links and QR become invalid and must not be shown again
+        to anyone — admin or users. The bot regenerates fresh links/QR
+        from the updated config on the next /profiles or
         /my_profile.
         """
         entries = storage_get_all_my_profile_messages()
@@ -5929,21 +5929,21 @@ class BotHandlersLite(AITranslateMixin):
                 await bot.delete_message(chat_id, message_id)
                 deleted += 1
             except Exception as exc:
-                # Сообщение могло быть уже удалено/старше 48ч (лимит Bot API) —
-                # это не ошибка, всё равно чистим трекинг ниже.
+                # The message may already be deleted / older than 48h (Bot API limit) —
+                # that is not an error; still clear tracking below.
                 logger.debug("purge profile message delete failed: %s", exc)
         storage_clear_all_my_profile_messages()
         if entries:
             logger.info(
                 "Purged stale profile links/QR after config change: "
-                "%s удалено из %s отслеживаемых",
+                "%s deleted of %s tracked",
                 deleted,
                 len(entries),
             )
         return deleted
 
     async def _notify_admins(self, context, text: str):
-        """Разослать text каждому admin'у. Молча игнорируем недоступных."""
+        """Broadcast text to every admin. Silently ignore unreachable ones."""
         for admin_id in self.config.admin_user_ids or []:
             try:
                 await context.bot.send_message(
@@ -5953,35 +5953,35 @@ class BotHandlersLite(AITranslateMixin):
                 logger.warning("notify admin %s failed: %s", admin_id, exc)
 
     async def _auto_cleanup_my_profile(self, context, update: Update, user_id: int):
-        """Достигнут лимит просмотров — снести URL/QR из чата и клиентов
-        с панелей, сбросить счётчик, нотифицировать админов."""
-        # 1. Удаляем все ранее отправленные сообщения с URL/QR.
+        """View limit reached — wipe URL/QR from chat and clients
+        from panels, reset the counter, notify admins."""
+        # 1. Delete all previously sent URL/QR messages.
         await self._delete_tracked_profile_messages(context.bot, user_id)
 
-        # 2. Сносим клиентов из всех bot-managed inbound'ов.
+        # 2. Wipe clients from all bot-managed inbounds.
         try:
             cleanup_results = provision_manager.clean_user(user_id)
         except Exception as exc:
             logger.warning("provision_manager.clean_user(%s) failed: %s", user_id, exc)
             cleanup_results = {}
 
-        # 3. Сбрасываем счётчик — после нового /provision дадим ещё 2.
+        # 3. Reset the counter — after a new /provision give 2 more.
         storage_reset_my_profile_views(user_id)
 
-        # 4. Сообщение пользователю.
+        # 4. Message to the user.
         await update.effective_message.reply_text(
-            f"🚫 <b>Лимит {self.MY_PROFILE_VIEW_LIMIT} просмотров /my_profile исчерпан.</b>\n\n"
-            f"Все ваши bot-managed профили удалены с VPS.\n"
-            f"Чтобы получить новые ссылки, попросите админа выполнить:\n"
+            f"🚫 <b>/my_profile view limit of {self.MY_PROFILE_VIEW_LIMIT} exhausted.</b>\n\n"
+            f"All your bot-managed profiles were deleted from the VPS.\n"
+            f"To get new links, ask an admin to run:\n"
             f"<code>/provision {user_id}</code>",
             parse_mode=ParseMode.HTML,
         )
 
-        # 5. Нотификация админам.
+        # 5. Notify admins.
         notif = [
-            f"🗑 <b>Auto-cleanup профилей</b>",
-            f"Пользователь: <code>{user_id}</code>",
-            f"Причина: исчерпан лимит {self.MY_PROFILE_VIEW_LIMIT} просмотров /my_profile.",
+            f"🗑 <b>Profile auto-cleanup</b>",
+            f"User: <code>{user_id}</code>",
+            f"Reason: /my_profile view limit of {self.MY_PROFILE_VIEW_LIMIT} exhausted.",
             "",
         ]
         if cleanup_results:
@@ -5989,44 +5989,44 @@ class BotHandlersLite(AITranslateMixin):
                 emoji = "✅" if r.get("removed") else ("⚪" if r.get("ok") else "❌")
                 name = html.escape(str(r.get("client_name") or ""))
                 if r.get("removed"):
-                    label = "удалён"
+                    label = "deleted"
                 elif r.get("ok"):
-                    label = "не было"
+                    label = "was not there"
                 else:
-                    label = f"ошибка: {html.escape(str(r.get('message') or ''))}"
+                    label = f"error: {html.escape(str(r.get('message') or ''))}"
                 notif.append(f"{emoji} <b>{proto}</b>: <code>{name}</code> ({label})")
         else:
-            notif.append("⚠️ Список протоколов пуст — clean_user не отработал.")
+            notif.append("⚠️ Protocol list is empty — clean_user did not run.")
         notif.append("")
-        notif.append(f"Чтобы выдать снова: <code>/provision {user_id}</code>")
+        notif.append(f"To re-issue: <code>/provision {user_id}</code>")
         await self._notify_admins(context, "\n".join(notif))
 
     async def my_profile_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         """
-        Команда /my_profile — special-пользователь получает свои URL + QR.
+        /my_profile command — a special user gets their URL + QR.
 
-        Сначала ищем bot-managed канонизированные профили
-        (`<Prefix>_ID<first2>_<last2>` от Telegram-ID, см. provision_manager) —
-        они появляются после `/provision <uid>` админа. Если их нет —
-        fallback на legacy-lookup (`/user`-flow + интеграция 3x-ui).
+        First look up bot-managed canonical profiles
+        (`<Prefix>_ID<first2>_<last2>` from Telegram-ID, see provision_manager) —
+        they appear after an admin `/provision <uid>`. If none —
+        fall back to legacy lookup (`/user` flow + 3x-ui integration).
 
-        Защита: сообщения с URL+QR авто-удаляются через 15 минут.
-        Лимит 3 успешных просмотра — на 4-м клиенты сносятся и из чата,
-        и с панели 3x-ui (см. `_auto_cleanup_my_profile`).
+        Protection: URL+QR messages auto-delete after 15 minutes.
+        Limit of 3 successful views — on the 4th, clients are wiped from chat
+        and from the 3x-ui panel (see `_auto_cleanup_my_profile`).
         """
         try:
             user = update.effective_user
             msg = update.effective_message
             if not self._is_privileged(user.id):
                 await msg.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             uid = int(user.id)
 
-            # Сначала — bot-managed канонизированные профили (после /provision).
+            # First — bot-managed canonical profiles (after /provision).
             try:
                 bot_profiles = provision_manager.profiles_for_user(uid)
             except Exception as exc:
@@ -6041,8 +6041,8 @@ class BotHandlersLite(AITranslateMixin):
                 is_admin = self._is_admin(uid)
                 already_viewed = 0
                 if not is_admin:
-                    # Лимит просмотров применяется только к special-пользователям.
-                    # Админ может проверять свои профили без счётчика и auto-cleanup.
+                    # The view limit applies only to special users.
+                    # An admin can inspect their profiles without a counter or auto-cleanup.
                     already_viewed = storage_get_my_profile_views(uid)
                     if already_viewed >= self.MY_PROFILE_VIEW_LIMIT:
                         await self._auto_cleanup_my_profile(context, update, uid)
@@ -6058,18 +6058,18 @@ class BotHandlersLite(AITranslateMixin):
                     "mieru": "🛰 Mieru",
                 }
                 summary_lines = [
-                    f"🔐 <b>Ваши профили (user_id={uid}):</b>",
+                    f"🔐 <b>Your profiles (user_id={uid}):</b>",
                     (
-                        "<i>Админ-доступ: без лимита просмотров. "
-                        "Сообщения авто-удалятся через 15 мин.</i>"
+                        "<i>Admin access: no view limit. "
+                        "Messages auto-delete after 15 min.</i>"
                         if is_admin
-                        else f"<i>Просмотр {already_viewed + 1} из "
-                        f"{self.MY_PROFILE_VIEW_LIMIT}. Сообщения авто-удалятся "
-                        f"через 15 мин.</i>"
+                        else f"<i>View {already_viewed + 1} of "
+                        f"{self.MY_PROFILE_VIEW_LIMIT}. Messages auto-delete "
+                        f"after 15 min.</i>"
                     ),
                     "",
-                    "📋 <b>Тапни на URL ниже чтобы скопировать в буфер.</b> "
-                    "QR — для скана камерой клиента.",
+                    "📋 <b>Tap a URL below to copy it.</b> "
+                    "QR — scan with the client camera.",
                     "",
                 ]
                 for proto, p in existing_bot.items():
@@ -6079,25 +6079,25 @@ class BotHandlersLite(AITranslateMixin):
                     )
                 summary_lines.append("")
                 summary_lines.append(
-                    "📲 Ниже на каждый протокол: одно сообщение с URL "
-                    "(тап = копировать) + QR картинкой."
+                    "📲 Below, for each protocol: one URL message "
+                    "(tap = copy) + a QR image."
                 )
                 sent = await msg.reply_text(
                     "\n".join(summary_lines).strip(), parse_mode=ParseMode.HTML
                 )
                 self._track_and_schedule_delete(sent, uid)
-                # На каждый протокол: одно URL-only сообщение целиком из
-                # <code> (весь bubble — tap-target, удобно скопировать), и
-                # отдельным сообщением QR картинка.
+                # For each protocol: one URL-only message entirely in
+                # <code> (the whole bubble is a tap-target, easy to copy), and
+                # a QR image as a separate message.
                 for proto, p in existing_bot.items():
                     label = proto_labels.get(proto, proto)
                     uri = str(p.get("uri") or "")
                     client_name = str(p.get("client_name") or proto)
                     usage_hint = ""
                     if proto == "vless":
-                        usage_hint = "\n<i>Современная ссылка для v2rayN / sing-box / Clash Meta.</i>"
+                        usage_hint = "\n<i>Modern link for v2rayN / sing-box / Clash Meta.</i>"
                     elif proto == "hysteria2":
-                        usage_hint = "\n<i>Основная ссылка hy2:// для Karing и совместимых клиентов.</i>"
+                        usage_hint = "\n<i>Primary hy2:// link for Karing and compatible clients.</i>"
                     elif proto == "mtproto":
                         usage_hint = "\n<i>Telegram-only: open in Telegram, do not paste into a VPN client.</i>"
                     url_msg = await msg.reply_text(
@@ -6110,8 +6110,8 @@ class BotHandlersLite(AITranslateMixin):
                         if hysteria2_alias and hysteria2_alias != uri:
                             alias_msg = await msg.reply_text(
                                 "⚡ Hysteria2 alias\n"
-                                "<i>Полная схема hysteria2:// для Karing и клиентов, "
-                                "которые не принимают hy2://.</i>\n"
+                                "<i>Full hysteria2:// scheme for Karing and clients "
+                                "that do not accept hy2://.</i>\n"
                                 f"<code>{html.escape(hysteria2_alias)}</code>",
                                 parse_mode=ParseMode.HTML,
                             )
@@ -6119,84 +6119,84 @@ class BotHandlersLite(AITranslateMixin):
                     qr_msg = await self._reply_qr_for_link(msg, uri, client_name)
                     self._track_and_schedule_delete(qr_msg, uid)
                 if not is_admin:
-                    # Засчитываем успешный просмотр только после реальной отправки.
+                    # Count a successful view only after a real send.
                     storage_inc_my_profile_views(uid)
                 return
 
-            # Bot-managed нет — пробуем legacy.
+            # No bot-managed profiles — try legacy.
             found = self._build_user_protocol_profile_lookup(uid)
             if not found:
-                # Админ ≠ автоматически есть VPN-клиент: /my_profile ищет
-                # профили после /provision, а не проверяет роль.
+                # Admin ≠ automatically having a VPN client: /my_profile looks up
+                # profiles after /provision; it does not check the role.
                 if self._is_admin(uid):
                     hint = (
-                        "📭 У вас пока нет VPN-профиля "
+                        "📭 You do not have a VPN profile yet "
                         f"(user_id=<code>{uid}</code>).\n\n"
-                        "✅ Права админа в порядке — это не про доступ к боту.\n"
-                        "Создайте клиенты себе командой:\n"
+                        "✅ Admin rights are fine — this is not about bot access.\n"
+                        "Create clients for yourself with:\n"
                         f"<code>/provision {uid}</code>\n\n"
-                        "После этого снова откройте /my_profile — появятся "
-                        "VLESS / Hysteria2 / и т.д. с QR-кодами.\n"
-                        "Проверка панели: /xui_status"
+                        "Then open /my_profile again — you will get "
+                        "VLESS / Hysteria2 / etc. with QR codes.\n"
+                        "Panel check: /xui_status"
                     )
                 else:
                     hint = (
-                        "📭 Для вас пока нет готового профиля "
+                        "📭 There is no ready profile for you yet "
                         f"(user_id=<code>{uid}</code>).\n\n"
-                        "Вы в списке special — доступ к /my_profile есть, "
-                        "но VPN-клиенты ещё не созданы.\n"
-                        "Попросите админа выполнить:\n"
+                        "You are on the special list — /my_profile access is granted, "
+                        "but VPN clients have not been created yet.\n"
+                        "Ask an admin to run:\n"
                         f"<code>/provision {uid}</code>\n\n"
-                        "После этого снова откройте /my_profile."
+                        "Then open /my_profile again."
                     )
                 await msg.reply_text(hint, parse_mode=ParseMode.HTML)
                 return
 
-            lines = [f"🔐 <b>Ваши профили (user_id={html.escape(str(uid))}):</b>", ""]
+            lines = [f"🔐 <b>Your profiles (user_id={html.escape(str(uid))}):</b>", ""]
             v_source = ""
             if "vless_reality" in found:
                 item = found["vless_reality"]
                 src = item.get("source") or ""
                 v_source = src
                 if src == "xui":
-                    src_label = "из 3x-ui (рабочая)"
+                    src_label = "from 3x-ui (working)"
                 elif src == "vless_config_test":
-                    src_label = "legacy vless_config.json (тестовая/неактивная)"
+                    src_label = "legacy vless_config.json (test/inactive)"
                 else:
-                    src_label = "из vless_config.json бота"
+                    src_label = "from bot vless_config.json"
                 lines.append(f"🛡 <b>VLESS-Reality</b> ({html.escape(src_label)})")
-                lines.append(f"Имя: <code>{html.escape(str(item['name']))}</code>")
+                lines.append(f"Name: <code>{html.escape(str(item['name']))}</code>")
                 if item.get("url"):
                     vless_url = str(item["url"])
                     lines.append(f"URL: <code>{html.escape(vless_url)}</code>")
                 else:
                     lines.append(
-                        f"Статус: {html.escape(str(item.get('message') or 'неактивна'))}"
+                        f"Status: {html.escape(str(item.get('message') or 'inactive'))}"
                     )
                 lines.append("")
             if "hysteria2" in found:
                 item = found["hysteria2"]
                 lines.append("⚡ <b>Hysteria2</b>")
-                lines.append(f"Имя: <code>{html.escape(str(item['name']))}</code>")
+                lines.append(f"Name: <code>{html.escape(str(item['name']))}</code>")
                 hy2_url = str(item["url"])
                 lines.append(
-                    "URL (Karing / совместимые): "
+                    "URL (Karing / compatible): "
                     f"<code>{html.escape(hy2_url)}</code>"
                 )
                 hysteria2_alias = hysteria2_manager.to_hysteria2_uri(hy2_url)
                 if hysteria2_alias and hysteria2_alias != hy2_url:
                     lines.append(
-                        "Alias для Karing/full scheme: "
+                        "Alias for Karing/full scheme: "
                         f"<code>{html.escape(hysteria2_alias)}</code>"
                     )
                 lines.append("")
 
             if v_source in ("vless_config", "vless_config_test"):
                 lines.append(
-                    "⚠️ <i>Эта VLESS-ссылка собрана из локального JSON бота. "
-                    "Если VLESS на VPS обслуживает 3x-ui, а не ботовый "
-                    "xray.service, ссылка не подойдёт. Попросите админа "
-                    f"выполнить /xui_setup и выдать профиль из /user {html.escape(str(uid))}.</i>"
+                    "⚠️ <i>This VLESS link is built from the bot local JSON. "
+                    "If VLESS on the VPS is served by 3x-ui rather than the bot "
+                    "xray.service, the link will not work. Ask an admin "
+                    f"to run /xui_setup and issue a profile from /user {html.escape(str(uid))}.</i>"
                 )
 
             sent = await msg.reply_text(
@@ -6230,11 +6230,11 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.error(f"Error in my_profile_command: {e}")
             await update.effective_message.reply_text(
-                "Ошибка при получении вашего профиля."
+                "Failed to get your profile."
             )
 
     async def _reply_qr_for_link(self, message, link: str, name: str):
-        """Отправить QR-картинку по готовой ссылке. Возвращает Message или None."""
+        """Send a QR image for a ready link. Returns Message or None."""
         try:
             from io import BytesIO
 
@@ -6255,14 +6255,14 @@ class BotHandlersLite(AITranslateMixin):
             buf.name = f"profile-{name}.png"
             return await message.reply_photo(
                 photo=buf,
-                caption=f"📲 QR для {name}\nЕсли скан не импортируется — скопируйте URL сообщением выше.",
+                caption=f"📲 QR for {name}\nIf the scan does not import — copy the URL from the message above.",
             )
         except Exception as exc:
             logger.warning("_reply_qr_for_link(%s): %s", name, exc)
             return None
 
     async def _handle_list_users_callbacks(self, query, data: str) -> bool:
-        """Inline-кнопки под /list_users: журнал и special. Только админ (как весь callback)."""
+        """Inline buttons under /list_users: journal and special. Admin only (like the whole callback)."""
         if data == "lu_log":
             await self._deliver_users_log(query.from_user, query.message)
             return True
@@ -6278,7 +6278,7 @@ class BotHandlersLite(AITranslateMixin):
                 await query.message.reply_text(text, reply_markup=kb)
                 return True
             if data == "lu_x":
-                await query.message.edit_text("Готово.", reply_markup=None)
+                await query.message.edit_text("Done.", reply_markup=None)
                 return True
             if data.startswith("lu_p:"):
                 page = int(data.split(":", 1)[1])
@@ -6311,17 +6311,17 @@ class BotHandlersLite(AITranslateMixin):
                 special, _users = storage_list_users()
                 if uid not in set(special):
                     await query.message.edit_text(
-                        "⛔ Заменять профиль можно только для special-пользователя.",
+                        "⛔ Replacing a profile is allowed only for a special user.",
                         reply_markup=InlineKeyboardMarkup(
                             [
                                 [
                                     InlineKeyboardButton(
-                                        "◀️ Назад", callback_data=f"lu_pru:{uid}:{page}"
+                                        "◀️ Back", callback_data=f"lu_pru:{uid}:{page}"
                                     )
                                 ],
                                 [
                                     InlineKeyboardButton(
-                                        "✖️ Закрыть", callback_data="lu_x"
+                                        "✖️ Close", callback_data="lu_x"
                                     )
                                 ],
                             ]
@@ -6354,10 +6354,10 @@ class BotHandlersLite(AITranslateMixin):
                 return True
         except Exception as e:
             err_text = str(e) or ""
-            # "Message is not modified" — Telegram-API возвращает 400 когда
-            # `edit_text` получает идентичный контент (типичный кейс — клик
-            # на кнопку, которая просто refresh'ит тот же экран). Это не
-            # баг, не шумим: молча ack'аем callback и возвращаем True.
+            # "Message is not modified" — Telegram API returns 400 when
+            # `edit_text` gets identical content (typical case — a tap
+            # on a button that just refreshes the same screen). This is not
+            # a bug; stay quiet: silently ack the callback and return True.
             if "not modified" in err_text.lower():
                 try:
                     await query.answer()
@@ -6365,34 +6365,34 @@ class BotHandlersLite(AITranslateMixin):
                     pass
                 return True
             logger.exception("list_users inline callback %r: %s", data, e)
-            # Показываем реальную причину прямо в чате (admin'у виднее
-            # чем generic "Ошибка при обработке кнопки"). Тип ошибки
-            # + сокращённое сообщение, чтобы не утечь стектрейсом.
+            # Show the real reason in chat (admin can see more
+            # than a generic "Failed to handle the button"). Error type
+            # + a shortened message so the traceback does not leak.
             err_kind = type(e).__name__
-            err_msg = err_text[:200] if err_text else "(пусто)"
+            err_msg = err_text[:200] if err_text else "(empty)"
             try:
                 await query.message.reply_text(
-                    f"❌ Ошибка при обработке кнопки.\n"
+                    f"❌ Failed to handle the button.\n"
                     f"<code>{html.escape(err_kind)}</code>: "
                     f"<code>{html.escape(err_msg)}</code>\n\n"
-                    f"<i>Полный стектрейс — в логах "
+                    f"<i>Full traceback is in the logs "
                     f"<code>docker compose logs telegram-helper</code>.</i>",
                     parse_mode=ParseMode.HTML,
                 )
             except Exception:
-                # На крайний случай — старое сообщение, чтобы не молчать.
+                # Last resort — the old message so we are not silent.
                 try:
-                    await query.message.reply_text("Ошибка при обработке кнопки.")
+                    await query.message.reply_text("Failed to handle the button.")
                 except Exception:
                     pass
             return True
         return False
 
     async def _deliver_users_log(self, user, message) -> None:
-        """Отправить журнал пользователей (текст или .txt). Доступ: privileged."""
+        """Send the user journal (text or .txt). Access: privileged."""
         if not self._is_privileged(user.id):
             await message.reply_text(
-                "⛔ Эта команда доступна только администратору или special-пользователю."
+                "⛔ This command is for admin or special users only."
             )
             return
 
@@ -6401,7 +6401,7 @@ class BotHandlersLite(AITranslateMixin):
         special, users = storage_list_users()
         if not users:
             await message.reply_text(
-                "📒 Журнал пользователей пуст. Записи появятся после первого обращения к боту."
+                "📒 User journal is empty. Entries appear after the first contact with the bot."
             )
             return
 
@@ -6420,7 +6420,7 @@ class BotHandlersLite(AITranslateMixin):
             v = str(value).replace("T", " ")
             return v[:16]
 
-        header = f"📒 Журнал пользователей: {len(sorted_items)} (новые сверху)"
+        header = f"📒 User journal: {len(sorted_items)} (newest first)"
         lines: list[str] = [header, ""]
         for idx, (uid, info) in enumerate(sorted_items, 1):
             role = []
@@ -6442,7 +6442,7 @@ class BotHandlersLite(AITranslateMixin):
 
             lines.append(
                 f"{idx}. {full_name} ({handle}) [id={uid}]{role_str}\n"
-                f"   первый: {first_seen} UTC · последний: {last_seen} UTC"
+                f"   first: {first_seen} UTC · last: {last_seen} UTC"
             )
 
         body = "\n".join(lines)
@@ -6459,18 +6459,18 @@ class BotHandlersLite(AITranslateMixin):
             buf.name = "users_log.txt"
             await message.reply_document(
                 document=buf,
-                caption=f"Журнал пользователей: {len(sorted_items)}",
+                caption=f"User journal: {len(sorted_items)}",
             )
 
     async def users_log_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /users_log — журнал пользователей бота с датой первого обращения.
+        """/users_log command — bot user journal with first-seen date.
 
-        Доступ: администратор или special-пользователь.
-        Источник данных: storage.track_user(...), который пишет first_seen один раз
-        (через setdefault) и обновляет last_seen при каждом обращении. Дубликаты не
-        создаются: для существующего пользователя first_seen остаётся прежним.
+        Access: administrator or special user.
+        Data source: storage.track_user(...), which writes first_seen once
+        (via setdefault) and updates last_seen on every contact. Duplicates are not
+        created: for an existing user first_seen stays the same.
         """
         try:
             user = update.effective_user
@@ -6478,24 +6478,24 @@ class BotHandlersLite(AITranslateMixin):
         except Exception as e:
             logger.error(f"Error in users_log_command: {e}")
             await update.message.reply_text(
-                "Ошибка при формировании журнала пользователей."
+                "Failed to build the user journal."
             )
 
-    # === НАСТРОЙКИ ИИ ===
+    # === AI SETTINGS ===
 
     async def ai_set_provider(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /ai_provider - выбрать провайдера ИИ."""
+        """/ai_provider command — choose an AI provider."""
         user = update.effective_user
         if not self._is_admin(user.id):
             await update.message.reply_text(
-                "⛔ Эта команда доступна только администратору."
+                "⛔ This command is admin-only."
             )
             return
 
         args = context.args or []
         if len(args) != 1 or args[0].lower() not in ["openai", "anthropic"]:
             await update.message.reply_text(
-                "Использование: /ai_provider <openai|anthropic>"
+                "Usage: /ai_provider <openai|anthropic>"
             )
             return
 
@@ -6503,17 +6503,17 @@ class BotHandlersLite(AITranslateMixin):
         os.environ["DEFAULT_AI_PROVIDER"] = provider
 
         emoji = "🔵" if provider == "openai" else "🟣"
-        await update.message.reply_text(f"{emoji} Провайдер ИИ установлен: {provider}")
+        await update.message.reply_text(f"{emoji} AI provider set: {provider}")
 
     async def ch_model_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /ch_model - переключить AI модель."""
+        """/ch_model command — switch the AI model."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6530,28 +6530,28 @@ class BotHandlersLite(AITranslateMixin):
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(
-                "⚙️ Выберите провайдера для настройки модели:", reply_markup=reply_markup
+                "⚙️ Select a provider to configure the model:", reply_markup=reply_markup
             )
 
         except Exception as e:
             logger.error(f"Error in ch_model_command: {e}")
-            await update.message.reply_text("Ошибка при выполнении команды.")
+            await update.message.reply_text("Failed to run the command.")
 
-    # === КОМАНДЫ VLESS-REALITY ===
+    # === VLESS-REALITY COMMANDS ===
 
     async def vless_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_status - показать статус VLESS-Reality.
+        """/vless_status command — show VLESS-Reality status.
 
-        Если настроена интеграция с 3x-ui (`/xui_setup`), сначала
-        отправляется блок с реальным состоянием панели и bot-managed
-        inbound'а, и только потом — legacy-блок из локального
-        `vless_config.json` (с пометкой что он не используется).
+        If 3x-ui integration is configured (`/xui_setup`), first
+        a block with the live panel state and the bot-managed
+        inbound is sent, and only then the legacy block from local
+        `vless_config.json` (marked as unused).
         """
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6565,10 +6565,10 @@ class BotHandlersLite(AITranslateMixin):
             status_emoji = "🟢" if status["enabled"] else "🔴"
             config_emoji = "✅" if status["configured"] else "❌"
 
-            # Экранируем спецсимволы для Markdown V2
+            # Escape special characters for Markdown V2
             def escape_md2(text):
                 if not text:
-                    return "не настроен"
+                    return "not configured"
                 text = str(text)
                 for char in [
                     "_",
@@ -6597,43 +6597,43 @@ class BotHandlersLite(AITranslateMixin):
             port = escape_md2(status.get("port", 443))
             sni = escape_md2(status.get("sni", "www.microsoft.com"))
             fingerprint = escape_md2(status.get("fingerprint", "chrome"))
-            updated_at = escape_md2(status.get("updated_at", "никогда"))
+            updated_at = escape_md2(status.get("updated_at", "never"))
 
-            message = f"""🛡️ *VLESS\\-Reality Статус*
+            message = f"""🛡️ *VLESS\\-Reality Status*
 
-*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
-*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+*State:* {status_emoji} {"On" if status["enabled"] else "Off"}
+*Config:* {config_emoji} {"Configured" if status["configured"] else "Not configured"}
 
-*Параметры:*
-• Сервер: `{server}`
-• Порт: `{port}`
+*Parameters:*
+• Server: `{server}`
+• Port: `{port}`
 • SNI: `{sni}`
 • Fingerprint: `{fingerprint}`
 
-*Ключи:*
+*Keys:*
 • UUID: {"✅" if status["has_uuid"] else "❌"}
 • Public Key: {"✅" if status["has_public_key"] else "❌"}
 • Private Key: {"✅" if status["has_private_key"] else "❌"}
 • Short ID: {"✅" if status["has_short_id"] else "❌"}
 
-*Источник:* legacy `xray.service` \\+ `/usr/local/etc/xray/config.json`
-_Панель 3x\\-ui здесь не используется\\. Для текущих ссылок: /vless\\_qr, /vless\\_export\\._
+*Source:* legacy `xray.service` \\+ `/usr/local/etc/xray/config.json`
+_The 3x\\-ui panel is not used here\\. For current links: /vless\\_qr, /vless\\_export\\._
 
-_Обновлено: {updated_at}_"""
+_Updated: {updated_at}_"""
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in vless_status: {e}")
-            await update.message.reply_text("Ошибка при получении статуса VLESS.")
+            await update.message.reply_text("Failed to get VLESS status.")
 
     async def vless_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_on - включить VLESS-Reality."""
+        """/vless_on command — enable VLESS-Reality."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6646,15 +6646,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_on: {e}")
-            await update.message.reply_text("Ошибка при включении VLESS.")
+            await update.message.reply_text("Failed to enable VLESS.")
 
     async def vless_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_off - выключить VLESS-Reality."""
+        """/vless_off command — disable VLESS-Reality."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6667,15 +6667,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_off: {e}")
-            await update.message.reply_text("Ошибка при выключении VLESS.")
+            await update.message.reply_text("Failed to disable VLESS.")
 
     async def vless_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_config - показать и сохранить конфигурацию VLESS в файлы."""
+        """/vless_config command — show and save the VLESS configuration to files."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6683,45 +6683,45 @@ _Обновлено: {updated_at}_"""
 
             config = vless_manager.get_vless_config(include_secrets=False)
 
-            # Сохраняем конфиги в файлы
+            # Save configs to files
             success, save_msg, created_files = vless_manager.save_vless_config_files()
 
-            # Формируем список сохранённых файлов
+            # Build the list of saved files
             files_list = ""
             if created_files:
-                files_list = "\n\n📁 *Сохранённые файлы:*\n"
+                files_list = "\n\n📁 *Saved files:*\n"
                 for f in created_files:
-                    # Показываем только имя файла без полного пути
+                    # Show only the file name without the full path
                     fname = os.path.basename(f)
                     files_list += f"• `{fname}`\n"
 
-            # Escape для Markdown V2
+            # Escape for Markdown V2
             save_msg_escaped = escape_markdown(save_msg)
 
-            message = f"""🔧 *Конфигурация VLESS\\-Reality*
+            message = f"""🔧 *VLESS\\-Reality configuration*
 
 ```json
 {json.dumps(config, indent=2, ensure_ascii=False)}
 ```
 
 {save_msg_escaped}{files_list}
-💡 Секретные данные скрыты\\. Для полной конфигурации используйте /vless\\_export"""
+💡 Secrets are hidden\\. For the full configuration use /vless\\_export"""
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in vless_config: {e}")
-            await update.message.reply_text("Ошибка при получении конфигурации VLESS.")
+            await update.message.reply_text("Failed to get VLESS configuration.")
 
     async def vless_set_server(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_set_server - установить адрес сервера (автоопределение если без аргументов)."""
+        """/vless_set_server command — set the server address (auto-detect if no arguments)."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6729,32 +6729,32 @@ _Обновлено: {updated_at}_"""
                 return
             args = context.args or []
 
-            # Если аргумент указан - используем его, иначе автоопределение
+            # If an argument is given — use it, otherwise auto-detect
             if len(args) >= 1:
                 server = args[0]
             else:
-                await update.message.reply_text("🔍 Определяю IP сервера...")
-                server = None  # Автоопределение
+                await update.message.reply_text("🔍 Detecting server IP...")
+                server = None  # Auto-detect
 
             success, message = vless_manager.set_vless_server(server)
             if success:
                 message += (
                     self._legacy_vless_reexport_text()
-                    + "\n\nℹ️ Restart Xray не нужен — меняется только адрес в URI."
+                    + "\n\nℹ️ Xray restart is not needed — only the address in the URI changes."
                 )
             await update.message.reply_text(message)
 
         except Exception as e:
             logger.error(f"Error in vless_set_server: {e}")
-            await update.message.reply_text("Ошибка при установке сервера.")
+            await update.message.reply_text("Failed to set the server.")
 
     async def vless_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_set_port - установить порт."""
+        """/vless_set_port command — set the port."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6762,37 +6762,37 @@ _Обновлено: {updated_at}_"""
                 return
             args = context.args or []
             if len(args) != 1:
-                await update.message.reply_text("Использование: /vless_set_port <port>")
+                await update.message.reply_text("Usage: /vless_set_port <port>")
                 return
 
             try:
                 port = int(args[0])
             except ValueError:
-                await update.message.reply_text("❌ Порт должен быть числом")
+                await update.message.reply_text("❌ Port must be a number")
                 return
 
             success, message = vless_manager.set_vless_port(port)
             await update.message.reply_text(message)
 
             if success:
-                # Автоприменение к реальному Xray-конфигу (legacy host-Xray
-                # flow) — без этого xray.service продолжит слушать старый порт,
-                # а новые QR/ссылки будут указывать на порт, который сервер ещё не слушает.
+                # Auto-apply to the real Xray config (legacy host-Xray
+                # flow) — without this, xray.service keeps listening on the old port,
+                # and new QR/links would point at a port the server is not listening on yet.
                 await self._legacy_vless_apply_followup(update, port=port)
 
         except Exception as e:
             logger.error(f"Error in vless_set_port: {e}")
-            await update.message.reply_text("Ошибка при установке порта.")
+            await update.message.reply_text("Failed to set the port.")
 
     async def vless_add_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_add_client - добавить клиента VLESS."""
+        """/vless_add_client command — add a VLESS client."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6801,7 +6801,7 @@ _Обновлено: {updated_at}_"""
             args = context.args or []
             if len(args) < 1:
                 await update.message.reply_text(
-                    "Использование: /vless_add_client <name> [uuid]"
+                    "Usage: /vless_add_client <name> [uuid]"
                 )
                 return
 
@@ -6820,15 +6820,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_add_client: {e}")
-            await update.message.reply_text("Ошибка при добавлении клиента.")
+            await update.message.reply_text("Failed to add the client.")
 
     async def vless_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_qr - показать QR для VLESS-клиента."""
+        """/vless_qr command — show a QR for a VLESS client."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ QR-коды VLESS доступны только администратору."
+                    "⛔ VLESS QR codes are admin-only."
                 )
                 return
 
@@ -6837,7 +6837,7 @@ _Обновлено: {updated_at}_"""
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /vless_qr <client_name_or_uuid>"
+                    "Usage: /vless_qr <client_name_or_uuid>"
                 )
                 return
 
@@ -6845,24 +6845,24 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_qr: {e}")
-            await update.message.reply_text("Ошибка при показе QR клиента.")
+            await update.message.reply_text("Failed to show the client QR.")
 
     async def vless_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_list_clients - список клиентов VLESS.
+        """/vless_list_clients command — VLESS client list.
 
-        Когда `/xui_setup` настроен — показывает клиентов **bot-managed
-        inbound** в 3x-ui (созданных через /provision). Manual inbound
-        с ручными клиентами не трогает (на скрине это `195_Vless` —
-        админ его правит сам в панели).
-        Когда нет — список из локального `vless_config.json` (legacy).
+        When `/xui_setup` is configured — shows **bot-managed
+        inbound** clients in 3x-ui (created via /provision). A manual inbound
+        with hand-made clients is not touched (on the screenshot that is `195_Vless` —
+        admin edits it in the panel).
+        When not — the list from local `vless_config.json` (legacy).
         """
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6871,28 +6871,28 @@ _Обновлено: {updated_at}_"""
                 default_id = int(cfg.get("default_inbound_id") or 0)
                 if not default_id:
                     await update.message.reply_text(
-                        "ℹ️ default_inbound_id не задан в /xui_setup.\n"
-                        "Без него бот не знает, в какой inbound смотреть.",
+                        "ℹ️ default_inbound_id is not set in /xui_setup.\n"
+                        "Without it the bot does not know which inbound to look at.",
                         parse_mode=ParseMode.HTML,
                     )
                     return
                 xclient = xui_manager.make_client_for_config(cfg)
                 if xclient is None:
                     await update.message.reply_text(
-                        "❌ Не удалось восстановить XUIClient (см. /xui_status)."
+                        "❌ Failed to restore XUIClient (see /xui_status)."
                     )
                     return
                 ok_l, msg_l = xclient.login()
                 if not ok_l:
                     await update.message.reply_text(
-                        f"❌ Login в 3x-ui: {html.escape(msg_l)}",
+                        f"❌ 3x-ui login: {html.escape(msg_l)}",
                         parse_mode=ParseMode.HTML,
                     )
                     return
                 ok_g, msg_g, inbound = xclient.get_inbound(default_id)
                 if not ok_g or not inbound:
                     await update.message.reply_text(
-                        f"❌ Не удалось получить default inbound #{default_id}: "
+                        f"❌ Failed to get default inbound #{default_id}: "
                         f"{html.escape(msg_g or '')}",
                         parse_mode=ParseMode.HTML,
                     )
@@ -6907,8 +6907,8 @@ _Обновлено: {updated_at}_"""
                     clients = settings.get("clients") or []
                 except Exception:
                     clients = []
-                # Фильтруем по canonical-паттерну — manual клиенты не
-                # показываем как «bot-managed» (их видно только в панели).
+                # Filter by the canonical pattern — manual clients are not
+                # shown as “bot-managed” (they are visible only in the panel).
                 import re as _re
 
                 canon_re = _re.compile(r"^(Vless|Hys|Mtp|Tuic|Any|Xh)_ID\d{2}_\d{2}$")
@@ -6921,16 +6921,16 @@ _Обновлено: {updated_at}_"""
                 inbound_remark = inbound.get("remark") or ""
                 inbound_port = inbound.get("port") or 0
                 lines = [
-                    f"🛡 <b>Bot-managed VLESS клиенты</b> "
+                    f"🛡 <b>Bot-managed VLESS clients</b> "
                     f"(inbound #{default_id} — "
                     f"<code>{html.escape(str(inbound_remark))}</code>, "
-                    f"порт {inbound_port}):",
+                    f"port {inbound_port}):",
                     "",
                 ]
                 if not bot_clients:
                     lines.append(
-                        "Bot-managed клиентов нет. "
-                        "<code>/provision &lt;id&gt;</code> — добавить."
+                        "No bot-managed clients. "
+                        "<code>/provision &lt;id&gt;</code> — add one."
                     )
                 else:
                     for c in bot_clients:
@@ -6944,9 +6944,9 @@ _Обновлено: {updated_at}_"""
                         )
                 lines.append("")
                 lines.append(
-                    f"<i>Кроме bot-managed, в этом же inbound живут "
-                    f"<b>{manual_count}</b> ручных клиентов админа — "
-                    f"их бот не трогает (правится напрямую в панели).</i>"
+                    f"<i>Besides bot-managed, this inbound also has "
+                    f"<b>{manual_count}</b> manual admin clients — "
+                    f"the bot does not touch them (edit them in the panel).</i>"
                 )
                 await update.message.reply_text(
                     "\n".join(lines), parse_mode=ParseMode.HTML
@@ -6956,13 +6956,13 @@ _Обновлено: {updated_at}_"""
             # Legacy fallback
             clients = vless_manager.list_clients()
             if not clients:
-                await update.message.reply_text("Список клиентов пуст.")
+                await update.message.reply_text("Client list is empty.")
                 return
 
             lines = [
-                "*VLESS клиенты \\(legacy Xray, без 3x\\-ui\\):*",
-                "_Источник: `vless_config.json` \\+ `/usr/local/etc/xray/config.json`\\._",
-                "_Для QR/URI используйте `/vless\\_qr <name>` или `/vless\\_export`\\._",
+                "*VLESS clients \\(legacy Xray, no 3x\\-ui\\):*",
+                "_Source: `vless_config.json` \\+ `/usr/local/etc/xray/config.json`\\._",
+                "_For QR/URI use `/vless\\_qr <name>` or `/vless\\_export`\\._",
                 "",
             ]
             for client in clients:
@@ -6974,17 +6974,17 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_list_clients: {e}")
-            await update.message.reply_text("Ошибка при получении списка клиентов.")
+            await update.message.reply_text("Failed to get the client list.")
 
     async def vless_del_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_del_client - удалить клиента VLESS."""
+        """/vless_del_client command — delete a VLESS client."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -6993,7 +6993,7 @@ _Обновлено: {updated_at}_"""
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /vless_del_client <name_or_uuid>"
+                    "Usage: /vless_del_client <name_or_uuid>"
                 )
                 return
 
@@ -7004,15 +7004,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_del_client: {e}")
-            await update.message.reply_text("Ошибка при удалении клиента.")
+            await update.message.reply_text("Failed to delete the client.")
 
     async def vless_set_uuid(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_set_uuid - установить UUID."""
+        """/vless_set_uuid command — set UUID."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7020,7 +7020,7 @@ _Обновлено: {updated_at}_"""
                 return
             args = context.args or []
             if len(args) != 1:
-                await update.message.reply_text("Использование: /vless_set_uuid <uuid>")
+                await update.message.reply_text("Usage: /vless_set_uuid <uuid>")
                 return
 
             success, message = vless_manager.set_vless_uuid(args[0])
@@ -7030,15 +7030,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_set_uuid: {e}")
-            await update.message.reply_text("Ошибка при установке UUID.")
+            await update.message.reply_text("Failed to set UUID.")
 
     async def vless_set_key(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_set_key - установить публичный ключ Reality."""
+        """/vless_set_key command — set the Reality public key."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7047,7 +7047,7 @@ _Обновлено: {updated_at}_"""
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /vless_set_key <public_key>"
+                    "Usage: /vless_set_key <public_key>"
                 )
                 return
 
@@ -7058,17 +7058,17 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_set_key: {e}")
-            await update.message.reply_text("Ошибка при установке ключа.")
+            await update.message.reply_text("Failed to set the key.")
 
     async def vless_set_shortid(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_set_shortid - установить Short ID."""
+        """/vless_set_shortid command — set Short ID."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7077,7 +7077,7 @@ _Обновлено: {updated_at}_"""
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /vless_set_shortid <hex_string>"
+                    "Usage: /vless_set_shortid <hex_string>"
                 )
                 return
 
@@ -7088,15 +7088,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_set_shortid: {e}")
-            await update.message.reply_text("Ошибка при установке Short ID.")
+            await update.message.reply_text("Failed to set Short ID.")
 
     async def vless_set_sni(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_set_sni - установить SNI для маскировки."""
+        """/vless_set_sni command — set SNI for camouflage."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7104,10 +7104,10 @@ _Обновлено: {updated_at}_"""
                 return
             args = context.args or []
             if len(args) != 1:
-                # Без аргумента — показываем интерактивный список кнопок с
-                # готовыми SNI: одно нажатие меняет домен, применяет конфиг и
-                # предлагает перезапустить Xray. Это «простая команда с
-                # подсказками» — не нужно помнить домены наизусть.
+                # With no argument — show an interactive button list with
+                # ready SNIs: one tap changes the domain, applies the config, and
+                # offers to restart Xray. This is a “simple command with
+                # hints” — no need to memorize domains.
                 await self._show_vless_sni_picker(update.message)
                 return
 
@@ -7118,18 +7118,18 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_set_sni: {e}")
-            await update.message.reply_text("Ошибка при установке SNI.")
+            await update.message.reply_text("Failed to set SNI.")
 
     async def _show_vless_sni_picker(self, message) -> None:
-        """Показать кнопки выбора SNI (текущий помечен ✅) с подсказкой."""
+        """Show SNI picker buttons (current marked ✅) with a hint."""
         try:
             current = (vless_manager.get_vless_status() or {}).get("sni", "")
         except Exception:
             current = ""
 
-        # Явные «человеческие» названия рядом с доменом — чтобы в списке кнопок
-        # было понятно, что за сайт маскируем (Cloudflare, Apple и т.д.), а не
-        # только голый домен.
+        # Human-readable names next to the domain — so the button list
+        # makes it clear which site we are camouflaging (Cloudflare, Apple, etc.), not
+        # just a bare domain.
         sni_labels = {
             "yahoo.com": "Yahoo",
             "www.cloudflare.com": "Cloudflare",
@@ -7154,14 +7154,14 @@ _Обновлено: {updated_at}_"""
             )
 
         hint = (
-            "🌐 *Выбор SNI \\(маскировочный домен Reality\\)*\n\n"
-            f"Текущий: `{escape_markdown(current or '—')}`\n\n"
-            "Нажмите домен — бот сменит SNI, перезапишет конфиг Xray и предложит "
-            "перезапуск\\.\n\n"
-            "💡 Единого верного SNI нет: мобильные операторы \\(особенно в РФ\\) чаще "
-            "всего режут `www\\.microsoft\\.com`\\. Если не подключается при рабочих "
-            "сети/порте/ключах — начните с `yahoo\\.com`\\.\n\n"
-            "Свой домен: `/vless_set_sni example\\.com`"
+            "🌐 *SNI picker \\(Reality camouflage domain\\)*\n\n"
+            f"Current: `{escape_markdown(current or '—')}`\n\n"
+            "Tap a domain — the bot will change SNI, rewrite the Xray config, and offer "
+            "a restart\\.\n\n"
+            "💡 There is no single correct SNI: mobile operators \\(especially in RU\\) most "
+            "often block `www\\.microsoft\\.com`\\. If it does not connect while the "
+            "network/port/keys are fine — start with `yahoo\\.com`\\.\n\n"
+            "Custom domain: `/vless_set_sni example\\.com`"
         )
         await self._reply_md2_safe(
             message, hint, reply_markup=InlineKeyboardMarkup(rows)
@@ -7170,12 +7170,12 @@ _Обновлено: {updated_at}_"""
     async def vless_set_fingerprint(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /vless_set_fingerprint - установить TLS fingerprint."""
+        """/vless_set_fingerprint command — set TLS fingerprint."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7185,7 +7185,7 @@ _Обновлено: {updated_at}_"""
             if len(args) != 1:
                 fp_list = ", ".join(vless_manager.AVAILABLE_FINGERPRINTS)
                 await update.message.reply_text(
-                    f"Использование: /vless_set_fingerprint <fingerprint>\n\nДоступные: {fp_list}"
+                    f"Usage: /vless_set_fingerprint <fingerprint>\n\nAvailable: {fp_list}"
                 )
                 return
 
@@ -7196,15 +7196,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_set_fingerprint: {e}")
-            await update.message.reply_text("Ошибка при установке fingerprint.")
+            await update.message.reply_text("Failed to set fingerprint.")
 
     async def vless_gen_keys(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_gen_keys - сгенерировать все ключи VLESS-Reality."""
+        """/vless_gen_keys command — generate all VLESS-Reality keys."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7212,7 +7212,7 @@ _Обновлено: {updated_at}_"""
                 return
             logger.info(f"Admin {user.id} generating VLESS keys")
 
-            await update.message.reply_text("⏳ Генерация ключей...")
+            await update.message.reply_text("⏳ Generating keys...")
 
             success, keys, message = vless_manager.generate_all_keys()
 
@@ -7222,7 +7222,7 @@ _Обновлено: {updated_at}_"""
                 sid_escaped = escape_markdown(keys.get("short_id", ""))
                 response = f"""{message}
 
-🔑 *Сгенерированные ключи:*
+🔑 *Generated keys:*
 
 *UUID:*
 `{uuid_escaped}`
@@ -7233,32 +7233,32 @@ _Обновлено: {updated_at}_"""
 *Short ID:*
 `{sid_escaped}`
 
-⚠️ *Важно:*
-• Private Key сохранён только на сервере и не отправляется в Telegram
-• Public Key и Short ID нужны для клиента
-• UUID должен совпадать на сервере и клиенте"""
+⚠️ *Important:*
+• Private Key is stored only on the server and is not sent to Telegram
+• Public Key and Short ID are needed for the client
+• UUID must match on the server and the client"""
 
                 await self._reply_md2_safe(update.message, response)
 
-                # Автоматически применяем новые ключи к реальному Xray-конфигу
-                # (legacy host-Xray flow). Без этого шага QR/ссылки клиента
-                # содержат новые ключи, а xray.service продолжает слушать старый
-                # (или пустой) конфиг — Reality-хендшейк не проходит.
+                # Automatically apply the new keys to the real Xray config
+                # (legacy host-Xray flow). Without this step client QR/links
+                # contain the new keys while xray.service still serves the old
+                # (or empty) config — the Reality handshake fails.
                 await self._legacy_vless_apply_followup(update)
             else:
                 await update.message.reply_text(message)
 
         except Exception as e:
             logger.error(f"Error in vless_gen_keys: {e}")
-            await update.message.reply_text("Ошибка при генерации ключей.")
+            await update.message.reply_text("Failed to generate keys.")
 
     async def vless_test(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_test - тест подключения к серверу."""
+        """/vless_test command — test connectivity to the server."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7266,49 +7266,49 @@ _Обновлено: {updated_at}_"""
                 return
             logger.info(f"Admin {user.id} testing VLESS connection")
 
-            await update.message.reply_text("⏳ Тестирование подключения...")
+            await update.message.reply_text("⏳ Testing connectivity...")
 
             success, message = vless_manager.test_connection()
             await update.message.reply_text(message)
 
         except Exception as e:
             logger.error(f"Error in vless_test: {e}")
-            await update.message.reply_text("Ошибка при тестировании подключения.")
+            await update.message.reply_text("Failed to test connectivity.")
 
     async def vless_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_export — admin-only.
+        """/vless_export command — admin-only.
 
-        Поведение зависит от 3x-ui-интеграции:
-        - **xui активен** → отправляется ТОЛЬКО overview-блок, который
-          указывает рабочие команды `/provision`, `/profiles`,
-          `/email_profile`. Legacy JSON-дамп локального
-          `vless_config.json` и вся пачка из 8 inline-кнопок не
-          показывается — это путало.
-        - **xui НЕ активен** (bare host-Xray VPS) → старый legacy
-          экспорт со всеми форматами (он полезен в этой конфигурации).
+        Behavior depends on 3x-ui integration:
+        - **xui active** → ONLY the overview block is sent, which
+          points at working commands `/provision`, `/profiles`,
+          `/email_profile`. The legacy JSON dump of local
+          `vless_config.json` and the pack of 8 inline buttons are not
+          shown — that was confusing.
+        - **xui NOT active** (bare host-Xray VPS) → the old legacy
+          export with all formats (it is useful in this setup).
         """
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
             logger.info(f"Admin {user.id} exporting VLESS config")
 
             if self._xui_is_active():
-                # На VPS с 3x-ui реальный source клиентских профилей —
-                # через /provision/profiles/email_profile. Legacy JSON
-                # больше не показываем (он от локального xray.service,
-                # которого здесь нет).
+                # On a VPS with 3x-ui the real source of client profiles is
+                # /provision/profiles/email_profile. Legacy JSON
+                # is no longer shown (it belongs to local xray.service,
+                # which is not present here).
                 await self._send_vless_xui_overview(update, intent="export")
                 return
 
-            # Клиентская конфигурация
+            # Client configuration
             client_config = vless_manager.export_client_config()
 
-            # Xray конфигурации
+            # Xray configurations
             xray_client = vless_manager.export_xray_config(is_server=False)
             xray_server = vless_manager.export_xray_config(is_server=True)
 
@@ -7316,17 +7316,17 @@ _Обновлено: {updated_at}_"""
             vless_link = vless_manager.generate_vless_link()
             vless_link_escaped = escape_markdown(vless_link)
 
-            message = f"""📤 *Экспорт конфигурации VLESS\\-Reality*
+            message = f"""📤 *VLESS\\-Reality configuration export*
 
-*Конфигурация клиента:*
+*Client configuration:*
 ```json
 {json.dumps(client_config, indent=2)}
 ```
 
-🔗 *Ссылка для Hiddify / Foxray / v2rayNG:*
+🔗 *Link for Hiddify / Foxray / v2rayNG:*
 `{vless_link_escaped}`
 
-Для полной конфигурации Xray используйте команды ниже\\."""
+For the full Xray configuration use the commands below\\."""
 
             keyboard = [
                 [
@@ -7341,7 +7341,7 @@ _Обновлено: {updated_at}_"""
                 ],
                 [
                     InlineKeyboardButton(
-                        "📷 QR по клиенту", callback_data="vless_export_qr_menu"
+                        "📷 QR by client", callback_data="vless_export_qr_menu"
                     )
                 ],
                 [
@@ -7374,15 +7374,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in vless_export: {e}")
-            await update.message.reply_text("Ошибка при экспорте конфигурации.")
+            await update.message.reply_text("Failed to export configuration.")
 
     async def vless_sync(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_sync - автонастройка и экспорт для VPN-клиента."""
+        """/vless_sync command — auto-configure and export for a VPN client."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7390,23 +7390,23 @@ _Обновлено: {updated_at}_"""
                 return
             logger.info(f"Admin {user.id} syncing VLESS config for client")
 
-            # Сначала синхронизируем ключи из xray config (если xray установлен и работает)
-            # Это гарантирует что public_key в vless_config.json соответствует privateKey в xray
+            # First sync keys from the xray config (if xray is installed and running)
+            # This ensures public_key in vless_config.json matches privateKey in xray
             sync_success, sync_msg = vless_manager.sync_from_xray_config()
-            if sync_success and "Синхронизировано" in sync_msg:
+            if sync_success and "Synced" in sync_msg:
                 await update.message.reply_text(
                     "🔄 " + sync_msg.replace("`", ""), parse_mode=None
                 )
 
-            # Получаем текущую конфигурацию
+            # Get the current configuration
             config = vless_manager.get_vless_config(include_secrets=True)
 
             auto_configured = False
 
-            # Если сервер не настроен - автоопределение
+            # If the server is not set — auto-detect
             if not config.get("server") or "..." in str(config.get("server", "")):
-                await update.message.reply_text("🔍 Определяю IP сервера...")
-                success, msg = vless_manager.set_vless_server(None)  # Автоопределение
+                await update.message.reply_text("🔍 Detecting server IP...")
+                success, msg = vless_manager.set_vless_server(None)  # Auto-detect
                 if not success:
                     await update.message.reply_text(msg)
                     return
@@ -7414,9 +7414,9 @@ _Обновлено: {updated_at}_"""
                 auto_configured = True
                 config = vless_manager.get_vless_config(include_secrets=True)
 
-            # Если ключи не сгенерированы - генерируем
+            # If keys are not generated — generate them
             if not config.get("uuid") or "..." in str(config.get("uuid", "")):
-                await update.message.reply_text("🔑 Генерирую ключи...")
+                await update.message.reply_text("🔑 Generating keys...")
                 success, keys, msg = vless_manager.generate_all_keys()
                 if not success:
                     await update.message.reply_text(msg)
@@ -7425,19 +7425,19 @@ _Обновлено: {updated_at}_"""
                 auto_configured = True
                 config = vless_manager.get_vless_config(include_secrets=True)
 
-            # Получаем полную конфигурацию для экспорта
+            # Get the full configuration for export
             full_config = vless_manager.export_client_config()
 
-            # Escaping для Markdown
+            # Escaping for Markdown
             server_escaped = escape_markdown(full_config["server"])
             uuid_escaped = escape_markdown(full_config["uuid"])
             pk_escaped = escape_markdown(full_config["public_key"])
             sid_escaped = escape_markdown(full_config["short_id"])
 
             if auto_configured:
-                header = "✅ *VLESS\\-Reality настроен автоматически\\!*"
+                header = "✅ *VLESS\\-Reality configured automatically\\!*"
             else:
-                header = "🔄 *VLESS\\-Reality для sing-box*"
+                header = "🔄 *VLESS\\-Reality for sing-box*"
 
             # Generate VLESS link
             vless_link = vless_manager.generate_vless_link()
@@ -7445,7 +7445,7 @@ _Обновлено: {updated_at}_"""
 
             message = f"""{header}
 
-*Скопируйте эти значения в Settings → Reality:*
+*Copy these values into Settings → Reality:*
 
 📍 *Server:* `{server_escaped}`
 🔌 *Port:* `{full_config["port"]}`
@@ -7455,24 +7455,24 @@ _Обновлено: {updated_at}_"""
 🌐 *SNI:* `{full_config["sni"]}`
 🎭 *Fingerprint:* `{full_config["fingerprint"]}`
 
-🔗 *Ссылка для Hiddify / Foxray / v2rayNG:*
+🔗 *Link for Hiddify / Foxray / v2rayNG:*
 `{vless_link_escaped}`
 
-💡 _Откройте sing-box → Settings → VLESS\\-Reality → Configure Reality_"""
+💡 _Open sing-box → Settings → VLESS\\-Reality → Configure Reality_"""
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in vless_sync: {e}")
-            await update.message.reply_text("Ошибка при синхронизации конфигурации.")
+            await update.message.reply_text("Failed to sync configuration.")
 
     async def vless_reset(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /vless_reset - сбросить конфигурацию VLESS."""
+        """/vless_reset command — reset the VLESS configuration."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7480,39 +7480,39 @@ _Обновлено: {updated_at}_"""
                 return
             logger.info(f"Admin {user.id} resetting VLESS config")
 
-            # Запрашиваем подтверждение
+            # Ask for confirmation
             keyboard = [
                 [
                     InlineKeyboardButton(
-                        "✅ Да, сбросить", callback_data="vless_reset_confirm"
+                        "✅ Yes, reset", callback_data="vless_reset_confirm"
                     ),
                     InlineKeyboardButton(
-                        "❌ Отмена", callback_data="vless_reset_cancel"
+                        "❌ Cancel", callback_data="vless_reset_cancel"
                     ),
                 ]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
 
             await update.message.reply_text(
-                "⚠️ *Вы уверены, что хотите сбросить конфигурацию VLESS\\-Reality?*\n\n"
-                "Все настройки и ключи будут удалены\\!",
+                "⚠️ *Are you sure you want to reset the VLESS\\-Reality configuration?*\n\n"
+                "All settings and keys will be deleted\\!",
                 parse_mode=ParseMode.MARKDOWN_V2,
                 reply_markup=reply_markup,
             )
 
         except Exception as e:
             logger.error(f"Error in vless_reset: {e}")
-            await update.message.reply_text("Ошибка при сбросе конфигурации.")
+            await update.message.reply_text("Failed to reset configuration.")
 
     # === XRAY MANAGEMENT COMMANDS ===
 
     async def xray_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_status - проверить статус Xray."""
+        """/xray_status command — check Xray status."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7521,21 +7521,21 @@ _Обновлено: {updated_at}_"""
             installed, message, info = vless_manager.check_xray_installed()
 
             if not installed:
-                message += "\n\n💡 Для установки: /xray\\_install"
+                message += "\n\n💡 To install: /xray\\_install"
 
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in xray_status: {e}")
-            await update.message.reply_text("Ошибка при проверке статуса Xray.")
+            await update.message.reply_text("Failed to check Xray status.")
 
     async def xray_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_config - показать конфигурацию Xray."""
+        """/xray_config command — show the Xray configuration."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7546,22 +7546,22 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in xray_config: {e}")
-            await update.message.reply_text("Ошибка при получении конфигурации Xray.")
+            await update.message.reply_text("Failed to get Xray configuration.")
 
     async def xray_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_install - установить Xray."""
+        """/xray_install command — install Xray."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
             logger.info(f"Admin {user.id} installing Xray")
 
             await update.message.reply_text(
-                "⏳ Устанавливаю Xray... (может занять 1-2 минуты)"
+                "⏳ Installing Xray... (may take 1-2 minutes)"
             )
 
             success, message = vless_manager.install_xray()
@@ -7569,15 +7569,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in xray_install: {e}")
-            await update.message.reply_text("Ошибка при установке Xray.")
+            await update.message.reply_text("Failed to install Xray.")
 
     async def xray_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_apply - применить VLESS конфигурацию к Xray."""
+        """/xray_apply command — apply the VLESS configuration to Xray."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7586,20 +7586,20 @@ _Обновлено: {updated_at}_"""
             success, message = vless_manager.apply_xray_config()
             await self._reply_md2_safe(update.message, message)
             if success:
-                # Plain text: в MD2 ломаются systemctl / подчёркивания.
+                # Plain text: MD2 breaks on systemctl / underscores.
                 await update.message.reply_text(self._legacy_vless_host_restart_text())
 
         except Exception as e:
             logger.error(f"Error in xray_apply: {e}")
-            await update.message.reply_text("Ошибка при применении конфигурации.")
+            await update.message.reply_text("Failed to apply configuration.")
 
     async def xray_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_start - запустить Xray."""
+        """/xray_start command — start Xray."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7610,15 +7610,15 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in xray_start: {e}")
-            await update.message.reply_text("Ошибка при запуске Xray.")
+            await update.message.reply_text("Failed to start Xray.")
 
     async def xray_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_stop - остановить Xray."""
+        """/xray_stop command — stop Xray."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7629,63 +7629,63 @@ _Обновлено: {updated_at}_"""
 
         except Exception as e:
             logger.error(f"Error in xray_stop: {e}")
-            await update.message.reply_text("Ошибка при остановке Xray.")
+            await update.message.reply_text("Failed to stop Xray.")
 
     async def xray_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_restart - перезапустить Xray."""
+        """/xray_restart command — restart Xray."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
             logger.info(f"Admin {user.id} restarting Xray")
 
-            await update.message.reply_text("⏳ Перезапускаю Xray...")
+            await update.message.reply_text("⏳ Restarting Xray...")
 
             success, message = vless_manager.restart_xray()
             await update.message.reply_text(message)
 
         except Exception as e:
             logger.error(f"Error in xray_restart: {e}")
-            await update.message.reply_text("Ошибка при перезапуске Xray.")
+            await update.message.reply_text("Failed to restart Xray.")
 
     async def xray_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xray_logs - показать логи Xray."""
+        """/xray_logs command — show Xray logs."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
             logger.info(f"Admin {user.id} viewing Xray logs")
 
-            # Парсим количество строк из аргументов
+            # Parse line count from arguments
             args = context.args or []
             lines = 30
             if args and args[0].isdigit():
-                lines = min(int(args[0]), 100)  # Максимум 100 строк
+                lines = min(int(args[0]), 100)  # Max 100 lines
 
             success, message = vless_manager.get_xray_logs(lines)
             await self._reply_md2_safe(update.message, message)
 
         except Exception as e:
             logger.error(f"Error in xray_logs: {e}")
-            await update.message.reply_text("Ошибка при получении логов.")
+            await update.message.reply_text("Failed to get logs.")
 
     # === NGINX SNI ROUTING COMMANDS ===
 
     async def nginx_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /nginx_status - статус Nginx SNI fallback."""
+        """/nginx_status command — Nginx SNI fallback status."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7697,13 +7697,13 @@ _Обновлено: {updated_at}_"""
 
             status_emoji = "🟢" if enabled else "🔴"
             lines = [
-                f"{status_emoji} *Nginx SNI Fallback*: {'включён' if enabled else 'выключен'}",
-                f"📍 *Порт*: `{port}`",
-                f"🌐 *Headscale домен*: `{escape_markdown(hs_domain or 'не задан')}`",
+                f"{status_emoji} *Nginx SNI Fallback*: {'on' if enabled else 'off'}",
+                f"📍 *Port*: `{port}`",
+                f"🌐 *Headscale domain*: `{escape_markdown(hs_domain or 'not set')}`",
             ]
             if ha_domain:
                 lines.append(
-                    f"🏠 *Home Assistant домен*: `{escape_markdown(ha_domain)}`"
+                    f"🏠 *Home Assistant domain*: `{escape_markdown(ha_domain)}`"
                 )
 
             await update.message.reply_text(
@@ -7711,15 +7711,15 @@ _Обновлено: {updated_at}_"""
             )
         except Exception as e:
             logger.error(f"Error in nginx_status: {e}")
-            await update.message.reply_text("Ошибка при получении статуса Nginx.")
+            await update.message.reply_text("Failed to get Nginx status.")
 
     async def nginx_enable(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /nginx_enable - включить Nginx SNI fallback."""
+        """/nginx_enable command — enable Nginx SNI fallback."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7729,15 +7729,15 @@ _Обновлено: {updated_at}_"""
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in nginx_enable: {e}")
-            await update.message.reply_text("Ошибка при включении Nginx fallback.")
+            await update.message.reply_text("Failed to enable Nginx fallback.")
 
     async def nginx_disable(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /nginx_disable - выключить Nginx SNI fallback."""
+        """/nginx_disable command — disable Nginx SNI fallback."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7745,25 +7745,25 @@ _Обновлено: {updated_at}_"""
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in nginx_disable: {e}")
-            await update.message.reply_text("Ошибка при выключении Nginx fallback.")
+            await update.message.reply_text("Failed to disable Nginx fallback.")
 
     async def nginx_set_domain(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /nginx_set_domain <headscale_domain> [ha_domain]."""
+        """/nginx_set_domain command <headscale_domain> [ha_domain]."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /nginx_set_domain <headscale_domain> [ha_domain]\n"
-                    "Пример: /nginx_set_domain headscale.example.com ha.example.com"
+                    "Usage: /nginx_set_domain <headscale_domain> [ha_domain]\n"
+                    "Example: /nginx_set_domain headscale.example.com ha.example.com"
                 )
                 return
 
@@ -7775,15 +7775,15 @@ _Обновлено: {updated_at}_"""
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in nginx_set_domain: {e}")
-            await update.message.reply_text("Ошибка при установке домена.")
+            await update.message.reply_text("Failed to set the domain.")
 
     async def nginx_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /nginx_config - вывести Nginx конфиг для копирования на VPS."""
+        """/nginx_config command — print the Nginx config to copy onto the VPS."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7797,19 +7797,19 @@ _Обновлено: {updated_at}_"""
                 await update.message.reply_text(config_text)
         except Exception as e:
             logger.error(f"Error in nginx_config: {e}")
-            await update.message.reply_text("Ошибка при генерации конфига Nginx.")
+            await update.message.reply_text("Failed to generate Nginx config.")
 
     # === HEADSCALE COMMANDS ===
 
     async def headscale_host_tailscale_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale — IPv4/IPv6 клиента Tailscale на хосте VPS (админ/special)."""
+        """/headscale command — Tailscale client IPv4/IPv6 on the VPS host (admin/special)."""
         try:
             user = update.effective_user
             if not self._is_privileged(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору или special-пользователю."
+                    "⛔ This command is for admin or special users only."
                 )
                 return
             self._track_user(user)
@@ -7822,18 +7822,18 @@ _Обновлено: {updated_at}_"""
         except Exception as e:
             logger.error(f"Error in headscale_host_tailscale_command: {e}")
             await update.message.reply_text(
-                "Ошибка при определении адреса Tailscale на сервере."
+                "Failed to detect the Tailscale address on the server."
             )
 
     async def headscale_status(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_status - статус Headscale."""
+        """/headscale_status command — Headscale status."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7842,106 +7842,106 @@ _Обновлено: {updated_at}_"""
             container_emoji = "🟢" if status["container_running"] else "🔴"
 
             lines = [
-                f"{enabled_emoji} *Headscale*: {'включён' if status['enabled'] else 'выключен'}",
-                f"{container_emoji} *Контейнер* `{escape_markdown(status['container_name'])}`: "
-                f"{'запущен' if status['container_running'] else 'остановлен'}",
-                f"🌐 *URL*: `{escape_markdown(status['server_url'] or 'не задан')}`",
-                f"💻 *Ноды*: {status['node_count']}",
-                f"👤 *Пользователи*: {status['user_count']}",
+                f"{enabled_emoji} *Headscale*: {'on' if status['enabled'] else 'off'}",
+                f"{container_emoji} *Container* `{escape_markdown(status['container_name'])}`: "
+                f"{'running' if status['container_running'] else 'stopped'}",
+                f"🌐 *URL*: `{escape_markdown(status['server_url'] or 'not set')}`",
+                f"💻 *Nodes*: {status['node_count']}",
+                f"👤 *Users*: {status['user_count']}",
             ]
 
-            # Headplane (Web UI). Развернут отдельным контейнером через
-            # compose.headplane.yaml. Если контейнер найден — показываем URL
-            # для SSH-туннеля. Если нет — не зашумляем status.
+            # Headplane (Web UI). Deployed as a separate container via
+            # compose.headplane.yaml. If the container is found — show the URL
+            # for the SSH tunnel. If not — do not clutter status.
             hp = status.get("headplane") or {}
             if hp.get("container_running"):
                 browser = escape_markdown(hp.get("browser_url", ""))
                 tunnel = escape_markdown(hp.get("tunnel_hint", ""))
                 lines.append("")
-                lines.append("🟢 *Headplane* \\(Web UI\\): запущен")
+                lines.append("🟢 *Headplane* \\(Web UI\\): running")
                 lines.append(f"🔗 `{browser}`")
-                lines.append(f"🚪 SSH\\-туннель: `{tunnel}`")
+                lines.append(f"🚪 SSH\\-tunnel: `{tunnel}`")
             await update.message.reply_text(
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
             logger.error(f"Error in headscale_status: {e}")
-            await update.message.reply_text("Ошибка при получении статуса Headscale.")
+            await update.message.reply_text("Failed to get Headscale status.")
 
     async def headscale_enable(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_enable."""
+        """/headscale_enable command."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             success, message = headscale_manager.enable_headscale()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_enable: {e}")
-            await update.message.reply_text("Ошибка.")
+            await update.message.reply_text("Error.")
 
     async def headscale_disable(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_disable."""
+        """/headscale_disable command."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             success, message = headscale_manager.disable_headscale()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_disable: {e}")
-            await update.message.reply_text("Ошибка.")
+            await update.message.reply_text("Error.")
 
     async def headscale_set_url(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_set_url <url>."""
+        """/headscale_set_url command <url>."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /headscale_set_url https://headscale.example.com"
+                    "Usage: /headscale_set_url https://headscale.example.com"
                 )
                 return
             success, message = headscale_manager.set_server_url(args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_set_url: {e}")
-            await update.message.reply_text("Ошибка.")
+            await update.message.reply_text("Error.")
 
     async def headscale_gen(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /headscale_gen [user] [expiration] - генерация Pre-Auth ключа.
+        """/headscale_gen command [user] [expiration] — generate a Pre-Auth key.
 
-        Аргументы позиционно-независимы: токен вида ``720h``/``30m``/``7d``
-        распознаётся как срок жизни ключа, любой другой — как имя пользователя.
-        Примеры: ``/headscale_gen``, ``/headscale_gen 720h``,
+        Arguments are position-independent: a token like ``720h``/``30m``/``7d``
+        is treated as key lifetime; anything else is a username.
+        Examples: ``/headscale_gen``, ``/headscale_gen 720h``,
         ``/headscale_gen alice``, ``/headscale_gen alice 720h``.
         """
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
-            # Срок: число + единица (s/m/h/d). Всё остальное — имя пользователя.
+            # Lifetime: number + unit (s/m/h/d). Everything else is a username.
             hs_user, hs_expiration = headscale_manager.parse_user_expiration(
                 context.args or []
             )
@@ -7959,21 +7959,21 @@ _Обновлено: {updated_at}_"""
                 await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_gen: {e}")
-            await update.message.reply_text("Ошибка при генерации ключа.")
+            await update.message.reply_text("Failed to generate the key.")
 
     async def headscale_revoke(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_revoke <key> [user] — отозвать Pre-Auth ключ.
+        """/headscale_revoke command <key> [user] — revoke a Pre-Auth key.
 
-        Без аргументов показывает список активных ключей, чтобы было что
-        отзывать. Полезно, если ключ из /headscale_gen утёк или больше не нужен.
+        With no arguments, shows the list of active keys so there is something
+        to revoke. Useful if a /headscale_gen key leaked or is no longer needed.
         """
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -7985,16 +7985,16 @@ _Обновлено: {updated_at}_"""
                     return
                 if not keys:
                     await update.message.reply_text(
-                        "Активных Pre-Auth ключей нет.\n"
-                        "Использование: /headscale_revoke <key> [user]"
+                        "No active Pre-Auth keys.\n"
+                        "Usage: /headscale_revoke <key> [user]"
                     )
                     return
-                lines = ["🔑 *Pre-Auth ключи* \\(укажите ключ для отзыва\\):"]
+                lines = ["🔑 *Pre-Auth keys* \\(specify a key to revoke\\):"]
                 for k in keys:
                     if not isinstance(k, dict):
                         continue
                     kid = str(k.get("key", k.get("id", "?")))
-                    used = "использован" if k.get("used") else "активен"
+                    used = "used" if k.get("used") else "active"
                     reusable = "reusable" if k.get("reusable") else "one\\-time"
                     lines.append(f"• `{escape_markdown(kid)}` — {used}, {reusable}")
                 await update.message.reply_text(
@@ -8008,17 +8008,17 @@ _Обновлено: {updated_at}_"""
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_revoke: {e}")
-            await update.message.reply_text("Ошибка при отзыве ключа.")
+            await update.message.reply_text("Failed to revoke the key.")
 
     async def headscale_list_nodes(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_list_nodes - список нод."""
+        """/headscale_list_nodes command — node list."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -8028,10 +8028,10 @@ _Обновлено: {updated_at}_"""
                 return
 
             if not nodes:
-                await update.message.reply_text("📋 Подключённых нод нет.")
+                await update.message.reply_text("📋 No connected nodes.")
                 return
 
-            lines = [f"📋 *Ноды Headscale* \\({len(nodes)}\\):"]
+            lines = [f"📋 *Headscale nodes* \\({len(nodes)}\\):"]
             for node in nodes[:20]:  # Limit to 20
                 name = escape_markdown(node.get("givenName", node.get("name", "?")))
                 ip = (
@@ -8047,44 +8047,44 @@ _Обновлено: {updated_at}_"""
             )
         except Exception as e:
             logger.error(f"Error in headscale_list_nodes: {e}")
-            await update.message.reply_text("Ошибка при получении списка нод.")
+            await update.message.reply_text("Failed to get the node list.")
 
     async def headscale_create_user(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /headscale_create_user <name>."""
+        """/headscale_create_user command <name>."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /headscale_create_user <username>"
+                    "Usage: /headscale_create_user <username>"
                 )
                 return
             success, message = headscale_manager.create_user(args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in headscale_create_user: {e}")
-            await update.message.reply_text("Ошибка при создании пользователя.")
+            await update.message.reply_text("Failed to create the user.")
 
-    # === EXIT NODE (выход в интернет через VPS-координатор) ===
+    # === EXIT NODE (internet via the VPS coordinator) ===
 
     async def exit_node_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /exit_node — статус exit node + гайд (admin + special)."""
+        """/exit_node command — exit node status + guide (admin + special)."""
         msg = update.effective_message
         try:
             user = update.effective_user
             self._track_user(user)
             if not self._is_privileged(user.id):
                 await msg.reply_text(
-                    "⛔ Доступно администратору или special-пользователю."
+                    "⛔ Available to admin or special users."
                 )
                 return
 
@@ -8095,14 +8095,14 @@ _Обновлено: {updated_at}_"""
                 ready = bool(status.get("advertising") and status.get("approved"))
 
             if ready:
-                head = "🟢 Exit node готов — можно выходить в интернет через VPS."
+                head = "🟢 Exit node ready — internet via VPS is available."
             elif status.get("error"):
-                head = f"🔴 Exit node недоступен: {status['error']}."
+                head = f"🔴 Exit node unavailable: {status['error']}."
             else:
-                head = "🟡 Exit node ещё не поднят." + (
+                head = "🟡 Exit node is not up yet." + (
                     ""
                     if self._is_admin(user.id)
-                    else " Попросите админа включить его (/exit_node_on)."
+                    else " Ask an admin to enable it (/exit_node_on)."
                 )
 
             lines = [head, ""]
@@ -8112,66 +8112,66 @@ _Обновлено: {updated_at}_"""
                     headscale_manager.exit_node_client_instructions(node_label)
                 )
             elif self._is_admin(user.id):
-                # Админу показываем диагностику, чтобы понять чего не хватает.
+                # Show diagnostics to admin so they can see what is missing.
                 adv = "✅" if status.get("advertising") else "❌"
                 appr = "✅" if status.get("approved") else "❌"
                 fwd4 = status.get("ip_forward_v4")
                 fwd6 = status.get("ip_forward_v6")
                 lines += [
-                    f"{adv} advertise на хосте",
-                    f"{appr} approve маршрута в Headscale",
+                    f"{adv} advertise on the host",
+                    f"{appr} route approved in Headscale",
                     f"forwarding IPv4: {fwd4 or '?'}, IPv6: {fwd6 or '?'}",
                     "",
-                    "Включить: /exit_node_on",
+                    "Enable: /exit_node_on",
                 ]
             await msg.reply_text("\n".join(lines).strip())
         except Exception as e:
             logger.error(f"Error in exit_node_command: {e}")
             if msg:
-                await msg.reply_text("Ошибка при получении статуса exit node.")
+                await msg.reply_text("Failed to get exit node status.")
 
     async def exit_node_on_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /exit_node_on — сделать VPS exit node'ом (только админ)."""
+        """/exit_node_on command — make the VPS an exit node (admin only)."""
         msg = update.effective_message
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
-                await msg.reply_text("⛔ Эта команда доступна только администратору.")
+                await msg.reply_text("⛔ This command is admin-only.")
                 return
             ok, report = headscale_manager.enable_exit_node()
             prefix = "" if ok else "❌ "
             await msg.reply_text(f"{prefix}{report}")
         except Exception as e:
             logger.error(f"Error in exit_node_on_command: {e}")
-            await msg.reply_text("Ошибка при включении exit node.")
+            await msg.reply_text("Failed to enable exit node.")
 
     async def exit_node_off_command(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /exit_node_off — выключить exit node (только админ)."""
+        """/exit_node_off command — disable exit node (admin only)."""
         msg = update.effective_message
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
-                await msg.reply_text("⛔ Эта команда доступна только администратору.")
+                await msg.reply_text("⛔ This command is admin-only.")
                 return
             ok, report = headscale_manager.disable_exit_node()
             await msg.reply_text(report)
         except Exception as e:
             logger.error(f"Error in exit_node_off_command: {e}")
-            await msg.reply_text("Ошибка при выключении exit node.")
+            await msg.reply_text("Failed to disable exit node.")
 
     # === CALLBACK QUERY HANDLER ===
 
     async def _handle_menu_callbacks(
         self, update: Update, context, query, data: str
     ) -> bool:
-        """Callback'и `menu:*` — единственный namespace, доступный не-админам.
+        """`menu:*` callbacks — the only namespace available to non-admins.
 
-        Роль проверяется на каждое действие (spec §1), а не на входе
-        handler'а. Возвращает True, если callback обработан.
+        Role is checked on every action (spec §1), not only at handler
+        entry. Returns True if the callback was handled.
         """
         if not data.startswith("menu:"):
             return False
@@ -8191,7 +8191,7 @@ _Обновлено: {updated_at}_"""
                         edit=True,
                     )
             elif action == "diag":
-                # diag_command сам различает роли (краткий/полный отчёт).
+                # diag_command itself distinguishes roles (brief/full report).
                 await self.diag_command(update, context)
             elif action == "clear":
                 await self.clear_chat(update, context)
@@ -8201,11 +8201,11 @@ _Обновлено: {updated_at}_"""
             elif action.startswith("set_theme:"):
                 name = action.split(":", 1)[1]
                 if storage_get_ui_prefs(uid)["theme"] == name:
-                    return True  # уже выбрана — не дёргаем edit_text
+                    return True  # already selected — do not call edit_text
                 try:
                     storage_set_ui_pref(uid, "theme", name)
                 except ValueError:
-                    await query.message.reply_text("Неизвестная тема.")
+                    await query.message.reply_text("Unknown theme.")
                     return True
                 text, kb = self._settings_panel(uid)
                 await self._menu_panel(query.message, text, kb, edit=True)
@@ -8217,32 +8217,32 @@ _Обновлено: {updated_at}_"""
             elif action == "my_profile":
                 if not self._is_privileged(uid):
                     await query.message.reply_text(
-                        "⛔ Доступно администратору или special-пользователю."
+                        "⛔ Available to admin or special users."
                     )
                     return True
                 if self._is_admin(uid):
-                    # У админа нет лимита просмотров — без подтверждения.
+                    # Admins have no view limit — no confirmation.
                     await self.my_profile_command(update, context)
                     return True
                 views = storage_get_my_profile_views(uid)
                 icons = self._theme_icons(uid)
                 text = (
-                    "Открыть VPN\\-профили?\n\n"
-                    f"Это потратит просмотр *{views + 1} из "
-                    f"{self.MY_PROFILE_VIEW_LIMIT}*\\. Сообщения с URL и QR "
-                    "авто\\-удалятся через 15 минут\\."
+                    "Open VPN\\-profiles?\n\n"
+                    f"This will use view *{views + 1} of "
+                    f"{self.MY_PROFILE_VIEW_LIMIT}*\\. Messages with URL and QR "
+                    "will auto\\-delete after 15 minutes\\."
                 )
                 kb = InlineKeyboardMarkup(
                     [
                         [
                             InlineKeyboardButton(
-                                self._btn(icons, "ok", "Открыть"),
+                                self._btn(icons, "ok", "Open"),
                                 callback_data="menu:my_profile_go",
                             )
                         ],
                         [
                             InlineKeyboardButton(
-                                self._btn(icons, "back", "Назад"),
+                                self._btn(icons, "back", "Back"),
                                 callback_data="menu:back",
                             )
                         ],
@@ -8252,11 +8252,11 @@ _Обновлено: {updated_at}_"""
             elif action == "my_profile_go":
                 if not self._is_privileged(uid):
                     await query.message.reply_text(
-                        "⛔ Доступно администратору или special-пользователю."
+                        "⛔ Available to admin or special users."
                     )
                     return True
-                # Вернуть панель в обычное состояние, затем выдать профили
-                # новыми сообщениями (счётчик инкрементится внутри команды).
+                # Restore the panel to the normal state, then issue profiles
+                # as new messages (the counter increments inside the command).
                 await self._menu_panel(
                     query.message,
                     self._user_help_panel_text(uid),
@@ -8267,35 +8267,35 @@ _Обновлено: {updated_at}_"""
             elif action == "exit_node":
                 if not self._is_privileged(uid):
                     await query.message.reply_text(
-                        "⛔ Доступно администратору или special-пользователю."
+                        "⛔ Available to admin or special users."
                     )
                     return True
                 await self.exit_node_command(update, context)
             elif action == "admin_help":
                 if not self._is_admin(uid):
-                    await query.message.reply_text("⛔ Только для администратора.")
+                    await query.message.reply_text("⛔ Admin only.")
                     return True
                 await self._help_show_menu(query.message)
             elif action == "admin_users":
                 if not self._is_admin(uid):
-                    await query.message.reply_text("⛔ Только для администратора.")
+                    await query.message.reply_text("⛔ Admin only.")
                     return True
                 await self.admin_list_users(update, context)
             elif action == "backup":
                 if not self._is_privileged(uid):
                     await query.message.reply_text(
-                        "⛔ Доступно администратору или special-пользователю."
+                        "⛔ Available to admin or special users."
                     )
                     return True
                 await self.backup_status(update, context)
             else:
                 logger.warning("unknown menu action: %r", data)
-                await query.message.reply_text("Неизвестное действие меню.")
+                await query.message.reply_text("Unknown menu action.")
             return True
         except Exception as exc:
             logger.error("menu callback %r failed: %s", data, exc)
             try:
-                await query.message.reply_text("❌ Не удалось выполнить действие меню.")
+                await query.message.reply_text("❌ Failed to run the menu action.")
             except Exception:
                 pass
             return True
@@ -8303,26 +8303,26 @@ _Обновлено: {updated_at}_"""
     async def callback_query_handler(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Обработка callback queries от inline клавиатур."""
+        """Handle callback queries from inline keyboards."""
         query = update.callback_query
         await query.answer()
 
         data = query.data
 
-        # `menu:` — единственный namespace для всех ролей; роль проверяется
-        # внутри на каждое действие.
+        # `menu:` is the only namespace for all roles; the role is checked
+        # inside on every action.
         if await self._handle_menu_callbacks(update, context, query, data):
             return
 
         if await self._handle_ai_translate_callbacks(update, context, query, data):
             return
 
-        # Все остальные callback'и доступны только администраторам.
+        # All other callbacks are admin-only.
         if not self._is_admin(query.from_user.id):
-            # У inline-сообщений (via @бот) query.message is None —
-            # молча игнорируем чужой тап, отвечать некуда.
+            # For inline messages (via @bot) query.message is None —
+            # silently ignore someone else's tap; there is nowhere to reply.
             if query.message:
-                await query.message.reply_text("⛔ Только для администратора.")
+                await query.message.reply_text("⛔ Admin only.")
             return
 
         if await self._handle_list_users_callbacks(query, data):
@@ -8348,7 +8348,7 @@ _Обновлено: {updated_at}_"""
                     return
             except Exception as e:
                 logger.error(f"Error in help callback '{data}': {e}")
-                # Fallback: отправить новым сообщением без MarkdownV2
+                # Fallback: send a new message without MarkdownV2
                 section_text = self._HELP_SECTIONS.get(data, "")
                 if section_text:
                     plain = (
@@ -8411,11 +8411,11 @@ _Обновлено: {updated_at}_"""
                 provider, model = parts
                 if set_current_model(provider, model):
                     await query.message.edit_text(
-                        f"✅ Модель для {provider.upper()} изменена на {model}"
+                        f"✅ Model for {provider.upper()} changed to {model}"
                     )
                 else:
                     await query.message.edit_text(
-                        f"❌ Ошибка при установке модели {model}"
+                        f"❌ Failed to set model {model}"
                     )
             return
 
@@ -8432,39 +8432,39 @@ _Обновлено: {updated_at}_"""
             xray_config = vless_manager.export_xray_config(is_server=True)
             config_json = json.dumps(xray_config, indent=2)
 
-            # Выводим конфиг
+            # Print the config
             await query.message.reply_text(
                 f"🖥️ *Xray Server Config:*\n```json\n{config_json}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
 
-            # Выводим инструкцию
-            instructions = """💡 *Как применить на сервере \\(SSH\\):*
+            # Print the instructions
+            instructions = """💡 *How to apply on the server \\(SSH\\):*
 
-*1\\. Подключитесь к серверу:*
+*1\\. Connect to the server:*
 ```
-ssh root@<IP\\_СЕРВЕРА>
+ssh root@<SERVER\\_IP>
 ```
 
-*2\\. Откройте редактор nano:*
+*2\\. Open the nano editor:*
 ```
 nano /usr/local/etc/xray/config\\.json
 ```
 
-*3\\. В nano:*
-• Удалите всё: зажмите `Ctrl\\+K` несколько раз
-• Вставьте JSON: `Ctrl\\+Shift\\+V` \\(или ПКМ → Вставить\\)
-• Сохраните: `Ctrl\\+O`, затем `Enter`
-• Выйдите: `Ctrl\\+X`
+*3\\. In nano:*
+• Delete everything: hold `Ctrl\\+K` several times
+• Paste JSON: `Ctrl\\+Shift\\+V` \\(or right\\-click → Paste\\)
+• Save: `Ctrl\\+O`, then `Enter`
+• Exit: `Ctrl\\+X`
 
-*4\\. Проверьте и запустите:*
+*4\\. Check and start:*
 ```
 xray \\-test \\-config /usr/local/etc/xray/config\\.json
 systemctl restart xray
 systemctl status xray
 ```
 
-✅ Если видите `Active: active \\(running\\)` \\- готово\\!"""
+✅ If you see `Active: active \\(running\\)` \\- done\\!"""
             await query.message.reply_text(
                 instructions, parse_mode=ParseMode.MARKDOWN_V2
             )
@@ -8473,7 +8473,7 @@ systemctl status xray
         if data == "vless_export_qr_menu":
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды VLESS доступны только администратору."
+                    "⛔ VLESS QR codes are admin-only."
                 )
                 return
             await self._show_vless_qr_selection(query.message)
@@ -8482,7 +8482,7 @@ systemctl status xray
         if data.startswith("vless_export_qr_uuid:"):
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды VLESS доступны только администратору."
+                    "⛔ VLESS QR codes are admin-only."
                 )
                 return
             client_uuid = data.split(":", 1)[1]
@@ -8493,7 +8493,7 @@ systemctl status xray
             sub_base64 = vless_manager.export_subscription_base64()
             if not sub_base64:
                 await query.message.reply_text(
-                    "❌ Нет данных для subscription. Проверьте /vless_sync"
+                    "❌ No subscription data. Check /vless_sync"
                 )
                 return
             await self._reply_export_file(
@@ -8508,7 +8508,7 @@ systemctl status xray
             links = vless_manager.export_subscription_list()
             if not links:
                 await query.message.reply_text(
-                    "❌ Нет данных для subscription. Проверьте /vless_sync"
+                    "❌ No subscription data. Check /vless_sync"
                 )
                 return
             raw_list = "\n".join(links)
@@ -8575,13 +8575,13 @@ systemctl status xray
                     "📦 Subscription (base64)",
                 )
             else:
-                await query.message.reply_text("❌ Нет данных для subscription")
+                await query.message.reply_text("❌ No subscription data")
             return
 
         if data == "hy2_export_qr_menu":
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды Hysteria2 доступны только администратору."
+                    "⛔ Hysteria2 QR codes are admin-only."
                 )
                 return
             await self._show_hy2_qr_selection(query.message)
@@ -8590,7 +8590,7 @@ systemctl status xray
         if data.startswith("hy2_export_qr_pw:"):
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды Hysteria2 доступны только администратору."
+                    "⛔ Hysteria2 QR codes are admin-only."
                 )
                 return
             client_password = data.split(":", 1)[1]
@@ -8607,7 +8607,7 @@ systemctl status xray
                 )
             else:
                 await query.message.reply_text(
-                    "❌ Ссылка недоступна (не настроен сервер или секрет)"
+                    "❌ Link unavailable (server or secret is not set)"
                 )
             return
 
@@ -8619,7 +8619,7 @@ systemctl status xray
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             else:
-                await query.message.reply_text("❌ Ссылка недоступна")
+                await query.message.reply_text("❌ Link unavailable")
             return
 
 
@@ -8633,13 +8633,13 @@ systemctl status xray
                     "📦 Subscription (base64)",
                 )
             else:
-                await query.message.reply_text("❌ Нет данных для subscription")
+                await query.message.reply_text("❌ No subscription data")
             return
 
         if data == "mt_export_qr_menu":
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды MTProto доступны только администратору."
+                    "⛔ MTProto QR codes are admin-only."
                 )
                 return
             await self._show_mt_qr_selection(query.message)
@@ -8648,7 +8648,7 @@ systemctl status xray
         if data.startswith("mt_export_qr_name:"):
             if not self._is_admin(query.from_user.id):
                 await query.message.reply_text(
-                    "⛔ QR-коды MTProto доступны только администратору."
+                    "⛔ MTProto QR codes are admin-only."
                 )
                 return
             client_name = data.split(":", 1)[1]
@@ -8661,26 +8661,26 @@ systemctl status xray
             if not success:
                 await query.message.reply_text(message)
                 return
-            # Сразу записываем конфиг host-Xray, чтобы Reality serverNames/dest
-            # обновились; сам перезапуск оставляем на кнопку — так админ видит
-            # результат теста конфига до рестарта.
+            # Write the host-Xray config immediately so Reality serverNames/dest
+            # update; leave the restart for the button — so admin sees
+            # the config test result before restart.
             apply_ok, apply_msg = vless_manager.apply_xray_config()
             purged = await self._purge_all_profile_messages(query.get_bot())
             purge_note = (
-                f"\n🧹 Старые ссылки/QR удалены у всех ({purged})."
+                f"\n🧹 Old links/QR purged for everyone ({purged})."
                 if purged
                 else ""
             )
             text = (
                 f"{message}\n{apply_msg}{purge_note}\n\n"
-                "После перезапуска заново выдайте клиентам URI/QR: "
-                "/vless_qr <имя>, /profiles <id> или /my_profile"
+                "After restart, re-issue URI/QR to clients: "
+                "/vless_qr <name>, /profiles <id> or /my_profile"
             )
             keyboard = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "🔄 Перезапустить Xray",
+                            "🔄 Restart Xray",
                             callback_data="xray_restart_after_port",
                         )
                     ]
@@ -8693,7 +8693,7 @@ systemctl status xray
 
         if data.startswith("hy2_hub:"):
             if not self._is_admin(query.from_user.id):
-                await query.answer("⛔ Только для администратора.", show_alert=True)
+                await query.answer("⛔ Admin only.", show_alert=True)
                 return
             action = data.split(":", 1)[1]
             await query.answer()
@@ -8701,11 +8701,11 @@ systemctl status xray
                 await self._show_hy2_sni_picker(query.message)
                 return
             if action == "status":
-                # Лёгкий статус без полного MD2-отчёта /hy2_status.
+                # Light status without the full MD2 /hy2_status report.
                 try:
                     st = hysteria2_manager.get_status()
                 except Exception as exc:
-                    await query.message.reply_text(f"❌ Статус: {exc}")
+                    await query.message.reply_text(f"❌ Status: {exc}")
                     return
                 await query.message.reply_text(
                     "⚡ Hysteria2\n"
@@ -8715,7 +8715,7 @@ systemctl status xray
                     f"sni: {st.get('sni') or '—'}\n"
                     f"insecure: {st.get('insecure')}\n"
                     f"clients: {st.get('clients_count')}\n\n"
-                    "Подробно: /hy2_status"
+                    "Details: /hy2_status"
                 )
                 return
             if action == "on":
@@ -8732,16 +8732,16 @@ systemctl status xray
                 return
             if action == "gen_all":
                 await query.message.reply_text(
-                    "Отправьте команду:\n/hy2_gen_all\n"
-                    "(пароль + сертификат + IP — лучше явно из чата)"
+                    "Send the command:\n/hy2_gen_all\n"
+                    "(password + certificate + IP — better explicitly from chat)"
                 )
                 return
-            await query.message.reply_text(f"Неизвестное действие: {action}")
+            await query.message.reply_text(f"Unknown action: {action}")
             return
 
         if data.startswith("hy2_set_sni:"):
             if not self._is_admin(query.from_user.id):
-                await query.message.reply_text("⛔ Только для администратора.")
+                await query.message.reply_text("⛔ Admin only.")
                 return
             domain = data.split(":", 1)[1]
             success, message = hysteria2_manager.set_sni(domain)
@@ -8756,7 +8756,7 @@ systemctl status xray
                 logger.warning("hy2_set_sni callback cert failed: %s", cert_msg)
             purged = await self._purge_all_profile_messages(query.get_bot())
             purge_note = (
-                f"\n🧹 Старые ссылки/QR удалены у всех ({purged})."
+                f"\n🧹 Old links/QR purged for everyone ({purged})."
                 if purged
                 else ""
             )
@@ -8771,52 +8771,52 @@ systemctl status xray
 
         # === Xray restart after port change ===
         if data == "xray_restart_after_port":
-            await query.answer("⏳ Перезапускаю Xray...")
+            await query.answer("⏳ Restarting Xray...")
 
             success, message = vless_manager.restart_xray()
 
-            # Обновляем сообщение с результатом
+            # Update the message with the result
             original_text = query.message.text
             new_text = (
-                f"{original_text}\n\n{'✅' if success else '❌'} Перезапуск: {message}"
+                f"{original_text}\n\n{'✅' if success else '❌'} Restart: {message}"
             )
 
             await query.edit_message_text(
                 text=new_text,
-                reply_markup=None,  # Убираем кнопку
+                reply_markup=None,  # Remove the button
             )
             return
 
         if data == "vless_reset_cancel":
-            await query.message.edit_text("❌ Сброс конфигурации отменён")
+            await query.message.edit_text("❌ Configuration reset cancelled")
             return
 
-    # === ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ===
+    # === HELPER METHODS ===
 
     async def _show_api_key(self, update: Update, app_id: str):
-        """Показать API ключ для app_id (маскированный)."""
+        """Show the API key for app_id (masked)."""
         try:
             from app_keys import get_api_key, has_api_key
 
             if app_id == "default":
                 api_key = os.getenv("API_SECRET_KEY", "")
-                source = "из \\.env"
+                source = "from \\.env"
             else:
                 api_key = get_api_key(app_id)
-                # Проверяем, есть ли индивидуальный ключ для этого app_id
+                # Check whether this app_id has an individual key
                 if has_api_key(app_id):
-                    source = "индивидуальный"
+                    source = "individual"
                 else:
-                    source = "дефолтный"
+                    source = "default"
 
             if api_key:
                 masked = self._mask_secret(api_key).replace(".", "\\.")
-                message = f"🔑 API ключ \\({source}\\):\n\n`{masked}`"
+                message = f"🔑 API key \\({source}\\):\n\n`{masked}`"
                 if self._secret_reveal_allowed():
                     keyboard = [
                         [
                             InlineKeyboardButton(
-                                "👁️ Показать полностью",
+                                "👁️ Show in full",
                                 callback_data=f"show_full_api_key:{app_id}",
                             )
                         ]
@@ -8828,29 +8828,29 @@ systemctl status xray
                         reply_markup=reply_markup,
                     )
                 else:
-                    message += "\n\n⚠️ Полный вывод секретов через Telegram отключён по умолчанию\\."
+                    message += "\n\n⚠️ Full secret reveal over Telegram is disabled by default\\."
                     await update.callback_query.message.reply_text(
                         message, parse_mode=ParseMode.MARKDOWN_V2
                     )
             else:
                 app_id_escaped = escape_markdown(app_id)
-                message = f"❌ API ключ не найден для {app_id_escaped}"
+                message = f"❌ API key not found for {app_id_escaped}"
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
         except Exception as e:
             logger.error(f"Error showing API key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при получении API ключа"
+                "Failed to get API key"
             )
 
     async def _show_full_api_key(self, update: Update, app_id: str):
-        """Показать полный API ключ для app_id."""
+        """Show the full API key for app_id."""
         try:
             if not self._secret_reveal_allowed():
                 await update.callback_query.message.reply_text(
-                    "⛔ Полный вывод API ключей через Telegram отключён. "
-                    "Если это действительно нужно, включите `TELEGRAMHELPER_ALLOW_SECRET_REVEAL=true` только временно на сервере."
+                    "⛔ Full API key reveal over Telegram is disabled. "
+                    "If this is really needed, set `TELEGRAMHELPER_ALLOW_SECRET_REVEAL=true` only temporarily on the server."
                 )
                 return
 
@@ -8858,20 +8858,20 @@ systemctl status xray
 
             if app_id == "default":
                 api_key = os.getenv("API_SECRET_KEY", "")
-                source = "из \\.env"
+                source = "from \\.env"
             else:
                 api_key = get_api_key(app_id)
-                # Проверяем, есть ли индивидуальный ключ для этого app_id
+                # Check whether this app_id has an individual key
                 if has_api_key(app_id):
-                    source = "индивидуальный"
+                    source = "individual"
                 else:
-                    source = "дефолтный"
+                    source = "default"
 
-            # URL API сервера
+            # API server URL
             api_url = os.getenv("API_URL", "http://localhost:8000/ai_query")
 
             if api_key:
-                message = f"""🔑 API ключ \\({source}\\):
+                message = f"""🔑 API key \\({source}\\):
 
 📍 *URL:*
 `{api_url}`
@@ -8879,46 +8879,46 @@ systemctl status xray
 🔐 *API Key:*
 `{api_key}`
 
-⚠️ _Скопируйте и удалите это сообщение_"""
+⚠️ _Copy this and delete the message_"""
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
             else:
                 app_id_escaped = escape_markdown(app_id)
-                message = f"❌ API ключ не найден для {app_id_escaped}"
+                message = f"❌ API key not found for {app_id_escaped}"
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
         except Exception as e:
             logger.error(f"Error showing full API key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при получении API ключа"
+                "Failed to get API key"
             )
 
     async def _show_encryption_key(self, update: Update, app_id: str):
-        """Показать ключ шифрования для app_id (маскированный)."""
+        """Show the encryption key for app_id (masked)."""
         try:
             from app_keys import get_encryption_key, has_encryption_key
 
             if app_id == "default":
                 enc_key = os.getenv("ENCRYPTION_KEY", "")
-                source = "из \\.env"
+                source = "from \\.env"
             else:
                 enc_key = get_encryption_key(app_id, force_reload=True)
-                # Проверяем, есть ли индивидуальный ключ для этого app_id
+                # Check whether this app_id has an individual key
                 if has_encryption_key(app_id, force_reload=True):
-                    source = "индивидуальный"
+                    source = "individual"
                 else:
-                    source = "дефолтный"
+                    source = "default"
 
             if enc_key:
                 masked = self._mask_secret(enc_key).replace(".", "\\.")
-                message = f"🔐 Ключ шифрования \\({source}\\):\n\n`{masked}`"
+                message = f"🔐 Encryption key \\({source}\\):\n\n`{masked}`"
                 if self._secret_reveal_allowed():
                     keyboard = [
                         [
                             InlineKeyboardButton(
-                                "👁️ Показать полностью",
+                                "👁️ Show in full",
                                 callback_data=f"show_full_enc_key:{app_id}",
                             )
                         ]
@@ -8930,29 +8930,29 @@ systemctl status xray
                         reply_markup=reply_markup,
                     )
                 else:
-                    message += "\n\n⚠️ Полный вывод секретов через Telegram отключён по умолчанию\\."
+                    message += "\n\n⚠️ Full secret reveal over Telegram is disabled by default\\."
                     await update.callback_query.message.reply_text(
                         message, parse_mode=ParseMode.MARKDOWN_V2
                     )
             else:
                 app_id_escaped = escape_markdown(app_id)
-                message = f"❌ Ключ шифрования не найден для {app_id_escaped}"
+                message = f"❌ Encryption key not found for {app_id_escaped}"
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
         except Exception as e:
             logger.error(f"Error showing encryption key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при получении ключа шифрования"
+                "Failed to get encryption key"
             )
 
     async def _show_full_encryption_key(self, update: Update, app_id: str):
-        """Показать полный ключ шифрования для app_id."""
+        """Show the full encryption key for app_id."""
         try:
             if not self._secret_reveal_allowed():
                 await update.callback_query.message.reply_text(
-                    "⛔ Полный вывод ключей шифрования через Telegram отключён. "
-                    "Если это действительно нужно, включите `TELEGRAMHELPER_ALLOW_SECRET_REVEAL=true` только временно на сервере."
+                    "⛔ Full encryption-key reveal over Telegram is disabled. "
+                    "If this is really needed, set `TELEGRAMHELPER_ALLOW_SECRET_REVEAL=true` only temporarily on the server."
                 )
                 return
 
@@ -8960,51 +8960,51 @@ systemctl status xray
 
             if app_id == "default":
                 enc_key = os.getenv("ENCRYPTION_KEY", "")
-                source = "из \\.env"
+                source = "from \\.env"
             else:
                 enc_key = get_encryption_key(app_id, force_reload=True)
-                # Проверяем, есть ли индивидуальный ключ для этого app_id
+                # Check whether this app_id has an individual key
                 if has_encryption_key(app_id, force_reload=True):
-                    source = "индивидуальный"
+                    source = "individual"
                 else:
-                    source = "дефолтный"
+                    source = "default"
 
             if enc_key:
-                message = f"🔐 Ключ шифрования \\({source}\\):\n\n`{enc_key}`\n\n⚠️ _Скопируйте и удалите это сообщение_"
+                message = f"🔐 Encryption key \\({source}\\):\n\n`{enc_key}`\n\n⚠️ _Copy this and delete the message_"
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
             else:
                 app_id_escaped = escape_markdown(app_id)
-                message = f"❌ Ключ шифрования не найден для {app_id_escaped}"
+                message = f"❌ Encryption key not found for {app_id_escaped}"
                 await update.callback_query.message.reply_text(
                     message, parse_mode=ParseMode.MARKDOWN_V2
                 )
         except Exception as e:
             logger.error(f"Error showing full encryption key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при получении ключа шифрования"
+                "Failed to get encryption key"
             )
 
     async def _generate_api_key(self, update: Update, app_id: str):
-        """Сгенерировать новый API ключ."""
+        """Generate a new API key."""
         try:
             new_key = secrets.token_hex(32)
 
             if app_id == "default":
                 if not self._secret_reveal_allowed():
                     await update.callback_query.message.reply_text(
-                        "⛔ Генерация дефолтного API ключа через Telegram отключена в безопасном режиме.\n"
-                        "Сгенерируйте ключ локально на сервере и обновите `API_SECRET_KEY` в `.env`."
+                        "⛔ Generating the default API key via Telegram is disabled in safe mode.\n"
+                        "Generate the key locally on the server and update `API_SECRET_KEY` in `.env`."
                     )
                     return
 
-                message = f"""✅ Новый API ключ сгенерирован:
+                message = f"""✅ New API key generated:
 
 `{new_key}`
 
-⚠️ Добавьте в \\.env как API\\_SECRET\\_KEY
-🔄 После изменения \\.env перезапустите контейнер"""
+⚠️ Add it to \\.env as API\\_SECRET\\_KEY
+🔄 After changing \\.env, restart the container"""
             else:
                 from app_keys import set_api_key
 
@@ -9012,19 +9012,19 @@ systemctl status xray
                 app_id_escaped = escape_markdown(app_id)
                 masked = self._mask_secret(new_key).replace(".", "\\.")
                 if self._secret_reveal_allowed():
-                    message = f"""✅ API ключ для {app_id_escaped} сгенерирован и сохранён:
+                    message = f"""✅ API key for {app_id_escaped} generated and saved:
 
 `{new_key}`
 
-💾 Сохранено в app\\_keys\\.json
-🔄 Изменения применятся при следующем запросе"""
+💾 Saved in app\\_keys\\.json
+🔄 Changes apply on the next request"""
                 else:
-                    message = f"""✅ API ключ для {app_id_escaped} сгенерирован и сохранён:
+                    message = f"""✅ API key for {app_id_escaped} generated and saved:
 
 `{masked}`
 
-⚠️ Полный секрет не отправляется через Telegram
-💾 Сохранено в app\\_keys\\.json"""
+⚠️ The full secret is not sent over Telegram
+💾 Saved in app\\_keys\\.json"""
 
             await update.callback_query.message.reply_text(
                 message, parse_mode=ParseMode.MARKDOWN_V2
@@ -9032,28 +9032,28 @@ systemctl status xray
         except Exception as e:
             logger.error(f"Error generating API key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при генерации API ключа"
+                "Failed to generate API key"
             )
 
     async def _generate_encryption_key(self, update: Update, app_id: str):
-        """Сгенерировать новый ключ шифрования."""
+        """Generate a new encryption key."""
         try:
             new_key = secrets.token_hex(32)
 
             if app_id == "default":
                 if not self._secret_reveal_allowed():
                     await update.callback_query.message.reply_text(
-                        "⛔ Генерация дефолтного ключа шифрования через Telegram отключена в безопасном режиме.\n"
-                        "Сгенерируйте ключ локально на сервере и обновите `ENCRYPTION_KEY` в `.env`."
+                        "⛔ Generating the default encryption key via Telegram is disabled in safe mode.\n"
+                        "Generate the key locally on the server and update `ENCRYPTION_KEY` in `.env`."
                     )
                     return
 
-                message = f"""✅ Новый ключ шифрования сгенерирован:
+                message = f"""✅ New encryption key generated:
 
 `{new_key}`
 
-⚠️ Добавьте в \\.env как ENCRYPTION\\_KEY
-🔄 После изменения \\.env перезапустите контейнер"""
+⚠️ Add it to \\.env as ENCRYPTION\\_KEY
+🔄 After changing \\.env, restart the container"""
             else:
                 from app_keys import set_encryption_key
 
@@ -9061,19 +9061,19 @@ systemctl status xray
                 app_id_escaped = escape_markdown(app_id)
                 masked = self._mask_secret(new_key).replace(".", "\\.")
                 if self._secret_reveal_allowed():
-                    message = f"""✅ Ключ шифрования для {app_id_escaped} сгенерирован и сохранён:
+                    message = f"""✅ Encryption key for {app_id_escaped} generated and saved:
 
 `{new_key}`
 
-💾 Сохранено в app\\_keys\\.json
-🔄 Изменения применятся при следующем запросе"""
+💾 Saved in app\\_keys\\.json
+🔄 Changes apply on the next request"""
                 else:
-                    message = f"""✅ Ключ шифрования для {app_id_escaped} сгенерирован и сохранён:
+                    message = f"""✅ Encryption key for {app_id_escaped} generated and saved:
 
 `{masked}`
 
-⚠️ Полный секрет не отправляется через Telegram
-💾 Сохранено в app\\_keys\\.json"""
+⚠️ The full secret is not sent over Telegram
+💾 Saved in app\\_keys\\.json"""
 
             await update.callback_query.message.reply_text(
                 message, parse_mode=ParseMode.MARKDOWN_V2
@@ -9081,47 +9081,47 @@ systemctl status xray
         except Exception as e:
             logger.error(f"Error generating encryption key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при генерации ключа шифрования"
+                "Failed to generate encryption key"
             )
 
     async def _delete_api_key(self, update: Update, app_id: str):
-        """Удалить API ключ."""
+        """Delete an API key."""
         try:
             from app_keys import delete_api_key
 
             if delete_api_key(app_id):
-                message = f"✅ API ключ для {app_id} удалён"
+                message = f"✅ API key for {app_id} deleted"
             else:
-                message = f"❌ Не удалось удалить API ключ для {app_id}"
+                message = f"❌ Failed to delete API key for {app_id}"
 
             await update.callback_query.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error deleting API key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при удалении API ключа"
+                "Failed to delete API key"
             )
 
     async def _delete_encryption_key(self, update: Update, app_id: str):
-        """Удалить ключ шифрования."""
+        """Delete an encryption key."""
         try:
             from app_keys import delete_encryption_key
 
             if delete_encryption_key(app_id):
-                message = f"✅ Ключ шифрования для {app_id} удалён"
+                message = f"✅ Encryption key for {app_id} deleted"
             else:
-                message = f"❌ Не удалось удалить ключ шифрования для {app_id}"
+                message = f"❌ Failed to delete encryption key for {app_id}"
 
             await update.callback_query.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error deleting encryption key: {e}")
             await update.callback_query.message.reply_text(
-                "Ошибка при удалении ключа шифрования"
+                "Failed to delete encryption key"
             )
 
     async def _show_model_selection(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE, provider: str
     ):
-        """Показать выбор модели для провайдера."""
+        """Show model picker for a provider."""
         try:
             models = get_available_models(provider)
             current_model = get_current_model(provider)
@@ -9139,12 +9139,12 @@ systemctl status xray
 
             reply_markup = InlineKeyboardMarkup(keyboard)
             await update.callback_query.message.edit_text(
-                f"🤖 Выберите модель для {provider.upper()}:", reply_markup=reply_markup
+                f"🤖 Select a model for {provider.upper()}:", reply_markup=reply_markup
             )
         except Exception as e:
             logger.error(f"Error showing model selection: {e}")
             await update.callback_query.message.edit_text(
-                "Ошибка при загрузке списка моделей"
+                "Failed to load the model list"
             )
 
     # ================================================================
@@ -9152,9 +9152,9 @@ systemctl status xray
     # ================================================================
 
     def _escape_md2(self, text):
-        """Экранирование спецсимволов для Telegram Markdown V2."""
+        """Escape special characters for Telegram Markdown V2."""
         if not text:
-            return "не настроен"
+            return "not configured"
         text = str(text)
         for char in [
             "_",
@@ -9180,16 +9180,16 @@ systemctl status xray
         return text
 
     async def hy2_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2 — хаб Hysteria2 (видна в автодополнении при наборе /hy2)."""
+        """/hy2 command — Hysteria2 hub (shown in autocomplete when typing /hy2)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             keyboard = InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "📊 Статус", callback_data="hy2_hub:status"
+                            "📊 Status", callback_data="hy2_hub:status"
                         ),
                         InlineKeyboardButton(
                             "🌐 SNI", callback_data="hy2_hub:set_sni"
@@ -9197,7 +9197,7 @@ systemctl status xray
                     ],
                     [
                         InlineKeyboardButton(
-                            "🟢 On (в выдачу)", callback_data="hy2_hub:on"
+                            "🟢 On (for issuance)", callback_data="hy2_hub:on"
                         ),
                         InlineKeyboardButton(
                             "✅ Apply", callback_data="hy2_hub:apply"
@@ -9214,22 +9214,22 @@ systemctl status xray
                 ]
             )
             await update.message.reply_text(
-                "⚡ Hysteria2 — выберите действие\n\n"
-                "Команды вручную: /hy2_status /hy2_set_sni /hy2_on "
+                "⚡ Hysteria2 — choose an action\n\n"
+                "Manual commands: /hy2_status /hy2_set_sni /hy2_on "
                 "/hy2_apply /hy2_start",
                 reply_markup=keyboard,
             )
         except Exception as e:
             logger.error(f"Error in hy2_command: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_status — показать статус Hysteria2."""
+        """/hy2_status command — show Hysteria2 status."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -9244,96 +9244,96 @@ systemctl status xray
             profile_emoji = "🟢" if enabled else "🔴"
             config_emoji = "✅" if configured else "❌"
             if active is True:
-                service_line = "🟢 запущен \\(active\\)"
+                service_line = "🟢 running \\(active\\)"
             elif active is False:
-                service_line = "🔴 остановлен \\(inactive\\)"
+                service_line = "🔴 stopped \\(inactive\\)"
             else:
-                service_line = "❔ не определено"
+                service_line = "❔ unknown"
 
             binary_path = status.get("binary_path") or ""
             unit_ok = bool(status.get("unit_exec_ok"))
             unit_path = status.get("unit_exec_path") or ""
 
-            # Подсказка следующего шага — чтобы инструкция не вела в тупик.
+            # Next-step hint — so the playbook does not dead-end.
             if not binary_path:
                 next_step = (
-                    "➡️ *Дальше:* `/hy2_install` — бинарник Hysteria2 не найден "
-                    "на хосте \\(иначе будет 203/EXEC\\)\\."
+                    "➡️ *Next:* `/hy2_install` — the Hysteria2 binary was not found "
+                    "on the host \\(otherwise you get 203/EXEC\\)\\."
                 )
             elif unit_path and not unit_ok:
                 next_step = (
-                    "➡️ *Дальше:* `/hy2_install` — systemd ExecStart указывает "
-                    "на отсутствующий файл\\. Команда починит unit\\."
+                    "➡️ *Next:* `/hy2_install` — systemd ExecStart points "
+                    "at a missing file\\. The command will repair the unit\\."
                 )
             elif not configured:
-                next_step = "➡️ *Дальше:* `/hy2_gen_all` \\(пароль \\+ сертификат \\+ IP\\), затем `/hy2_apply`\\."
+                next_step = "➡️ *Next:* `/hy2_gen_all` \\(password \\+ certificate \\+ IP\\), then `/hy2_apply`\\."
             elif not enabled:
                 next_step = (
-                    "➡️ *Дальше:* `/hy2_on` — пометить профиль активным "
-                    "\\(нужно для `/provision`, `/my_profile` и выдачи URI/QR\\)\\."
+                    "➡️ *Next:* `/hy2_on` — mark the profile active "
+                    "\\(needed for `/provision`, `/my_profile`, and issuing URI/QR\\)\\."
                 )
             elif active is False:
-                next_step = "➡️ *Дальше:* `/hy2_start` — сервис не запущен на сервере\\."
+                next_step = "➡️ *Next:* `/hy2_start` — the service is not running on the server\\."
             elif active is None:
-                next_step = "⚠️ Не удалось проверить systemd \\(SSH/`systemctl`\\)\\. Проверьте `/hy2_logs`\\."
+                next_step = "⚠️ Could not check systemd \\(SSH/`systemctl`\\)\\. Check `/hy2_logs`\\."
             else:
                 next_step = (
-                    "✅ Всё готово\\. Клиент: `/hy2_add_client <имя>` → `/hy2_qr <имя>` "
-                    "или раздайте через `/provision <id>`\\."
+                    "✅ All set\\. Client: `/hy2_add_client <name>` → `/hy2_qr <name>` "
+                    "or issue via `/provision <id>`\\."
                 )
 
             binary_line = (
                 f"• Binary: `{esc(binary_path)}`"
                 if binary_path
-                else "• Binary: ❌ не найден"
+                else "• Binary: ❌ not found"
             )
             if unit_path:
                 unit_line = (
                     f"• Unit ExecStart: `{esc(unit_path)}` "
-                    + ("✅" if unit_ok else "❌ нет файла")
+                    + ("✅" if unit_ok else "❌ no file")
                 )
             else:
-                unit_line = "• Unit ExecStart: ❌ unit не найден"
+                unit_line = "• Unit ExecStart: ❌ unit not found"
 
-            message = f"""⚡ *Hysteria2 Статус*
+            message = f"""⚡ *Hysteria2 Status*
 
-*Профиль \\(enabled\\):* {profile_emoji} {"включён" if enabled else "выключен"}
-*Сервис \\(systemd\\):* {service_line}
-*Конфигурация:* {config_emoji} {"настроена" if configured else "не настроена"}
+*Profile \\(enabled\\):* {profile_emoji} {"on" if enabled else "off"}
+*Service \\(systemd\\):* {service_line}
+*Config:* {config_emoji} {"configured" if configured else "not configured"}
 
-*Параметры:*
-• Сервер: `{esc(status.get("server"))}`
-• Порт: `{esc(status.get("port", 443))}` \\(UDP\\)
-• SNI: `{esc(status.get("sni") or "(авто)")}`
-• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+*Parameters:*
+• Server: `{esc(status.get("server"))}`
+• Port: `{esc(status.get("port", 443))}` \\(UDP\\)
+• SNI: `{esc(status.get("sni") or "(auto)")}`
+• Insecure: {"yes ⚠️" if status.get("insecure") else "no ✅"}
 {binary_line}
 {unit_line}
 
-*Обфускация:* {("✅ " + esc(status.get("obfs_type", ""))) if status.get("has_obfs") else "❌ выключена"}
-*Скорость:* ↑ {status.get("up_mbps", 0) or "авто"} / ↓ {status.get("down_mbps", 0) or "авто"} Mbps
+*Obfuscation:* {("✅ " + esc(status.get("obfs_type", ""))) if status.get("has_obfs") else "❌ off"}
+*Speed:* ↑ {status.get("up_mbps", 0) or "auto"} / ↓ {status.get("down_mbps", 0) or "auto"} Mbps
 *Masquerade:* `{esc(status.get("masquerade_url", ""))}`
-*Пароль:* {"✅" if status["has_password"] else "❌"}
-*Клиентов:* {status.get("clients_count", 0)}
+*Password:* {"✅" if status["has_password"] else "❌"}
+*Clients:* {status.get("clients_count", 0)}
 
 {next_step}
 
-*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+*Updated:* {esc(status.get("updated_at", "never"))}"""
 
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in hy2_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
-    # === Reticulum / HA-стек ===
+    # === Reticulum / HA stack ===
 
     async def reticulum_status(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /reticulum_status — статус HA-стека и Reticulum-моста."""
+        """/reticulum_status command — HA stack and Reticulum bridge status."""
         try:
             if not self._is_admin(update.effective_user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
             import reticulum_manager
@@ -9341,7 +9341,7 @@ systemctl status xray
             st = reticulum_manager.get_status()
             if not st["installed"]:
                 await update.message.reply_text(
-                    "🛰 HA-стек / Reticulum не установлен на этом сервере."
+                    "🛰 HA stack / Reticulum is not installed on this server."
                 )
                 return
 
@@ -9350,38 +9350,38 @@ systemctl status xray
 
             svc = st["services"]
             lines = [
-                "🛰 Reticulum / HA-стек",
+                "🛰 Reticulum / HA stack",
                 "",
                 f"{mark(svc.get('ha-reticulum-bridge'))} ha-reticulum-bridge",
                 f"{mark(svc.get('ha-stub-grpc'))} ha-stub-grpc",
                 f"{mark(svc.get('ha-stub-udp'))} ha-stub-udp",
-                f"Мост слушает :50061 — {'да' if st['listening'] else 'нет'}",
+                f"Bridge listening on :50061 — {'yes' if st['listening'] else 'no'}",
                 "",
-                f"Bridge hash: {st['bridge_hash'] or '(появится в логе старта)'}",
+                f"Bridge hash: {st['bridge_hash'] or '(appears in the start log)'}",
             ]
             if st.get("i2pd_installed"):
                 lines += [
                     "",
-                    f"{mark(st.get('i2pd_active'))} i2pd (I2P, путь 2)",
-                    f"I2P b32: {st.get('i2p_b32') or '(туннель строится / нет)'}",
+                    f"{mark(st.get('i2pd_active'))} i2pd (I2P, path 2)",
+                    f"I2P b32: {st.get('i2p_b32') or '(tunnel building / none)'}",
                 ]
             lines += [
                 "",
-                "Управление: /reticulum_restart, /reticulum_hash, /reticulum_i2p",
-                "Тест round-trip — из UDP_gRPC_COM_Lite CLI (RETICULUM_TESTING.md).",
+                "Manage: /reticulum_restart, /reticulum_hash, /reticulum_i2p",
+                "Round-trip test — from the UDP_gRPC_COM_Lite CLI (RETICULUM_GUIDE.md).",
             ]
             await update.message.reply_text("\n".join(lines))
         except Exception as e:
             logger.error(f"Error in reticulum_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def reticulum_restart(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /reticulum_restart — перезапустить HA-стек (3 сервиса)."""
+        """/reticulum_restart command — restart the HA stack (3 services)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             import reticulum_manager
 
@@ -9389,13 +9389,13 @@ systemctl status xray
             await update.message.reply_text(("✅ " if ok else "❌ ") + msg)
         except Exception as e:
             logger.error(f"Error in reticulum_restart: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def reticulum_hash(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /reticulum_hash — bridge destination hash (для клиентов)."""
+        """/reticulum_hash command — bridge destination hash (for clients)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             import reticulum_manager
 
@@ -9406,59 +9406,59 @@ systemctl status xray
                 )
             else:
                 await update.message.reply_text(
-                    "Bridge hash не найден (мост не запущен или нет в логе старта)."
+                    "Bridge hash not found (bridge is not running or missing from the start log)."
                 )
         except Exception as e:
             logger.error(f"Error in reticulum_hash: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def reticulum_i2p(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /reticulum_i2p — статус I2P-пути (i2pd + b32 серверного туннеля)."""
+        """/reticulum_i2p command — I2P path status (i2pd + server tunnel b32)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             import reticulum_manager
 
             i = reticulum_manager.get_i2p_status()
             if not i["installed"]:
                 await update.message.reply_text(
-                    "🛰 i2pd не установлен — I2P-путь (этап 3) не настроен на этом сервере."
+                    "🛰 i2pd is not installed — I2P path (stage 3) is not set up on this server."
                 )
                 return
             lines = [
-                "🛰 Reticulum I2P (путь 2)",
+                "🛰 Reticulum I2P (path 2)",
                 "",
                 f"{'🟢' if i['active'] else '🔴'} i2pd",
-                f"b32 моста: {i['b32'] or '(серверный туннель ha-bridge строится / нет)'}",
+                f"Bridge b32: {i['b32'] or '(ha-bridge server tunnel building / none)'}",
                 "",
-                "Клиент: i2pd client-туннель → этот b32, RNS по TCP на 127.0.0.1:50061.",
-                "Детали — RETICULUM_TESTING.md (режим C), RETICULUM_VPS.md §12.",
+                "Client: i2pd client tunnel → this b32, RNS over TCP on 127.0.0.1:50061.",
+                "Details — RETICULUM_GUIDE.md §8 (I2P path).",
             ]
             await update.message.reply_text("\n".join(lines))
         except Exception as e:
             logger.error(f"Error in reticulum_i2p: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def reticulum_health(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /reticulum_health — здоровье i2pd (сеть, tunnel success, leasesets)."""
+        """/reticulum_health command — i2pd health (network, tunnel success, leasesets)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             import reticulum_manager
 
             h = reticulum_manager.get_i2p_health()
             if not h["installed"]:
                 await update.message.reply_text(
-                    "🛰 i2pd не установлен — I2P-путь (этап 3) не настроен на этом сервере."
+                    "🛰 i2pd is not installed — I2P path (stage 3) is not set up on this server."
                 )
                 return
             if not h["active"]:
-                await update.message.reply_text("🔴 i2pd не запущен. Подними: systemctl start i2pd")
+                await update.message.reply_text("🔴 i2pd is not running. Start it: systemctl start i2pd")
                 return
             lines = [
-                "🩺 i2pd health (I2P, путь 2)",
+                "🩺 i2pd health (I2P, path 2)",
                 "",
                 f"Network status:  {h['network'] or '—'}",
                 f"Tunnel success:  {h['success_rate'] or '—'}",
@@ -9467,63 +9467,63 @@ systemctl status xray
                 f"Transit tunnels: {h['transit'] or '—'}",
                 f"Uptime:          {h['uptime'] or '—'}",
                 "",
-                "💡 Свежий узел: низкий success rate и LeaseSets=0 — норма первых минут;",
-                "b32 моста публикуется после прогрева туннелей. b32 — /reticulum_i2p.",
+                "💡 Fresh node: low success rate and LeaseSets=0 is normal for the first minutes;",
+                "bridge b32 is published after tunnels warm up. b32 — /reticulum_i2p.",
             ]
             await update.message.reply_text("\n".join(lines))
         except Exception as e:
             logger.error(f"Error in reticulum_health: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
-    # === Управление администраторами ===
+    # === Administrator management ===
 
     async def admin_list(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /admin_list — список администраторов (первичные защищены)."""
+        """/admin_list command — administrator list (primary admins are protected)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             import storage
 
             founders = list(self.config.admin_user_ids or [])
             dynamic = [a for a in storage.get_dynamic_admins() if a not in founders]
-            lines = ["👑 Администраторы:", ""]
+            lines = ["👑 Administrators:", ""]
             for f in founders:
-                lines.append(f"🔒 {f} — первичный (нельзя снять)")
+                lines.append(f"🔒 {f} — primary (cannot be removed)")
             for d in dynamic:
-                lines.append(f"• {d} — назначенный")
+                lines.append(f"• {d} — assigned")
             if not dynamic:
-                lines.append("(назначенных динамически нет)")
+                lines.append("(no dynamically assigned admins)")
             lines += [
                 "",
-                "Назначить: /admin_add <user_id>",
-                "Снять: /admin_remove <user_id>",
+                "Assign: /admin_add <user_id>",
+                "Remove: /admin_remove <user_id>",
             ]
             await update.message.reply_text("\n".join(lines))
         except Exception as e:
             logger.error(f"Error in admin_list: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def admin_add(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /admin_add <user_id> — назначить пользователя администратором."""
+        """/admin_add command <user_id> — make a user an administrator."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /admin_add <user_id>\n"
-                    "Назначайте из особых; обычного сначала добавьте: /special_add <id>"
+                    "Usage: /admin_add <user_id>\n"
+                    "Assign from special users; add a regular user first: /special_add <id>"
                 )
                 return
             try:
                 uid = int(args[0])
             except ValueError:
-                await update.message.reply_text("user_id должен быть числом.")
+                await update.message.reply_text("user_id must be a number.")
                 return
             if self.config.is_admin(uid):
-                await update.message.reply_text(f"{uid} уже администратор.")
+                await update.message.reply_text(f"{uid} is already an administrator.")
                 return
             import storage
 
@@ -9534,121 +9534,121 @@ systemctl status xray
             note = (
                 ""
                 if is_special
-                else "\n⚠️ Этого пользователя нет в списке особых (можно /special_add)."
+                else "\n⚠️ This user is not on the special list (you can /special_add)."
             )
-            await update.message.reply_text(f"✅ {uid} назначен администратором.{note}")
+            await update.message.reply_text(f"✅ {uid} is now an administrator.{note}")
         except Exception as e:
             logger.error(f"Error in admin_add: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def admin_remove(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /admin_remove <user_id> — снять администратора (кроме первичного)."""
+        """/admin_remove command <user_id> — remove an administrator (except primary)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /admin_remove <user_id>"
+                    "Usage: /admin_remove <user_id>"
                 )
                 return
             try:
                 uid = int(args[0])
             except ValueError:
-                await update.message.reply_text("user_id должен быть числом.")
+                await update.message.reply_text("user_id must be a number.")
                 return
             if self.config.is_founder_admin(uid):
                 await update.message.reply_text(
-                    "🔒 Это первичный админ (задан при установке бота) — снять нельзя."
+                    "🔒 This is a primary admin (set at bot install) — cannot be removed."
                 )
                 return
             import storage
 
             if not storage.is_dynamic_admin(uid):
                 await update.message.reply_text(
-                    f"{uid} не является назначенным админом."
+                    f"{uid} is not an assigned admin."
                 )
                 return
             storage.remove_dynamic_admin(uid)
-            await update.message.reply_text(f"✅ {uid} снят с администраторов.")
+            await update.message.reply_text(f"✅ {uid} was removed from administrators.")
         except Exception as e:
             logger.error(f"Error in admin_remove: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_on — включить Hysteria2."""
+        """/hy2_on command — enable Hysteria2."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_on: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_off — выключить Hysteria2."""
+        """/hy2_off command — disable Hysteria2."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_off: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_config — показать текущую конфигурацию."""
+        """/hy2_config command — show the current configuration."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = hysteria2_manager.get_config(include_secrets=False)
             config_str = json.dumps(config, ensure_ascii=False, indent=2)
             await update.message.reply_text(
-                f"⚡ Конфигурация Hysteria2:\n```json\n{config_str}\n```",
+                f"⚡ Hysteria2 configuration:\n```json\n{config_str}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
             logger.error(f"Error in hy2_config: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_server <ip> — установить сервер."""
+        """/hy2_set_server command <ip> — set the server."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             server = args[0] if args else None
             success, message = hysteria2_manager.set_server(server)
             if success:
                 message += (
-                    "\n\n📲 Перевыдайте URI/QR: /profiles <id>  или  /my_profile"
-                    "\nℹ️ /hy2_apply не обязателен — меняется адрес в клиентской ссылке."
+                    "\n\n📲 Re-issue URI/QR: /profiles <id>  or  /my_profile"
+                    "\nℹ️ /hy2_apply is not required — only the address in the client link changes."
                 )
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_server: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_port <port> — установить порт."""
+        """/hy2_set_port command <port> — set the port."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /hy2_set_port <port>")
+                await update.message.reply_text("Usage: /hy2_set_port <port>")
                 return
             try:
                 port = int(args[0])
             except ValueError:
-                await update.message.reply_text("❌ Порт должен быть числом")
+                await update.message.reply_text("❌ Port must be a number")
                 return
             success, message = hysteria2_manager.set_port(port)
             if success:
@@ -9656,20 +9656,20 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_port: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_password(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_set_password <pass> — установить пароль."""
+        """/hy2_set_password command <pass> — set the password."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /hy2_set_password <password>"
+                    "Usage: /hy2_set_password <password>"
                 )
                 return
             password = args[0]
@@ -9679,20 +9679,20 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_password: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_obfs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_obfs <type> <password> — установить обфускацию."""
+        """/hy2_set_obfs command <type> <password> — set obfuscation."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование:\n"
-                    "/hy2_set_obfs salamander <password> — включить\n"
-                    "/hy2_set_obfs off — выключить"
+                    "Usage:\n"
+                    "/hy2_set_obfs salamander <password> — enable\n"
+                    "/hy2_set_obfs off — disable"
                 )
                 return
             obfs_type = args[0]
@@ -9706,24 +9706,24 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_obfs: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_sni(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_sni — SNI/маскировка Hy2 (кнопки как у /vless_set_sni)."""
+        """/hy2_set_sni command — Hy2 SNI/camouflage (buttons like /vless_set_sni)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                # Сразу ответить, чтобы команда не выглядела «молчащей», пока
-                # собираются кнопки (раньше get_status() мог висеть на systemd).
-                await update.message.reply_text("⏳ Выбор SNI Hysteria2…")
+                # Reply immediately so the command does not look “silent” while
+                # buttons are built (get_status() used to hang on systemd).
+                await update.message.reply_text("⏳ Hysteria2 SNI picker…")
                 await self._show_hy2_sni_picker(update.message)
                 return
             success, message = hysteria2_manager.set_sni(args[0])
             if success:
-                # Self-signed cert CN должен совпадать с новым SNI.
+                # Self-signed cert CN must match the new SNI.
                 cert_ok, cert_msg = hysteria2_manager.generate_self_signed_cert(
                     domain=args[0].strip()
                 )
@@ -9734,11 +9734,11 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_sni: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def _show_hy2_sni_picker(self, message) -> None:
-        """Кнопки выбора Hy2 SNI (текущий ✅); смена = SNI+masquerade+cert."""
-        # Только JSON — без get_status()/systemd, иначе команда «молчит» десятки секунд.
+        """Hy2 SNI picker buttons (current ✅); change = SNI+masquerade+cert."""
+        # JSON only — no get_status()/systemd, otherwise the command “goes silent” for tens of seconds.
         try:
             current = (hysteria2_manager.get_config(include_secrets=False) or {}).get(
                 "sni", ""
@@ -9748,7 +9748,7 @@ systemctl status xray
 
         domains = list(getattr(hysteria2_manager, "AVAILABLE_SNI", None) or [])
         if not domains:
-            # Старый образ без AVAILABLE_SNI — всё равно даём рабочие варианты.
+            # Older image without AVAILABLE_SNI — still offer working options.
             domains = [
                 "yahoo.com",
                 "www.cloudflare.com",
@@ -9782,39 +9782,39 @@ systemctl status xray
 
         keyboard = InlineKeyboardMarkup(rows)
         plain = (
-            "🌐 Выбор SNI (Hysteria2 TLS)\n\n"
-            f"Текущий: {current or '—'}\n\n"
-            "Нажмите домен — бот сменит SNI + masquerade, перевыпустит "
-            "self-signed сертификат (CN=SNI) и предложит /hy2_apply.\n\n"
-            "Свой домен: /hy2_set_sni example.com"
+            "🌐 SNI picker (Hysteria2 TLS)\n\n"
+            f"Current: {current or '—'}\n\n"
+            "Tap a domain — the bot will change SNI + masquerade, reissue "
+            "the self-signed certificate (CN=SNI), and offer /hy2_apply.\n\n"
+            "Custom domain: /hy2_set_sni example.com"
         )
         try:
             await message.reply_text(plain, reply_markup=keyboard)
         except Exception as exc:
             logger.error("_show_hy2_sni_picker failed: %s", exc)
             await message.reply_text(
-                "Не удалось показать кнопки. Смените вручную:\n"
+                "Could not show buttons. Change it manually:\n"
                 "/hy2_set_sni yahoo.com\n"
-                "затем /hy2_apply"
+                "then /hy2_apply"
             )
 
     async def hy2_set_speed(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_speed <up> <down> — установить скорость (Mbps)."""
+        """/hy2_set_speed command <up> <down> — set speed (Mbps)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if len(args) < 2:
                 await update.message.reply_text(
-                    "Использование: /hy2_set_speed <up_mbps> <down_mbps>\n0 = авто"
+                    "Usage: /hy2_set_speed <up_mbps> <down_mbps>\n0 = auto"
                 )
                 return
             try:
                 up = int(args[0])
                 down = int(args[1])
             except ValueError:
-                await update.message.reply_text("❌ Скорость должна быть числом")
+                await update.message.reply_text("❌ Speed must be a number")
                 return
             success, message = hysteria2_manager.set_speed(up, down)
             if success:
@@ -9822,20 +9822,20 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_speed: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_masquerade(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_set_masquerade <url> — установить URL маскировки."""
+        """/hy2_set_masquerade command <url> — set the masquerade URL."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /hy2_set_masquerade <url>"
+                    "Usage: /hy2_set_masquerade <url>"
                 )
                 return
             success, message = hysteria2_manager.set_masquerade(args[0])
@@ -9844,20 +9844,20 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_masquerade: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_insecure(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_set_insecure <1|0> — insecure TLS (self-signed)."""
+        """/hy2_set_insecure command <1|0> — insecure TLS (self-signed)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args or args[0] not in ("0", "1"):
                 await update.message.reply_text(
-                    "Использование: /hy2_set_insecure 1  или  /hy2_set_insecure 0"
+                    "Usage: /hy2_set_insecure 1  or  /hy2_set_insecure 0"
                 )
                 return
             insecure = args[0] == "1"
@@ -9867,23 +9867,23 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_insecure: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_quic_safe(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_set_quic_safe <1|0> — safe-QUIC defaults (чинит Windows-клиентов)."""
+        """/hy2_set_quic_safe command <1|0> — safe-QUIC defaults (fixes Windows clients)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args or args[0] not in ("0", "1"):
                 await update.message.reply_text(
-                    "Использование: /hy2_set_quic_safe 1 | 0\n\n"
-                    "1 — включить safe QUIC-defaults (disablePathMTUDiscovery + receive windows).\n"
-                    "0 — выключить (классический Hysteria2-конфиг).\n\n"
-                    "После смены: /hy2_apply"
+                    "Usage: /hy2_set_quic_safe 1 | 0\n\n"
+                    "1 — enable safe QUIC defaults (disablePathMTUDiscovery + receive windows).\n"
+                    "0 — disable (classic Hysteria2 config).\n\n"
+                    "After the change: /hy2_apply"
                 )
                 return
             enabled = args[0] == "1"
@@ -9893,24 +9893,24 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_quic_safe: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_set_quic(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_set_quic <param> <value> — тонкая настройка QUIC."""
+        """/hy2_set_quic command <param> <value> — fine-tune QUIC."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if len(args) < 2:
                 await update.message.reply_text(
-                    "Использование: /hy2_set_quic <param> <value>\n\n"
-                    "Параметры:\n"
+                    "Usage: /hy2_set_quic <param> <value>\n\n"
+                    "Parameters:\n"
                     "enabled, disable_path_mtu_discovery,\n"
                     "init_stream_receive_window, max_stream_receive_window,\n"
                     "init_conn_receive_window, max_conn_receive_window,\n"
                     "max_idle_timeout, keep_alive_period\n\n"
-                    "Примеры:\n"
+                    "Examples:\n"
                     "/hy2_set_quic max_idle_timeout 45s\n"
                     "/hy2_set_quic keep_alive_period 15s\n"
                     "/hy2_set_quic init_conn_receive_window 2097152"
@@ -9922,68 +9922,68 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_set_quic: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_gen_password(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_gen_password — сгенерировать и установить пароль."""
+        """/hy2_gen_password command — generate and set a password."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             password = hysteria2_manager.generate_password()
             success, message = hysteria2_manager.set_password(password)
             if success:
                 await update.message.reply_text(
-                    f"{message}\n🔑 Пароль: `{password}`",
+                    f"{message}\n🔑 Password: `{password}`",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             else:
                 await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_gen_password: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_gen_cert — сгенерировать TLS сертификат."""
+        """/hy2_gen_cert command — generate a TLS certificate."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
-            await update.message.reply_text("⏳ Генерация TLS сертификата...")
+            await update.message.reply_text("⏳ Generating TLS certificate...")
             success, message = hysteria2_manager.generate_self_signed_cert()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_gen_cert: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_gen_all — сгенерировать всё (пароль + сертификат + IP)."""
+        """/hy2_gen_all command — generate everything (password + certificate + IP)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             await update.message.reply_text(
-                "⏳ Генерация пароля, сертификата и определение IP..."
+                "⏳ Generating password, certificate, and detecting IP..."
             )
             success, data, message = hysteria2_manager.generate_all()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_gen_all: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_add_client <name> — добавить клиента."""
+        """/hy2_add_client command <name> — add a client."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /hy2_add_client <имя>")
+                await update.message.reply_text("Usage: /hy2_add_client <name>")
                 return
             name = args[0]
             success, message, client = hysteria2_manager.add_client(name)
@@ -9995,14 +9995,14 @@ systemctl status xray
                 await self._reply_hy2_qr(update.message, client.get("password", name))
         except Exception as e:
             logger.error(f"Error in hy2_add_client: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_qr - показать QR для Hysteria2-клиента."""
+        """/hy2_qr command — show a QR for a Hysteria2 client."""
         try:
             if not self._is_admin(update.effective_user.id):
                 await update.message.reply_text(
-                    "⛔ QR-коды Hysteria2 доступны только администратору."
+                    "⛔ Hysteria2 QR codes are admin-only."
                 )
                 return
             if await self._legacy_per_client_guard(update):
@@ -10011,152 +10011,152 @@ systemctl status xray
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /hy2_qr <client_name_or_password>"
+                    "Usage: /hy2_qr <client_name_or_password>"
                 )
                 return
 
             await self._reply_hy2_qr(update.message, args[0])
         except Exception as e:
             logger.error(f"Error in hy2_qr: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_del_client <name> — удалить клиента."""
+        """/hy2_del_client command <name> — remove a client."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /hy2_del_client <имя>")
+                await update.message.reply_text("Usage: /hy2_del_client <name>")
                 return
             success, message = hysteria2_manager.remove_client(args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_del_client: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /hy2_list_clients — список клиентов."""
+        """/hy2_list_clients command — client list."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = hysteria2_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов нет")
+                await update.message.reply_text("📋 No clients")
                 return
-            lines = ["⚡ *Клиенты Hysteria2:*\n"]
+            lines = ["⚡ *Hysteria2 clients:*\n"]
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
                 pw = c.get("password", "")
                 masked = f"{pw[:4]}..." if len(pw) > 4 else "***"
                 created = c.get("created_at", "")[:10]
                 lines.append(
-                    f"{i}\\. `{self._escape_md2(name)}` — пароль: `{self._escape_md2(masked)}` \\({self._escape_md2(created)}\\)"
+                    f"{i}\\. `{self._escape_md2(name)}` — password: `{self._escape_md2(masked)}` \\({self._escape_md2(created)}\\)"
                 )
             await update.message.reply_text(
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
             logger.error(f"Error in hy2_list_clients: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_install — установить Hysteria2 на сервер."""
+        """/hy2_install command — install Hysteria2 on the server."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
-            await update.message.reply_text("⏳ Установка Hysteria2...")
+            await update.message.reply_text("⏳ Installing Hysteria2...")
             success, message = hysteria2_manager.install_hysteria2()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_install: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_apply — применить конфиг к серверу."""
+        """/hy2_apply command — apply the config to the server."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.apply_config()
-            # Смена конфига Hysteria2 меняет hy2://-ссылки — старые ссылки/QR
-            # у всех пользователей больше не должны показываться.
+            # Changing the Hysteria2 config changes hy2:// links — old links/QR
+            # must no longer be shown to any user.
             purged = await self._purge_all_profile_messages(update.get_bot())
             if purged:
                 message += (
-                    f"\n\n🧹 Старые ссылки/QR удалены у всех ({purged}). "
-                    "Свежие выдайте заново: /profiles <id> или /my_profile."
+                    f"\n\n🧹 Old links/QR purged for everyone ({purged}). "
+                    "Re-issue fresh ones: /profiles <id> or /my_profile."
                 )
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_apply: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_start — запустить сервис."""
+        """/hy2_start command — start the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.service_control("start")
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in hy2_start: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_stop — остановить сервис."""
+        """/hy2_stop command — stop the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.service_control("stop")
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_stop: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_restart — перезапустить сервис."""
+        """/hy2_restart command — restart the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = hysteria2_manager.service_control("restart")
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in hy2_restart: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_logs — показать логи."""
+        """/hy2_logs command — show logs."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             lines_count = int(args[0]) if args else 30
             success, output = hysteria2_manager.get_logs(lines_count)
             await update.message.reply_text(
-                f"📋 Логи Hysteria2:\n```\n{output}\n```",
+                f"📋 Hysteria2 logs:\n```\n{output}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
             logger.error(f"Error in hy2_logs: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def hy2_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /hy2_export — экспорт конфигураций."""
+        """/hy2_export command — export configurations."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             logger.info(f"Admin {update.effective_user.id} exporting Hysteria2 config")
@@ -10172,7 +10172,7 @@ systemctl status xray
             parts = [f"⚡ *Hysteria2 Export*\n"]
 
             if uri:
-                parts.append(f"*URI \\(для клиента\\):*\n`{esc(uri)}`\n")
+                parts.append(f"*URI \\(for the client\\):*\n`{esc(uri)}`\n")
 
             parts.append(
                 f"*Client Config \\(native\\):*\n```json\n{json.dumps(client_config, indent=2)}\n```\n"
@@ -10185,7 +10185,7 @@ systemctl status xray
             keyboard = [
                 [
                     InlineKeyboardButton(
-                        "📷 QR по клиенту", callback_data="hy2_export_qr_menu"
+                        "📷 QR by client", callback_data="hy2_export_qr_menu"
                     )
                 ],
                 [
@@ -10234,18 +10234,18 @@ systemctl status xray
 
         except Exception as e:
             logger.error(f"Error in hy2_export: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
 
     # === MTPROTO PROXY COMMANDS ===
 
     async def mt_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_status — показать статус MTProto proxy."""
+        """/mt_status command — show MTProto proxy status."""
         try:
             user = update.effective_user
             if not self._is_admin(user.id):
                 await update.message.reply_text(
-                    "⛔ Эта команда доступна только администратору."
+                    "⛔ This command is admin-only."
                 )
                 return
 
@@ -10256,73 +10256,73 @@ systemctl status xray
             status_emoji = "🟢" if status["enabled"] else "🔴"
             config_emoji = "✅" if status["configured"] else "❌"
 
-            message = f"""📡 *MTProto Proxy Статус*
+            message = f"""📡 *MTProto Proxy Status*
 
-*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
-*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+*State:* {status_emoji} {"On" if status["enabled"] else "Off"}
+*Config:* {config_emoji} {"Configured" if status["configured"] else "Not configured"}
 
-*Параметры:*
-• Сервер: `{esc(status.get("server") or "(не задан)")}`
-• Порт: `{esc(str(status.get("port", 993)))}` \\(TCP\\)
-• Режим: `{esc(status.get("secret_mode_label") or status.get("secret_mode") or "?")}`
-• Секрет: {"✅" if status["has_secret"] else "❌"}
-• Fake\\-TLS: {"✅ " + esc(status.get("fake_tls_domain", "")) if status.get("is_fake_tls") else "❌ выключен"}
-• Тег: `{esc(status.get("tag") or "(нет)")}`
-• Воркеры: {status.get("workers", 2)}
-• Клиентов: {status.get("clients_count", 0)}
+*Parameters:*
+• Server: `{esc(status.get("server") or "(not set)")}`
+• Port: `{esc(str(status.get("port", 993)))}` \\(TCP\\)
+• Mode: `{esc(status.get("secret_mode_label") or status.get("secret_mode") or "?")}`
+• Secret: {"✅" if status["has_secret"] else "❌"}
+• Fake\\-TLS: {"✅ " + esc(status.get("fake_tls_domain", "")) if status.get("is_fake_tls") else "❌ off"}
+• Tag: `{esc(status.get("tag") or "(none)")}`
+• Workers: {status.get("workers", 2)}
+• Clients: {status.get("clients_count", 0)}
 
-*Обновлено:* {esc(str(status.get("updated_at") or "никогда"))}"""
+*Updated:* {esc(str(status.get("updated_at") or "never"))}"""
 
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in mt_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_on — включить MTProto proxy."""
+        """/mt_on command — enable MTProto proxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_on: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_off — выключить MTProto proxy."""
+        """/mt_off command — disable MTProto proxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_off: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_config — показать текущую конфигурацию."""
+        """/mt_config command — show the current configuration."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = mtproto_manager.get_config(include_secrets=False)
             config_str = json.dumps(config, ensure_ascii=False, indent=2)
             await update.message.reply_text(
-                f"📡 Конфигурация MTProto:\n```json\n{config_str}\n```",
+                f"📡 MTProto configuration:\n```json\n{config_str}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
             logger.error(f"Error in mt_config: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_server <ip> — установить сервер."""
+        """/mt_set_server command <ip> — set the server."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             server = args[0] if args else None
@@ -10330,80 +10330,80 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_set_server: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_port <port> — установить порт."""
+        """/mt_set_port command <port> — set the port."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /mt_set_port <port>")
+                await update.message.reply_text("Usage: /mt_set_port <port>")
                 return
             try:
                 port = int(args[0])
             except ValueError:
-                await update.message.reply_text("❌ Порт должен быть числом")
+                await update.message.reply_text("❌ Port must be a number")
                 return
             success, message = mtproto_manager.set_port(port)
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_set_port: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_mode <dd_inline|ee_split> — переключить режим MTProto."""
+        """/mt_set_mode command <dd_inline|ee_split> — switch MTProto mode."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /mt_set_mode <mode>\n"
-                    f"Доступно: `{mtproto_manager.SECRET_MODE_DD_INLINE}`, `{mtproto_manager.SECRET_MODE_EE_SPLIT}`\n"
-                    "Для новых серверов обычно подходит `ee_split`."
+                    "Usage: /mt_set_mode <mode>\n"
+                    f"Available: `{mtproto_manager.SECRET_MODE_DD_INLINE}`, `{mtproto_manager.SECRET_MODE_EE_SPLIT}`\n"
+                    "For new servers `ee_split` is usually the right choice."
                 )
                 return
             success, message = mtproto_manager.set_secret_mode(args[0])
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in mt_set_mode: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_domain(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_domain <domain> — установить fake-TLS домен."""
+        """/mt_set_domain command <domain> — set the fake-TLS domain."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 domains = ", ".join(mtproto_manager.AVAILABLE_FAKE_TLS_DOMAINS)
                 await update.message.reply_text(
-                    f"Использование: /mt_set_domain <domain>\nПримеры: {domains}"
+                    f"Usage: /mt_set_domain <domain>\nExamples: {domains}"
                 )
                 return
             success, message = mtproto_manager.set_fake_tls_domain(args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_set_domain: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_tag(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_tag <hex> — установить статистический тег."""
+        """/mt_set_tag command <hex> — set the stats tag."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /mt_set_tag <hex_tag>\n"
-                    "Тег для @MTProxybot (промоутирование прокси).\n"
-                    "/mt_set_tag off — удалить тег"
+                    "Usage: /mt_set_tag <hex_tag>\n"
+                    "Tag for @MTProxybot (proxy promotion).\n"
+                    "/mt_set_tag off — remove the tag"
                 )
                 return
             tag = "" if args[0] == "off" else args[0]
@@ -10411,36 +10411,36 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_set_tag: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_set_workers(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_set_workers <n> — установить число воркеров."""
+        """/mt_set_workers command <n> — set the worker count."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /mt_set_workers <1-16>")
+                await update.message.reply_text("Usage: /mt_set_workers <1-16>")
                 return
             try:
                 workers = int(args[0])
             except ValueError:
                 await update.message.reply_text(
-                    "❌ Количество воркеров должно быть числом"
+                    "❌ Worker count must be a number"
                 )
                 return
             success, message = mtproto_manager.set_workers(workers)
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_set_workers: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_gen_secret(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_gen_secret [domain] — сгенерировать и установить секрет."""
+        """/mt_gen_secret command [domain] — generate and set the secret."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             domain = args[0] if args else None
@@ -10449,59 +10449,59 @@ systemctl status xray
             if success:
                 status = mtproto_manager.get_status()
                 await update.message.reply_text(
-                    f"{message}\n🔑 Секрет: `{new_secret}`\n🧭 Режим: `{status.get('secret_mode_label')}`",
+                    f"{message}\n🔑 Secret: `{new_secret}`\n🧭 Mode: `{status.get('secret_mode_label')}`",
                     parse_mode=ParseMode.MARKDOWN_V2,
                 )
             else:
                 await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_gen_secret: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_gen_all — сгенерировать секрет + определить IP."""
+        """/mt_gen_all command — generate a secret + detect IP."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
-            await update.message.reply_text("⏳ Генерация секрета и определение IP...")
+            await update.message.reply_text("⏳ Generating secret and detecting IP...")
             success, data, message = mtproto_manager.generate_all()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_gen_all: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_add_client <name> — добавить клиента."""
+        """/mt_add_client command <name> — add a client."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /mt_add_client <имя>")
+                await update.message.reply_text("Usage: /mt_add_client <name>")
                 return
             name = args[0]
             success, message, client = mtproto_manager.add_client(name)
             if success and client:
                 link = mtproto_manager.generate_tg_link(client.get("secret"))
                 if link:
-                    message += f"\n🔗 Ссылка: `{link}`"
+                    message += f"\n🔗 Link: `{link}`"
             await update.message.reply_text(message)
             if success and client:
                 await self._reply_mt_qr(update.message, client.get("secret", name))
         except Exception as e:
             logger.error(f"Error in mt_add_client: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_qr - показать QR для MTProto-клиента."""
+        """/mt_qr command — show a QR for an MTProto client."""
         try:
             if not self._is_admin(update.effective_user.id):
                 await update.message.reply_text(
-                    "⛔ QR-коды MTProto доступны только администратору."
+                    "⛔ MTProto QR codes are admin-only."
                 )
                 return
             if await self._legacy_per_client_guard(update):
@@ -10509,46 +10509,46 @@ systemctl status xray
             args = context.args or []
             if len(args) != 1:
                 await update.message.reply_text(
-                    "Использование: /mt_qr <client_name_or_secret>"
+                    "Usage: /mt_qr <client_name_or_secret>"
                 )
                 return
             await self._reply_mt_qr(update.message, args[0])
         except Exception as e:
             logger.error(f"Error in mt_qr: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_del_client <name> — удалить клиента."""
+        """/mt_del_client command <name> — remove a client."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /mt_del_client <имя>")
+                await update.message.reply_text("Usage: /mt_del_client <name>")
                 return
             success, message = mtproto_manager.remove_client(args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_del_client: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_list_clients(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_list_clients — список клиентов."""
+        """/mt_list_clients command — client list."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = mtproto_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов нет")
+                await update.message.reply_text("📋 No clients")
                 return
-            lines = ["📡 *Клиенты MTProto:*\n"]
+            lines = ["📡 *MTProto clients:*\n"]
             status = mtproto_manager.get_status()
             lines.append(
-                f"*Режим:* `{self._escape_md2(status.get('secret_mode_label') or status.get('secret_mode') or '?')}`\n"
+                f"*Mode:* `{self._escape_md2(status.get('secret_mode_label') or status.get('secret_mode') or '?')}`\n"
             )
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
@@ -10556,115 +10556,115 @@ systemctl status xray
                 masked = f"{secret[:6]}..." if len(secret) > 6 else "***"
                 created = c.get("created_at", "")[:10]
                 lines.append(
-                    f"{i}\\. `{self._escape_md2(name)}` — секрет: `{self._escape_md2(masked)}` \\({self._escape_md2(created)}\\)"
+                    f"{i}\\. `{self._escape_md2(name)}` — secret: `{self._escape_md2(masked)}` \\({self._escape_md2(created)}\\)"
                 )
             await update.message.reply_text(
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
             logger.error(f"Error in mt_list_clients: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_install — установить MTProto proxy на сервер."""
+        """/mt_install command — install MTProto proxy on the server."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             await update.message.reply_text(
-                "⏳ Установка MTProto proxy (компиляция из исходников)..."
+                "⏳ Installing MTProto proxy (compiling from source)..."
             )
             success, message = mtproto_manager.install_mtproto()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_install: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_apply — применить конфиг (записать systemd unit, перезапустить)."""
+        """/mt_apply command — apply config (write systemd unit, restart)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.apply_config()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_apply: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_start — запустить сервис."""
+        """/mt_start command — start the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.service_control("start")
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in mt_start: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_stop — остановить сервис."""
+        """/mt_stop command — stop the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.service_control("stop")
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_stop: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_restart — перезапустить сервис."""
+        """/mt_restart command — restart the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mtproto_manager.service_control("restart")
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_restart: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_logs [n] — показать логи."""
+        """/mt_logs command [n] — show logs."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             lines_count = int(args[0]) if args else 30
             success, output = mtproto_manager.get_logs(lines_count)
             await update.message.reply_text(
-                f"📋 Логи MTProto:\n```\n{output}\n```",
+                f"📋 MTProto logs:\n```\n{output}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
             logger.error(f"Error in mt_logs: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_fetch_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_fetch_config — обновить proxy-secret и proxy-multi.conf."""
+        """/mt_fetch_config command — refresh proxy-secret and proxy-multi.conf."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             await update.message.reply_text(
-                "⏳ Загрузка proxy-secret и proxy-multi.conf..."
+                "⏳ Downloading proxy-secret and proxy-multi.conf..."
             )
             success, message = mtproto_manager.fetch_proxy_config()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in mt_fetch_config: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mt_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mt_export — экспорт ссылок и конфигов."""
+        """/mt_export command — export links and configs."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             logger.info(f"Admin {update.effective_user.id} exporting MTProto config")
@@ -10677,16 +10677,16 @@ systemctl status xray
 
             parts = ["📡 *MTProto Export*\n"]
             parts.append(
-                f"*Режим:* `{esc(status.get('secret_mode_label') or status.get('secret_mode') or '?')}`\n"
+                f"*Mode:* `{esc(status.get('secret_mode_label') or status.get('secret_mode') or '?')}`\n"
             )
 
             if tg_link:
-                parts.append(f"*tg link \\(для Telegram\\):*\n`{esc(tg_link)}`\n")
+                parts.append(f"*tg link \\(for Telegram\\):*\n`{esc(tg_link)}`\n")
             if https_link:
                 parts.append(f"*HTTPS link:*\n`{esc(https_link)}`\n")
 
             if not tg_link and not https_link:
-                parts.append("❌ Не настроен сервер или секрет")
+                parts.append("❌ Server or secret is not set")
 
             keyboard = [
                 [
@@ -10701,7 +10701,7 @@ systemctl status xray
                 ],
                 [
                     InlineKeyboardButton(
-                        "📷 QR по клиенту", callback_data="mt_export_qr_menu"
+                        "📷 QR by client", callback_data="mt_export_qr_menu"
                     )
                 ],
                 [
@@ -10719,27 +10719,27 @@ systemctl status xray
 
         except Exception as e:
             logger.error(f"Error in mt_export: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     # === ERROR HANDLER ===
 
     async def naive_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_status — показать состояние NaiveProxy."""
+        """/naive_status command — show NaiveProxy state."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             status = naiveproxy_manager.get_status()
-            enabled = "🟢 включен" if status.get("enabled") else "🔴 выключен"
-            configured = "да" if status.get("configured") else "нет"
+            enabled = "🟢 on" if status.get("enabled") else "🔴 off"
+            configured = "yes" if status.get("configured") else "no"
             systemd = status.get("systemd_output") or "unknown"
             text = (
                 "🌐 NaiveProxy status\n\n"
-                f"Состояние: {enabled}\n"
-                f"Сконфигурирован: {configured}\n"
-                f"Домен: {status.get('domain') or '-'}\n"
-                f"Порт: {status.get('port')}\n"
-                f"Пользователь: {status.get('username') or '-'}\n"
+                f"State: {enabled}\n"
+                f"Configured: {configured}\n"
+                f"Domain: {status.get('domain') or '-'}\n"
+                f"Port: {status.get('port')}\n"
+                f"User: {status.get('username') or '-'}\n"
                 f"Scheme: {status.get('scheme')}\n"
                 f"Padding: {status.get('padding')}\n"
                 f"Probe resistance: {status.get('probe_resistance')}\n"
@@ -10749,37 +10749,37 @@ systemctl status xray
             await update.message.reply_text(text)
         except Exception as e:
             logger.error(f"Error in naive_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_on — включить NaiveProxy."""
+        """/naive_on command — enable NaiveProxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = naiveproxy_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_on: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_off — выключить NaiveProxy."""
+        """/naive_off command — disable NaiveProxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = naiveproxy_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_off: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_config — показать текущий конфиг NaiveProxy."""
+        """/naive_config command — show the current NaiveProxy config."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = naiveproxy_manager.get_config(
                 include_secrets=self._secret_reveal_allowed()
@@ -10805,96 +10805,96 @@ systemctl status xray
             await update.message.reply_text(text)
         except Exception as e:
             logger.error(f"Error in naive_config: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_set_domain(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /naive_set_domain <domain> — задать домен NaiveProxy."""
+        """/naive_set_domain command <domain> — set the NaiveProxy domain."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /naive_set_domain <domain>"
+                    "Usage: /naive_set_domain <domain>"
                 )
                 return
             success, message = naiveproxy_manager.set_domain(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_set_domain: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_set_port <port> — задать порт NaiveProxy."""
+        """/naive_set_port command <port> — set the NaiveProxy port."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
-                await update.message.reply_text("Использование: /naive_set_port <port>")
+                await update.message.reply_text("Usage: /naive_set_port <port>")
                 return
             success, message = naiveproxy_manager.set_port(int(context.args[0]))
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_set_port: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_set_user(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_set_user <username> — задать пользователя NaiveProxy."""
+        """/naive_set_user command <username> — set the NaiveProxy username."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /naive_set_user <username>"
+                    "Usage: /naive_set_user <username>"
                 )
                 return
             success, message = naiveproxy_manager.set_username(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_set_user: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_set_password(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /naive_set_password <password> — задать пароль NaiveProxy."""
+        """/naive_set_password command <password> — set the NaiveProxy password."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /naive_set_password <password>"
+                    "Usage: /naive_set_password <password>"
                 )
                 return
             success, message = naiveproxy_manager.set_password(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_set_password: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_set_dpi(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_set_dpi <param> <value> — тонкая настройка NaiveProxy."""
+        """/naive_set_dpi command <param> <value> — fine-tune NaiveProxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if len(args) < 2:
                 await update.message.reply_text(
-                    "Использование: /naive_set_dpi <param> <value>\n\n"
-                    "Параметры:\n"
+                    "Usage: /naive_set_dpi <param> <value>\n\n"
+                    "Parameters:\n"
                     "scheme=https|quic\n"
                     "padding=on|off\n"
                     "local_socks_port=10808\n"
                     "probe_resistance=on|off\n"
                     "hide_ip=on|off\n"
                     "hide_via=on|off\n"
-                    "camouflage_url=https://example.com или off"
+                    "camouflage_url=https://example.com or off"
                 )
                 return
             param = args[0]
@@ -10903,13 +10903,13 @@ systemctl status xray
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_set_dpi: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_gen_creds(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_gen_creds — сгенерировать user/password для NaiveProxy."""
+        """/naive_gen_creds command — generate user/password for NaiveProxy."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message, creds = naiveproxy_manager.generate_credentials()
             if success:
@@ -10920,20 +10920,20 @@ systemctl status xray
                 await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_gen_creds: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_install — запустить серверную установку NaiveProxy."""
+        """/naive_install command — start NaiveProxy server install."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
-            await update.message.reply_text("⏳ Установка NaiveProxy...")
+            await update.message.reply_text("⏳ Installing NaiveProxy...")
             success, message = naiveproxy_manager.install_naiveproxy()
             await update.message.reply_text(
-                "✅ Установка завершена"
+                "✅ Install finished"
                 if success
-                else "❌ Установка завершилась с ошибкой"
+                else "❌ Install finished with an error"
             )
             await self._reply_export_file(
                 update.message,
@@ -10943,37 +10943,37 @@ systemctl status xray
             )
         except Exception as e:
             logger.error(f"Error in naive_install: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_uri(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_uri — показать клиентский URI NaiveProxy."""
+        """/naive_uri command — show the NaiveProxy client URI."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             uri = naiveproxy_manager.build_client_uri()
             await update.message.reply_text(f"🌐 NaiveProxy URI:\n{uri}")
         except Exception as e:
             logger.error(f"Error in naive_uri: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_apply — записать Caddyfile и перезапустить сервис."""
+        """/naive_apply command — write Caddyfile and restart the service."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = naiveproxy_manager.apply_server_config()
             await update.message.reply_text(message)
         except Exception as e:
             logger.error(f"Error in naive_apply: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def naive_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /naive_export — экспорт клиента NaiveProxy."""
+        """/naive_export command — export the NaiveProxy client."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             client_config = naiveproxy_manager.export_client_config()
             aping_profile = naiveproxy_manager.export_aping_profile()
@@ -10993,17 +10993,17 @@ systemctl status xray
             )
         except Exception as e:
             logger.error(f"Error in naive_export: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     # =====================================================================
     # === TUIC COMMANDS ===
     # =====================================================================
 
     async def tuic_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /tuic_status — показать статус TUIC."""
+        """/tuic_status command — show TUIC status."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             status = tuic_manager.get_status()
@@ -11011,138 +11011,138 @@ systemctl status xray
             status_emoji = "🟢" if status["enabled"] else "🔴"
             config_emoji = "✅" if status["configured"] else "❌"
 
-            message = f"""🔷 *TUIC Статус*
+            message = f"""🔷 *TUIC Status*
 
-*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
-*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+*State:* {status_emoji} {"On" if status["enabled"] else "Off"}
+*Config:* {config_emoji} {"Configured" if status["configured"] else "Not configured"}
 
-*Параметры:*
-• Сервер: `{esc(status.get("server"))}`
-• Порт: `{esc(status.get("port", 443))}` \\(UDP\\)
-• SNI: `{esc(status.get("sni") or "(авто)")}`
-• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+*Parameters:*
+• Server: `{esc(status.get("server"))}`
+• Port: `{esc(status.get("port", 443))}` \\(UDP\\)
+• SNI: `{esc(status.get("sni") or "(auto)")}`
+• Insecure: {"yes ⚠️" if status.get("insecure") else "no ✅"}
 • Congestion: `{esc(status.get("congestion_control", "bbr"))}`
 • UDP relay: `{esc(status.get("udp_relay_mode", "native"))}`
 
-*Клиентов:* {status.get("clients_count", 0)}
-*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+*Clients:* {status.get("clients_count", 0)}
+*Updated:* {esc(status.get("updated_at", "never"))}"""
 
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
             logger.error(f"Error in tuic_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = tuic_manager.get_config(include_secrets=False)
             config_str = json.dumps(config, ensure_ascii=False, indent=2)
             await update.message.reply_text(
-                f"🔷 Конфигурация TUIC:\n```json\n{config_str}\n```",
+                f"🔷 TUIC configuration:\n```json\n{config_str}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_set_server(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             server = args[0] if args else None
             success, message = tuic_manager.set_server(server)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /tuic_set_port <порт>")
+                await update.message.reply_text("Usage: /tuic_set_port <port>")
                 return
             port = int(args[0])
             success, message = tuic_manager.set_port(port)
             await update.message.reply_text(message)
         except ValueError:
-            await update.message.reply_text("❌ Порт должен быть числом")
+            await update.message.reply_text("❌ Port must be a number")
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_set_cc(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /tuic_set_cc <bbr|cubic|new_reno>."""
+        """/tuic_set_cc command <bbr|cubic|new_reno>."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /tuic_set_cc <bbr|cubic|new_reno>"
+                    "Usage: /tuic_set_cc <bbr|cubic|new_reno>"
                 )
                 return
             success, message = tuic_manager.set_congestion_control(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.generate_self_signed_cert()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, results, message = tuic_manager.generate_all()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_add_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /tuic_add <name>."""
+        """/tuic_add command <name>."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /tuic_add <имя>")
+                await update.message.reply_text("Usage: /tuic_add <name>")
                 return
             name = args[0]
             success, message, client = tuic_manager.add_client(name)
@@ -11153,52 +11153,52 @@ systemctl status xray
             if success and client:
                 await self._reply_tuic_qr(update.message, name)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /tuic_qr <имя_клиента>")
+                await update.message.reply_text("Usage: /tuic_qr <client_name>")
                 return
             await self._reply_tuic_qr(update.message, args[0])
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_del_client(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /tuic_del <имя>")
+                await update.message.reply_text("Usage: /tuic_del <name>")
                 return
             success, message = tuic_manager.remove_client(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = tuic_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов TUIC нет")
+                await update.message.reply_text("📋 No TUIC clients")
                 return
             esc = self._escape_md2
-            lines = ["🔷 *Клиенты TUIC:*\n"]
+            lines = ["🔷 *TUIC clients:*\n"]
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
                 uuid_short = c.get("uuid", "")[:8] + "..."
@@ -11210,67 +11210,67 @@ systemctl status xray
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.apply_config()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.service_control("start")
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.service_control("stop")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = tuic_manager.service_control("restart")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             lines_count = int(args[0]) if args else 30
             success, output = tuic_manager.get_logs(lines_count)
             await update.message.reply_text(
-                f"📋 Логи TUIC:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
+                f"📋 TUIC logs:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def tuic_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /tuic_export — экспорт конфигураций."""
+        """/tuic_export command — export configurations."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             singbox_config = tuic_manager.export_singbox_config()
@@ -11289,17 +11289,17 @@ systemctl status xray
                 "🔷 TUIC server config (sing-box)",
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     # =====================================================================
     # === ANYTLS COMMANDS ===
     # =====================================================================
 
     async def anytls_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /anytls_status — показать статус AnyTLS."""
+        """/anytls_status command — show AnyTLS status."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             status = anytls_manager.get_status()
@@ -11307,124 +11307,124 @@ systemctl status xray
             status_emoji = "🟢" if status["enabled"] else "🔴"
             config_emoji = "✅" if status["configured"] else "❌"
 
-            message = f"""🔶 *AnyTLS Статус*
+            message = f"""🔶 *AnyTLS Status*
 
-*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
-*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+*State:* {status_emoji} {"On" if status["enabled"] else "Off"}
+*Config:* {config_emoji} {"Configured" if status["configured"] else "Not configured"}
 
-*Параметры:*
-• Сервер: `{esc(status.get("server"))}`
-• Порт: `{esc(status.get("port", 443))}` \\(TCP\\)
-• SNI: `{esc(status.get("sni") or "(авто)")}`
-• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+*Parameters:*
+• Server: `{esc(status.get("server"))}`
+• Port: `{esc(status.get("port", 443))}` \\(TCP\\)
+• SNI: `{esc(status.get("sni") or "(auto)")}`
+• Insecure: {"yes ⚠️" if status.get("insecure") else "no ✅"}
 
-*Клиентов:* {status.get("clients_count", 0)}
-*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+*Clients:* {status.get("clients_count", 0)}
+*Updated:* {esc(status.get("updated_at", "never"))}"""
 
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = anytls_manager.get_config(include_secrets=False)
             config_str = json.dumps(config, ensure_ascii=False, indent=2)
             await update.message.reply_text(
-                f"🔶 Конфигурация AnyTLS:\n```json\n{config_str}\n```",
+                f"🔶 AnyTLS configuration:\n```json\n{config_str}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_set_server(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             server = args[0] if args else None
             success, message = anytls_manager.set_server(server)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /anytls_set_port <порт>"
+                    "Usage: /anytls_set_port <port>"
                 )
                 return
             port = int(args[0])
             success, message = anytls_manager.set_port(port)
             await update.message.reply_text(message)
         except ValueError:
-            await update.message.reply_text("❌ Порт должен быть числом")
+            await update.message.reply_text("❌ Port must be a number")
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.generate_self_signed_cert()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, results, message = anytls_manager.generate_all()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_add_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /anytls_add <name>."""
+        """/anytls_add command <name>."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /anytls_add <имя>")
+                await update.message.reply_text("Usage: /anytls_add <name>")
                 return
             name = args[0]
             success, message, client = anytls_manager.add_client(name)
@@ -11435,128 +11435,128 @@ systemctl status xray
             if success and client:
                 await self._reply_anytls_qr(update.message, name)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /anytls_qr <имя_клиента>"
+                    "Usage: /anytls_qr <client_name>"
                 )
                 return
             await self._reply_anytls_qr(update.message, args[0])
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_del_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /anytls_del <имя>")
+                await update.message.reply_text("Usage: /anytls_del <name>")
                 return
             success, message = anytls_manager.remove_client(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = anytls_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов AnyTLS нет")
+                await update.message.reply_text("📋 No AnyTLS clients")
                 return
             esc = self._escape_md2
-            lines = ["🔶 *Клиенты AnyTLS:*\n"]
+            lines = ["🔶 *AnyTLS clients:*\n"]
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
                 pw = c.get("password", "")
                 masked = f"{pw[:4]}..." if len(pw) > 4 else "***"
                 created = c.get("created_at", "")[:10]
                 lines.append(
-                    f"{i}\\. `{esc(name)}` — пароль: `{esc(masked)}` \\({esc(created)}\\)"
+                    f"{i}\\. `{esc(name)}` — password: `{esc(masked)}` \\({esc(created)}\\)"
                 )
             await update.message.reply_text(
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.apply_config()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.service_control("start")
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.service_control("stop")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = anytls_manager.service_control("restart")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             lines_count = int(args[0]) if args else 30
             success, output = anytls_manager.get_logs(lines_count)
             await update.message.reply_text(
-                f"📋 Логи AnyTLS:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
+                f"📋 AnyTLS logs:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def anytls_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             singbox_config = anytls_manager.export_singbox_config()
@@ -11575,17 +11575,17 @@ systemctl status xray
                 "🔶 AnyTLS server config (sing-box)",
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     # =====================================================================
     # === XHTTP COMMANDS ===
     # =====================================================================
 
     async def xhttp_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /xhttp_status — показать статус XHTTP."""
+        """/xhttp_status command — show XHTTP status."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             status = xhttp_manager.get_status()
@@ -11593,168 +11593,168 @@ systemctl status xray
             status_emoji = "🟢" if status["enabled"] else "🔴"
             config_emoji = "✅" if status["configured"] else "❌"
 
-            message = f"""🌐 *XHTTP Статус*
+            message = f"""🌐 *XHTTP Status*
 
-*Состояние:* {status_emoji} {"Включён" if status["enabled"] else "Выключен"}
-*Конфигурация:* {config_emoji} {"Настроена" if status["configured"] else "Не настроена"}
+*State:* {status_emoji} {"On" if status["enabled"] else "Off"}
+*Config:* {config_emoji} {"Configured" if status["configured"] else "Not configured"}
 
-*Параметры:*
-• Сервер: `{esc(status.get("server"))}`
-• Порт: `{esc(status.get("port", 443))}` \\(TCP\\)
+*Parameters:*
+• Server: `{esc(status.get("server"))}`
+• Port: `{esc(status.get("port", 443))}` \\(TCP\\)
 • Path: `{esc(status.get("path", "/"))}`
-• Host: `{esc(status.get("host") or "(пусто)")}`
+• Host: `{esc(status.get("host") or "(empty)")}`
 • Mode: `{esc(status.get("mode", "auto"))}`
 • Security: `{esc(status.get("security", "tls"))}`
-• SNI: `{esc(status.get("sni") or "(авто)")}`
-• Insecure: {"да ⚠️" if status.get("insecure") else "нет ✅"}
+• SNI: `{esc(status.get("sni") or "(auto)")}`
+• Insecure: {"yes ⚠️" if status.get("insecure") else "no ✅"}
 
-*Клиентов:* {status.get("clients_count", 0)}
-*Обновлено:* {esc(status.get("updated_at", "никогда"))}"""
+*Clients:* {status.get("clients_count", 0)}
+*Updated:* {esc(status.get("updated_at", "never"))}"""
 
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_on(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.enable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_off(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.disable()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = xhttp_manager.get_config(include_secrets=False)
             config_str = json.dumps(config, ensure_ascii=False, indent=2)
             await update.message.reply_text(
-                f"🌐 Конфигурация XHTTP:\n```json\n{config_str}\n```",
+                f"🌐 XHTTP configuration:\n```json\n{config_str}\n```",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_set_server(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             server = args[0] if args else None
             success, message = xhttp_manager.set_server(server)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /xhttp_set_port <порт>")
+                await update.message.reply_text("Usage: /xhttp_set_port <port>")
                 return
             port = int(args[0])
             success, message = xhttp_manager.set_port(port)
             await update.message.reply_text(message)
         except ValueError:
-            await update.message.reply_text("❌ Порт должен быть числом")
+            await update.message.reply_text("❌ Port must be a number")
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_set_path(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /xhttp_set_path <path>")
+                await update.message.reply_text("Usage: /xhttp_set_path <path>")
                 return
             success, message = xhttp_manager.set_path(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_set_host(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             host = args[0] if args else ""
             success, message = xhttp_manager.set_host(host)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_set_mode(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /xhttp_set_mode <auto|packet-up|stream-up>"
+                    "Usage: /xhttp_set_mode <auto|packet-up|stream-up>"
                 )
                 return
             success, message = xhttp_manager.set_mode(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_gen_cert(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.generate_self_signed_cert()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_gen_all(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, results, message = xhttp_manager.generate_all()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_add_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Команда /xhttp_add <name>."""
+        """/xhttp_add command <name>."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /xhttp_add <имя>")
+                await update.message.reply_text("Usage: /xhttp_add <name>")
                 return
             name = args[0]
             success, message, client = xhttp_manager.add_client(name)
@@ -11765,56 +11765,56 @@ systemctl status xray
             if success and client:
                 await self._reply_xhttp_qr(update.message, name)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_qr(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /xhttp_qr <имя_клиента>"
+                    "Usage: /xhttp_qr <client_name>"
                 )
                 return
             await self._reply_xhttp_qr(update.message, args[0])
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_del_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if await self._legacy_per_client_guard(update):
                 return
             args = context.args or []
             if not args:
-                await update.message.reply_text("Использование: /xhttp_del <имя>")
+                await update.message.reply_text("Usage: /xhttp_del <name>")
                 return
             success, message = xhttp_manager.remove_client(args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = xhttp_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов XHTTP нет")
+                await update.message.reply_text("📋 No XHTTP clients")
                 return
             esc = self._escape_md2
-            lines = ["🌐 *Клиенты XHTTP:*\n"]
+            lines = ["🌐 *XHTTP clients:*\n"]
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
                 uuid_short = c.get("uuid", "")[:8] + "..."
@@ -11826,66 +11826,66 @@ systemctl status xray
                 "\n".join(lines), parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.apply_config()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.service_control("start")
             await update.message.reply_text(message, parse_mode=ParseMode.MARKDOWN_V2)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.service_control("stop")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = xhttp_manager.service_control("restart")
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             lines_count = int(args[0]) if args else 30
             success, output = xhttp_manager.get_logs(lines_count)
             await update.message.reply_text(
-                f"📋 Логи XHTTP:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
+                f"📋 XHTTP logs:\n```\n{output}\n```", parse_mode=ParseMode.MARKDOWN_V2
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def xhttp_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
 
             singbox_config = xhttp_manager.export_singbox_config()
@@ -11904,21 +11904,21 @@ systemctl status xray
                 "🌐 XHTTP server config (sing-box)",
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     # =====================================================================
     # === MIERU COMMANDS ===
     # =====================================================================
 
     async def mieru_status(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mieru_status — состояние Mieru (mita)."""
+        """/mieru_status command — Mieru (mita) state."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             status = mieru_manager.get_status()
-            enabled = "🟢 включен" if status.get("enabled") else "🔴 выключен"
-            configured = "да" if status.get("configured") else "нет"
+            enabled = "🟢 on" if status.get("enabled") else "🔴 off"
+            configured = "yes" if status.get("configured") else "no"
             bindings = status.get("port_bindings") or []
             bindings_str = (
                 ", ".join(
@@ -11933,8 +11933,8 @@ systemctl status xray
             )
             text = (
                 "🛰 Mieru status\n\n"
-                f"Состояние: {enabled}\n"
-                f"Сконфигурирован: {configured}\n"
+                f"State: {enabled}\n"
+                f"Configured: {configured}\n"
                 f"Server: {status.get('server') or '-'}\n"
                 f"Port bindings: {bindings_str}\n"
                 f"MTU: {status.get('mtu')}\n"
@@ -11945,18 +11945,18 @@ systemctl status xray
                 f"Service: {status.get('service_name')}\n"
                 f"systemd: {status.get('systemd_output') or 'unknown'}\n"
                 f"mita status: {'OK' if status.get('mita_status_ok') else 'fail'}\n"
-                f"Клиентов: {status.get('clients_count', 0)}"
+                f"Clients: {status.get('clients_count', 0)}"
             )
             await update.message.reply_text(text)
         except Exception as e:
             logger.error(f"Error in mieru_status: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_config(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Команда /mieru_config — текущий конфиг Mieru без секретов (по умолчанию)."""
+        """/mieru_config command — current Mieru config without secrets (default)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             config = mieru_manager.get_config(
                 include_secrets=self._secret_reveal_allowed()
@@ -11966,178 +11966,178 @@ systemctl status xray
                 update.message,
                 payload,
                 "mieru-config.json",
-                "🛰 Mieru config (секреты маскированы)",
+                "🛰 Mieru config (secrets masked)",
             )
         except Exception as e:
             logger.error(f"Error in mieru_config: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_server(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_server <ip_or_domain>"
+                    "Usage: /mieru_set_server <ip_or_domain>"
                 )
                 return
             success, message = mieru_manager.set_server(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_port(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if not args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_port <port> [tcp|udp]"
+                    "Usage: /mieru_set_port <port> [tcp|udp]"
                 )
                 return
             try:
                 port = int(args[0])
             except ValueError:
-                await update.message.reply_text("❌ port должен быть числом")
+                await update.message.reply_text("❌ port must be a number")
                 return
             protocol = args[1] if len(args) > 1 else "tcp"
             success, message = mieru_manager.set_port(port, protocol)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_mtu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_mtu <1280..1500>"
+                    "Usage: /mieru_set_mtu <1280..1500>"
                 )
                 return
             try:
                 mtu = int(context.args[0])
             except ValueError:
-                await update.message.reply_text("❌ mtu должен быть числом")
+                await update.message.reply_text("❌ mtu must be a number")
                 return
             success, message = mieru_manager.set_mtu(mtu)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_multiplexing(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_multiplexing <off|low|middle|high>"
+                    "Usage: /mieru_set_multiplexing <off|low|middle|high>"
                 )
                 return
             success, message = mieru_manager.set_multiplexing(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_handshake(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_handshake <standard|no_wait>"
+                    "Usage: /mieru_set_handshake <standard|no_wait>"
                 )
                 return
             success, message = mieru_manager.set_handshake_mode(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_socks5_port(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_socks5_port <port>"
+                    "Usage: /mieru_set_socks5_port <port>"
                 )
                 return
             try:
                 port = int(context.args[0])
             except ValueError:
-                await update.message.reply_text("❌ port должен быть числом")
+                await update.message.reply_text("❌ port must be a number")
                 return
             success, message = mieru_manager.set_socks5_port(port)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_gen_password(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
-        """Сгенерировать password (для ручного использования или add_client)."""
+        """Generate a password (for manual use or add_client)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             password = mieru_manager.generate_password()
             await update.message.reply_text(
-                "✅ Сгенерирован пароль (использовать вручную):\n"
+                "✅ Generated password (use manually):\n"
                 f"`{password}`\n\n"
-                "Чтобы добавить клиента сразу с автогенерацией: /mieru_add_client <name>",
+                "To add a client immediately with auto-generation: /mieru_add_client <name>",
                 parse_mode=ParseMode.MARKDOWN_V2,
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_add_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_add_client <имя>"
+                    "Usage: /mieru_add_client <name>"
                 )
                 return
             name = context.args[0]
             success, message, client = mieru_manager.add_client(name)
             if success and client:
                 masked = self._mask_secret(client.get("password", ""))
-                message += f"\npassword: {masked}\nдля выдачи: /mieru_export {name}"
+                message += f"\npassword: {masked}\nto issue: /mieru_export {name}"
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_list_clients(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             clients = mieru_manager.list_clients()
             if not clients:
-                await update.message.reply_text("📋 Клиентов Mieru нет")
+                await update.message.reply_text("📋 No Mieru clients")
                 return
-            lines = ["🛰 Клиенты Mieru:"]
+            lines = ["🛰 Mieru clients:"]
             for i, c in enumerate(clients, 1):
                 name = c.get("name", "?")
                 owner = c.get("owner_id", "—")
@@ -12145,36 +12145,36 @@ systemctl status xray
                 lines.append(f"{i}. {name}  owner={owner}  created={created}")
             await update.message.reply_text("\n".join(lines))
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_del_client(
         self, update: Update, context: ContextTypes.DEFAULT_TYPE
     ):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             if not context.args:
                 await update.message.reply_text(
-                    "Использование: /mieru_del_client <имя>"
+                    "Usage: /mieru_del_client <name>"
                 )
                 return
             success, message = mieru_manager.delete_client(context.args[0])
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_install(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
-            await update.message.reply_text("⏳ Установка Mieru (mita)…")
+            await update.message.reply_text("⏳ Installing Mieru (mita)…")
             success, message = mieru_manager.install_mieru()
             await update.message.reply_text(
-                "✅ Установка завершена"
+                "✅ Install finished"
                 if success
-                else "❌ Установка завершилась с ошибкой"
+                else "❌ Install finished with an error"
             )
             await self._reply_export_file(
                 update.message,
@@ -12183,13 +12183,13 @@ systemctl status xray
                 "Mieru install output",
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_apply(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/mieru_apply [reload] — применить серверный config; reload = только users/logging."""
+        """/mieru_apply [reload] — apply server config; reload = users/logging only."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             reload_only = bool(args) and args[0].strip().lower() in {"reload", "soft"}
@@ -12198,42 +12198,42 @@ systemctl status xray
             )
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_start(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mieru_manager.start()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_stop(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mieru_manager.stop()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_restart(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             success, message = mieru_manager.restart()
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_logs(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             try:
@@ -12245,16 +12245,16 @@ systemctl status xray
                 update.message,
                 output,
                 "mieru-logs.txt",
-                f"🛰 Mieru logs (последние {n} строк)",
+                f"🛰 Mieru logs (last {n} lines)",
             )
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_export(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/mieru_export [name] — выдать client config + mierus:// + Clash + aping-profile."""
+        """/mieru_export [name] — issue client config + mierus:// + Clash + aping-profile."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             name = args[0] if args else None
@@ -12262,12 +12262,12 @@ systemctl status xray
                 clients = mieru_manager.list_clients()
                 if not clients:
                     await update.message.reply_text(
-                        "❌ Нет клиентов. /mieru_add_client <имя>"
+                        "❌ No clients. /mieru_add_client <name>"
                     )
                     return
                 name = clients[0].get("name", "")
                 await update.message.reply_text(
-                    f"ℹ️ Имя не указано — экспортирую первого: {name}"
+                    f"ℹ️ No name given — exporting the first one: {name}"
                 )
             try:
                 client_config = mieru_manager.export_client_config(name)
@@ -12298,19 +12298,19 @@ systemctl status xray
             )
         except Exception as e:
             logger.error(f"Error in mieru_export: {e}")
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def mieru_set_dpi(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """/mieru_set_dpi <param> <value> — единая ручка для DPI-параметров (plan §10)."""
+        """/mieru_set_dpi <param> <value> — single knob for DPI parameters (plan §10)."""
         try:
             if not self._is_admin(update.effective_user.id):
-                await update.message.reply_text("⛔ Только для администратора.")
+                await update.message.reply_text("⛔ Admin only.")
                 return
             args = context.args or []
             if len(args) < 2:
                 await update.message.reply_text(
-                    "Использование: /mieru_set_dpi <param> <value>\n\n"
-                    "Параметры:\n"
+                    "Usage: /mieru_set_dpi <param> <value>\n\n"
+                    "Parameters:\n"
                     "protocol=tcp|udp\n"
                     "port=<1025..65535>\n"
                     "port_range=<from>-<to>\n"
@@ -12319,8 +12319,8 @@ systemctl status xray
                     "handshake=standard|no_wait\n"
                     "socks5_port=<1025..65535>\n"
                     "logging=debug|info|warn|error\n\n"
-                    "После изменения port/MTU/protocol/multiplexing/handshake "
-                    "нужен /mieru_apply и заново /mieru_export."
+                    "After changing port/MTU/protocol/multiplexing/handshake "
+                    "run /mieru_apply and then /mieru_export again."
                 )
                 return
             param = args[0]
@@ -12328,13 +12328,13 @@ systemctl status xray
             success, message = mieru_manager.set_dpi_param(param, value)
             await update.message.reply_text(message)
         except Exception as e:
-            await update.message.reply_text(f"Ошибка: {e}")
+            await update.message.reply_text(f"Error: {e}")
 
     async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Обработка ошибок."""
+        """Error handling."""
         logger.error(f"Update {update} caused error {context.error}")
 
         if update and update.effective_message:
             await update.effective_message.reply_text(
-                "❌ Произошла ошибка при обработке команды. Попробуйте позже."
+                "❌ An error occurred while handling the command. Try again later."
             )

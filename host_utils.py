@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-Утилиты для выполнения команд на хосте из Docker-контейнера.
+Helpers for running host commands from a Docker container.
 
-Когда бот работает внутри Docker с ``pid: host``, хостовые команды
-(systemctl, journalctl и т.д.) запускаются через ``nsenter`` в PID 1.
-Вне Docker команды запускаются напрямую.
+When the bot runs inside Docker with ``pid: host``, host commands
+(systemctl, journalctl, etc.) are launched via ``nsenter`` into PID 1.
+Outside Docker the commands run directly.
 """
 
 import os

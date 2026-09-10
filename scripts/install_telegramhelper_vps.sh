@@ -68,27 +68,27 @@ EOF
 systemctl daemon-reload
 systemctl enable "${SERVICE_NAME}"
 
-# --- Авто-чистка диска (CLEANUP_SERVER.md) -----------------------------------
-# Ставим таймер сразу при установке, а не после того, как диск упрётся в 100%:
-# build cache растёт при каждом `compose build` (на your-vps — 1.9 GB за двое
-# суток), а journald без лимита съедает гигабайты.
+# --- Disk auto-cleanup (CLEANUP_SERVER.md) -----------------------------------
+# Install the timer at setup time, not after the disk hits 100%:
+# the build cache grows on every `compose build` (1.9 GB in two days on
+# your-vps), and unbounded journald can eat gigabytes.
 echo ""
 if [[ "${EUID}" -eq 0 ]]; then
   if systemctl is-enabled telegramhelper-maintenance.timer >/dev/null 2>&1; then
-    echo "🧹 Авто-чистка диска: уже включена."
+    echo "🧹 Disk auto-cleanup: already enabled."
   else
-    echo "🧹 Включаю авто-чистку диска..."
+    echo "🧹 Enabling disk auto-cleanup..."
     bash "${APP_DIR}/scripts/vps_maintenance.sh" --install \
-      || echo "⚠ Не удалось — включи вручную: sudo bash scripts/vps_maintenance.sh --install"
+      || echo "⚠ Failed — enable manually: sudo bash scripts/vps_maintenance.sh --install"
   fi
-  echo "   Когда:       раз в неделю, воскресенье 04:00 UTC"
-  echo "   Что чистит:  docker build cache + неиспользуемые образы, journald >500M, apt-кэш"
-  echo "   НЕ трогает:  запущенные контейнеры, volumes, .env, *_config.json,"
-  echo "                dev-данные и Rust target/ в /root — про них только предупреждает"
-  echo "   Проверить:   sudo bash scripts/vps_maintenance.sh --status"
-  echo "   Диагностика: sudo bash scripts/vps_maintenance.sh --report"
+  echo "   When:        weekly, Sunday 04:00 UTC"
+  echo "   Cleans:      docker build cache + unused images, journald >500M, apt cache"
+  echo "   Does NOT:    running containers, volumes, .env, *_config.json,"
+  echo "                dev data and Rust target/ in /root — those are warnings only"
+  echo "   Check:       sudo bash scripts/vps_maintenance.sh --status"
+  echo "   Diagnose:    sudo bash scripts/vps_maintenance.sh --report"
 else
-  echo "🧹 Авто-чистка диска НЕ включена (нужен root). Включить:"
+  echo "🧹 Disk auto-cleanup is NOT enabled (needs root). Enable with:"
   echo "   sudo bash scripts/vps_maintenance.sh --install"
 fi
 

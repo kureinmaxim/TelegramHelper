@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # ============================================================================
-# TelegramHelper — установка бота через Docker Compose (сервис telegram-helper).
+# TelegramHelper — install the bot via Docker Compose (telegram-helper service).
 #
-# Docker-эквивалент install_telegramhelper_vps.sh (systemd). Выбор между ними —
-# интерактивный вопрос в scripts/vps_setup.sh, либо запусти этот файл напрямую.
+# Docker equivalent of install_telegramhelper_vps.sh (systemd). The choice
+# between them is an interactive question in scripts/vps_setup.sh, or run
+# this file directly.
 #
-# Что делает:
-#   1) создаёт .env из example.env (если ещё нет)
-#   2) спрашивает BOT_TOKEN / ADMIN_USER_IDS (с подсказками); уже заполненные
-#      поля НЕ переспрашивает; API_SECRET_KEY / HMAC_SECRET генерирует сам
-#   3) приводит bind-mount JSON-конфиги к виду «обычный файл» (иначе Docker
-#      создаст директорию для несуществующего файла — см. POST_DEPLOY.md §5)
+# What it does:
+#   1) creates .env from example.env (if missing)
+#   2) asks for BOT_TOKEN / ADMIN_USER_IDS (with hints); already filled
+#      fields are NOT re-asked; API_SECRET_KEY / HMAC_SECRET are generated
+#   3) makes bind-mount JSON configs into regular files (otherwise Docker
+#      creates a directory for a missing file — see POST_DEPLOY.md §5)
 #   4) docker compose build + up -d telegram-helper
 #
-# Запуск (из корня репозитория, на VPS):
+# Run (from the repo root, on the VPS):
 #   sudo bash scripts/install_telegramhelper_docker.sh
 # ============================================================================
 set -euo pipefail
@@ -31,16 +32,16 @@ if [[ "$(uname -s)" != "Linux" ]]; then
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
-  echo "Docker не найден. Установи его сначала:"
+  echo "Docker not found. Install it first:"
   echo "  curl -fsSL https://get.docker.com | sh"
   exit 1
 fi
 
 configure_essential_env
 
-# --- Bind-mount sanity: JSON должен быть файлом, не директорией (POST_DEPLOY.md §5) ---
+# --- Bind-mount sanity: JSON must be a file, not a directory (POST_DEPLOY.md §5) ---
 echo ""
-echo "Проверяю bind-mount файлы (JSON-конфиги)..."
+echo "Checking bind-mount files (JSON configs)..."
 for f in \
   vless_config.json hysteria2_config.json tuic_config.json anytls_config.json \
   xhttp_config.json mtproto_config.json headscale_config.json naiveproxy_config.json \
@@ -50,25 +51,25 @@ for f in \
 done
 [[ -d bot.log ]] && rmdir bot.log 2>/dev/null || true
 [[ -f bot.log ]] || : > bot.log
-# История SSH CLI-дашборда — тоже должна быть файлом.
+# SSH CLI dashboard history must also be a file.
 [[ -d .cli_history ]] && rmdir .cli_history 2>/dev/null || true
 [[ -f .cli_history ]] || : > .cli_history
 chmod 600 .cli_history 2>/dev/null || true
 
 if env_is_placeholder BOT_TOKEN; then
   echo ""
-  echo "⚠ BOT_TOKEN всё ещё плейсхолдер — контейнер поднимется, но бот не залогинится."
-  echo "  Впиши токен в ${ENV_FILE}, затем:"
+  echo "⚠ BOT_TOKEN is still a placeholder — the container will start, but the bot will not log in."
+  echo "  Put the token in ${ENV_FILE}, then:"
   echo "  docker compose up -d --force-recreate telegram-helper"
 fi
 
 echo ""
-echo "Собираю и запускаю контейнер telegram-helper..."
-# DNS сборщика BuildKit на части VPS не резолвит deb.debian.org, хотя у хоста
-# DNS рабочий (POST_DEPLOY.md §10). Тогда собираем образ с сетью хоста —
-# иначе `up` молча поднимет старый/пустой образ.
+echo "Building and starting container telegram-helper..."
+# BuildKit builder DNS on some VPS hosts cannot resolve deb.debian.org even
+# when host DNS works (POST_DEPLOY.md §10). Then build the image with host
+# network — otherwise `up` silently starts an old/empty image.
 if ! docker compose build telegram-helper; then
-  echo "⚠ compose build упал — пробую docker build --network=host (POST_DEPLOY.md §10)…"
+  echo "⚠ compose build failed — trying docker build --network=host (POST_DEPLOY.md §10)…"
   docker build --network=host -t telegram-helper-lite:latest .
 fi
 docker compose up -d telegram-helper
@@ -77,26 +78,26 @@ sleep 3
 docker compose ps telegram-helper
 docker compose logs --tail=40 telegram-helper
 
-# --- Авто-чистка диска (CLEANUP_SERVER.md) -----------------------------------
-# Ставим таймер сразу при установке, а не после того, как диск упрётся в 100%:
-# build cache растёт при каждом `compose build` (на your-vps — 1.9 GB за двое
-# суток), а journald без лимита съедает гигабайты.
+# --- Disk auto-cleanup (CLEANUP_SERVER.md) -----------------------------------
+# Install the timer at setup time, not after the disk hits 100%:
+# the build cache grows on every `compose build` (1.9 GB in two days on
+# your-vps), and unbounded journald can eat gigabytes.
 echo ""
 if [[ "${EUID}" -eq 0 ]]; then
   if systemctl is-enabled telegramhelper-maintenance.timer >/dev/null 2>&1; then
-    echo "🧹 Авто-чистка диска: уже включена."
+    echo "🧹 Disk auto-cleanup: already enabled."
   else
-    echo "🧹 Включаю авто-чистку диска..."
+    echo "🧹 Enabling disk auto-cleanup..."
     bash "${APP_DIR}/scripts/vps_maintenance.sh" --install \
-      || echo "⚠ Не удалось — включи вручную: sudo bash scripts/vps_maintenance.sh --install"
+      || echo "⚠ Failed — enable manually: sudo bash scripts/vps_maintenance.sh --install"
   fi
-  echo "   Когда:       раз в неделю, воскресенье 04:00 UTC"
-  echo "   Что чистит:  docker build cache + неиспользуемые образы, journald >500M, apt-кэш"
-  echo "   НЕ трогает:  запущенные контейнеры, volumes, .env, *_config.json,"
-  echo "                dev-данные и Rust target/ в /root — про них только предупреждает"
-  echo "   Проверить:   sudo bash scripts/vps_maintenance.sh --status"
-  echo "   Диагностика: sudo bash scripts/vps_maintenance.sh --report"
+  echo "   When:        weekly, Sunday 04:00 UTC"
+  echo "   Cleans:      docker build cache + unused images, journald >500M, apt cache"
+  echo "   Does NOT:    running containers, volumes, .env, *_config.json,"
+  echo "                dev data and Rust target/ in /root — those are warnings only"
+  echo "   Check:       sudo bash scripts/vps_maintenance.sh --status"
+  echo "   Diagnose:    sudo bash scripts/vps_maintenance.sh --report"
 else
-  echo "🧹 Авто-чистка диска НЕ включена (нужен root). Включить:"
+  echo "🧹 Disk auto-cleanup is NOT enabled (needs root). Enable with:"
   echo "   sudo bash scripts/vps_maintenance.sh --install"
 fi

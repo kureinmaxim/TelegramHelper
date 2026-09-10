@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для хранения индивидуальных API и ключей шифрования для каждого app_id.
+Per-app_id API and encryption key storage.
 
-Структура данных:
+Data shape:
 {
   "app_keys": {
     "example-app": {
-      "api_key": "ключ_64_символа",
-      "encryption_key": "ключ_64_символа",
+      "api_key": "64_char_key",
+      "encryption_key": "64_char_key",
       "created_at": "2025-01-01T12:00:00",
       "updated_at": "2025-01-01T12:00:00"
     }
   },
   "default": {
-    "api_key": "ключ_из_env",
-    "encryption_key": "ключ_из_env"
+    "api_key": "key_from_env",
+    "encryption_key": "key_from_env"
   }
 }
 """
@@ -31,16 +31,16 @@ logger = logging.getLogger(__name__)
 # Thread safety
 _keys_lock = threading.Lock()
 
-# Кэш для отслеживания последнего времени изменения файла
+# Cache: last observed mtime of the keys file
 _last_file_mtime = None
 
-# Путь к файлу хранения ключей
+# Keys file path
 _KEYS_STORE_PATH = os.getenv("APP_KEYS_PATH", 
                              os.path.join(os.getcwd(), "app_keys.json"))
 
 
 def _load_keys(force_reload: bool = False) -> Dict:
-    """Загрузить ключи из файла"""
+    """Load keys from file."""
     global _last_file_mtime
     
     with _keys_lock:
@@ -48,11 +48,11 @@ def _load_keys(force_reload: bool = False) -> Dict:
             _last_file_mtime = None
             return {"app_keys": {}, "default": {}}
         
-        # Проверяем, изменился ли файл
+        # Check whether the file changed
         try:
             current_mtime = os.path.getmtime(_KEYS_STORE_PATH)
             if not force_reload and _last_file_mtime == current_mtime:
-                # Файл не изменился, можно использовать кэш (если он есть)
+                # Unchanged; cache may be reused
                 pass
             _last_file_mtime = current_mtime
         except Exception:
@@ -68,7 +68,7 @@ def _load_keys(force_reload: bool = False) -> Dict:
 
 
 def _save_keys(data: Dict) -> None:
-    """Сохранить ключи в файл"""
+    """Save keys to file."""
     with _keys_lock:
         try:
             directory = os.path.dirname(_KEYS_STORE_PATH) or "."
@@ -81,11 +81,11 @@ def _save_keys(data: Dict) -> None:
                 f.flush()
                 os.fsync(f.fileno())
             
-            # Дополнительная проверка: убеждаемся, что файл существует и читается
+            # Extra check: file exists and is readable
             if os.path.exists(_KEYS_STORE_PATH):
                 try:
                     with open(_KEYS_STORE_PATH, "r", encoding="utf-8") as f:
-                        json.load(f)  # Проверяем, что файл валидный JSON
+                        json.load(f)  # Confirm valid JSON
                 except Exception as e:
                     logger.error(f"Error verifying saved app keys file: {e}")
             else:
@@ -96,18 +96,18 @@ def _save_keys(data: Dict) -> None:
 
 def get_api_key(app_id: Optional[str] = None, force_reload: bool = False) -> Optional[str]:
     """
-    Получить API ключ для app_id
-    
+    Get API key for app_id.
+
     Args:
-        app_id: ID приложения (например, example-app)
-        force_reload: Принудительно перезагрузить данные из файла
-        
+        app_id: Application ID (e.g. example-app)
+        force_reload: Force reload from file
+
     Returns:
-        API ключ или None
+        API key or None
     """
     data = _load_keys(force_reload=force_reload)
     
-    # Если указан app_id и есть индивидуальный ключ
+    # Per-app key if present
     if app_id:
         app_keys = data.get("app_keys", {})
         if app_id in app_keys:
@@ -115,29 +115,29 @@ def get_api_key(app_id: Optional[str] = None, force_reload: bool = False) -> Opt
             if api_key:
                 return api_key
     
-    # Fallback на дефолтный ключ из env
+    # Fallback to default key from env store
     default_key = data.get("default", {}).get("api_key")
     if default_key:
         return default_key
     
-    # Последний fallback - из переменных окружения
+    # Last fallback: environment variables
     return os.getenv("API_SECRET_KEY")
 
 
 def get_encryption_key(app_id: Optional[str] = None, force_reload: bool = False) -> Optional[str]:
     """
-    Получить ключ шифрования для app_id
-    
+    Get encryption key for app_id.
+
     Args:
-        app_id: ID приложения
-        force_reload: Принудительно перезагрузить данные из файла
-        
+        app_id: Application ID
+        force_reload: Force reload from file
+
     Returns:
-        Ключ шифрования или None
+        Encryption key or None
     """
     data = _load_keys(force_reload=force_reload)
     
-    # Если указан app_id и есть индивидуальный ключ
+    # Per-app key if present
     if app_id:
         app_keys = data.get("app_keys", {})
         if app_id in app_keys:
@@ -145,12 +145,12 @@ def get_encryption_key(app_id: Optional[str] = None, force_reload: bool = False)
             if enc_key:
                 return enc_key
     
-    # Fallback на дефолтный ключ из env
+    # Fallback to default key from env store
     default_key = data.get("default", {}).get("encryption_key")
     if default_key:
         return default_key
     
-    # Последний fallback - из переменных окружения
+    # Last fallback: environment variables
     enc_key = os.getenv("ENCRYPTION_KEY")
     if enc_key:
         return enc_key
@@ -160,14 +160,14 @@ def get_encryption_key(app_id: Optional[str] = None, force_reload: bool = False)
 
 def set_api_key(app_id: str, api_key: str) -> bool:
     """
-    Установить API ключ для app_id
-    
+    Set API key for app_id.
+
     Args:
-        app_id: ID приложения
-        api_key: API ключ
-        
+        app_id: Application ID
+        api_key: API key
+
     Returns:
-        True если успешно
+        True on success
     """
     data = _load_keys()
     app_keys = data.setdefault("app_keys", {})
@@ -185,12 +185,12 @@ def set_api_key(app_id: str, api_key: str) -> bool:
     
     _save_keys(data)
     
-    # Проверяем, что ключ действительно сохранен
-    # Перезагружаем данные из файла для проверки
+    # Verify the key was actually persisted
+    # Reload from file for verification
     import time
-    time.sleep(0.05)  # Небольшая задержка для синхронизации файла
+    time.sleep(0.05)  # Brief delay for file sync
     
-    # Проверяем напрямую из файла
+    # Check the file directly
     try:
         if os.path.exists(_KEYS_STORE_PATH):
             with open(_KEYS_STORE_PATH, "r", encoding="utf-8") as f:
@@ -201,7 +201,7 @@ def set_api_key(app_id: str, api_key: str) -> bool:
                 else:
                     logger.warning(f"API key for {app_id} was saved but verification failed. Retrying...")
                     time.sleep(0.1)
-                    # Еще одна попытка
+                    # One more attempt
                     with open(_KEYS_STORE_PATH, "r", encoding="utf-8") as f:
                         saved_data = json.load(f)
                         saved_app_keys = saved_data.get("app_keys", {})
@@ -210,19 +210,19 @@ def set_api_key(app_id: str, api_key: str) -> bool:
     except Exception as e:
         logger.error(f"Error verifying saved API key: {e}")
     
-    return True  # Возвращаем True в любом случае, так как _save_keys уже выполнен
+    return True  # True anyway: _save_keys already ran
 
 
 def set_encryption_key(app_id: str, encryption_key: str) -> bool:
     """
-    Установить ключ шифрования для app_id
-    
+    Set encryption key for app_id.
+
     Args:
-        app_id: ID приложения
-        encryption_key: Ключ шифрования
-        
+        app_id: Application ID
+        encryption_key: Encryption key
+
     Returns:
-        True если успешно
+        True on success
     """
     data = _load_keys()
     app_keys = data.setdefault("app_keys", {})
@@ -240,12 +240,12 @@ def set_encryption_key(app_id: str, encryption_key: str) -> bool:
     
     _save_keys(data)
     
-    # Проверяем, что ключ действительно сохранен
-    # Перезагружаем данные из файла для проверки
+    # Verify the key was actually persisted
+    # Reload from file for verification
     import time
-    time.sleep(0.05)  # Небольшая задержка для синхронизации файла
+    time.sleep(0.05)  # Brief delay for file sync
     
-    # Проверяем напрямую из файла
+    # Check the file directly
     try:
         if os.path.exists(_KEYS_STORE_PATH):
             with open(_KEYS_STORE_PATH, "r", encoding="utf-8") as f:
@@ -256,7 +256,7 @@ def set_encryption_key(app_id: str, encryption_key: str) -> bool:
                 else:
                     logger.warning(f"Encryption key for {app_id} was saved but verification failed. Retrying...")
                     time.sleep(0.1)
-                    # Еще одна попытка
+                    # One more attempt
                     with open(_KEYS_STORE_PATH, "r", encoding="utf-8") as f:
                         saved_data = json.load(f)
                         saved_app_keys = saved_data.get("app_keys", {})
@@ -265,19 +265,19 @@ def set_encryption_key(app_id: str, encryption_key: str) -> bool:
     except Exception as e:
         logger.error(f"Error verifying saved encryption key: {e}")
     
-    return True  # Возвращаем True в любом случае, так как _save_keys уже выполнен
+    return True  # True anyway: _save_keys already ran
 
 
 def has_api_key(app_id: str, force_reload: bool = False) -> bool:
     """
-    Проверить, есть ли индивидуальный API ключ для app_id
-    
+    Check whether app_id has a dedicated API key.
+
     Args:
-        app_id: ID приложения
-        force_reload: Принудительно перезагрузить данные из файла
-        
+        app_id: Application ID
+        force_reload: Force reload from file
+
     Returns:
-        True если есть индивидуальный ключ
+        True if a dedicated key exists
     """
     data = _load_keys(force_reload=force_reload)
     app_keys = data.get("app_keys", {})
@@ -286,14 +286,14 @@ def has_api_key(app_id: str, force_reload: bool = False) -> bool:
 
 def has_encryption_key(app_id: str, force_reload: bool = False) -> bool:
     """
-    Проверить, есть ли индивидуальный ключ шифрования для app_id
-    
+    Check whether app_id has a dedicated encryption key.
+
     Args:
-        app_id: ID приложения
-        force_reload: Принудительно перезагрузить данные из файла
-        
+        app_id: Application ID
+        force_reload: Force reload from file
+
     Returns:
-        True если есть индивидуальный ключ
+        True if a dedicated key exists
     """
     data = _load_keys(force_reload=force_reload)
     app_keys = data.get("app_keys", {})
@@ -302,10 +302,10 @@ def has_encryption_key(app_id: str, force_reload: bool = False) -> bool:
 
 def list_app_ids() -> list:
     """
-    Получить список всех app_id с настроенными ключами
-    
+    List all app_id values with configured keys.
+
     Returns:
-        Список app_id
+        List of app_id
     """
     data = _load_keys()
     app_keys = data.get("app_keys", {})
@@ -314,13 +314,13 @@ def list_app_ids() -> list:
 
 def delete_app_keys(app_id: str) -> bool:
     """
-    Удалить все ключи для app_id
-    
+    Delete all keys for app_id.
+
     Args:
-        app_id: ID приложения
-        
+        app_id: Application ID
+
     Returns:
-        True если ключи были удалены
+        True if keys were deleted
     """
     data = _load_keys()
     app_keys = data.get("app_keys", {})
@@ -335,20 +335,20 @@ def delete_app_keys(app_id: str) -> bool:
 
 def delete_api_key(app_id: str) -> bool:
     """
-    Удалить только API ключ для app_id
-    
+    Delete only the API key for app_id.
+
     Args:
-        app_id: ID приложения
-        
+        app_id: Application ID
+
     Returns:
-        True если ключ был удален
+        True if the key was deleted
     """
     data = _load_keys()
     app_keys = data.get("app_keys", {})
     
     if app_id in app_keys and "api_key" in app_keys[app_id]:
         del app_keys[app_id]["api_key"]
-        # Если ключей больше нет, удаляем запись целиком
+        # Drop the whole record if no keys remain
         if not app_keys[app_id].get("encryption_key"):
             del app_keys[app_id]
         else:
@@ -362,20 +362,20 @@ def delete_api_key(app_id: str) -> bool:
 
 def delete_encryption_key(app_id: str) -> bool:
     """
-    Удалить только ключ шифрования для app_id
-    
+    Delete only the encryption key for app_id.
+
     Args:
-        app_id: ID приложения
-        
+        app_id: Application ID
+
     Returns:
-        True если ключ был удален
+        True if the key was deleted
     """
     data = _load_keys()
     app_keys = data.get("app_keys", {})
     
     if app_id in app_keys and "encryption_key" in app_keys[app_id]:
         del app_keys[app_id]["encryption_key"]
-        # Если ключей больше нет, удаляем запись целиком
+        # Drop the whole record if no keys remain
         if not app_keys[app_id].get("api_key"):
             del app_keys[app_id]
         else:
@@ -388,7 +388,7 @@ def delete_encryption_key(app_id: str) -> bool:
 
 
 def init_default_keys():
-    """Инициализировать дефолтные ключи из переменных окружения"""
+    """Initialize default keys from environment variables."""
     data = _load_keys()
     default = data.setdefault("default", {})
     

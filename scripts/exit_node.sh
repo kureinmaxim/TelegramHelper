@@ -1,28 +1,28 @@
 #!/usr/bin/env bash
 #
-# exit_node.sh — break-glass управление Tailscale exit node ПРЯМО НА ХОСТЕ.
+# exit_node.sh — break-glass Tailscale exit-node control DIRECTLY ON THE HOST.
 #
-# Зачем: exit node (выход в интернет через VPS-координатор) обычно включается
-# командой бота /exit_node_on. Но бывает курица-яйцо: сам Telegram доступен
-# только через VPN, значит до бота не достучаться, пока exit node не поднят.
-# Этот скрипт — аварийный путь по SSH, в обход Telegram и даже контейнера бота:
-# он ходит в host-`tailscale` и `docker exec headscale` напрямую (без nsenter,
-# т.к. уже выполняется на самом хосте).
+# Why: the exit node (internet via the VPS coordinator) is normally enabled
+# with the bot command /exit_node_on. There is a chicken-and-egg: Telegram
+# itself may only be reachable through the VPN, so you cannot reach the bot
+# until the exit node is up. This script is the SSH emergency path, bypassing
+# Telegram and even the bot container: it talks to host `tailscale` and
+# `docker exec headscale` directly (no nsenter, because we already run on the host).
 #
-# Соответствует HEADSCALE_GUIDE.md → «Exit node» и логике headscale_manager.py.
+# Matches HEADSCALE_GUIDE.md → "Exit node" and headscale_manager.py.
 #
-# Использование (на сервере, где крутятся бот и координатор):
-#   sudo ./scripts/exit_node.sh on        # сделать VPS exit node'ом
-#   sudo ./scripts/exit_node.sh off        # перестать быть exit node'ом
-#   sudo ./scripts/exit_node.sh status     # показать текущее состояние
+# Usage (on the server that runs the bot and the coordinator):
+#   sudo ./scripts/exit_node.sh on        # make this VPS an exit node
+#   sudo ./scripts/exit_node.sh off        # stop being an exit node
+#   sudo ./scripts/exit_node.sh status     # show current state
 #
-# Переменные окружения (необязательные):
-#   HS_CONTAINER=headscale   # имя Docker-контейнера Headscale
+# Environment (optional):
+#   HS_CONTAINER=headscale   # Headscale Docker container name
 #
-# Требования: запускать от root (sysctl/tailscale/docker). tailscale-клиент на
-# хосте должен быть подключён к вашему Headscale. JSON парсится через jq или
-# python3 (что найдётся); если нет ни того, ни другого — approve делается
-# вручную (скрипт подскажет команды).
+# Requirements: run as root (sysctl/tailscale/docker). The tailscale client on
+# the host must already be joined to your Headscale. JSON is parsed with jq or
+# python3 (whichever is found); if neither exists, approve is done by hand
+# (the script prints the commands).
 
 set -uo pipefail
 
@@ -41,24 +41,24 @@ for cand in tailscale /usr/bin/tailscale /usr/sbin/tailscale; do
   if command -v "$cand" >/dev/null 2>&1; then TS="$cand"; break; fi
 done
 if [ -z "$TS" ]; then
-  err "❌ tailscale не найден на хосте. Установите клиент и подключите к Headscale (HEADSCALE_GUIDE.md)."
+  err "❌ tailscale not found on the host. Install the client and join Headscale (HEADSCALE_GUIDE.md)."
   exit 1
 fi
 
 need_root() {
   if [ "$(id -u)" -ne 0 ]; then
-    err "❌ Нужны права root. Запустите через sudo."
+    err "❌ Root is required. Run via sudo."
     exit 1
   fi
 }
 
-# --- headscale nodes list -o json (через docker exec) ---
+# --- headscale nodes list -o json (via docker exec) ---
 hs_nodes_json() {
   docker exec "$HS_CONTAINER" headscale nodes list -o json 2>/dev/null
 }
 
-# Извлечь id узла, который объявил exit-маршрут (0.0.0.0/0 в availableRoutes).
-# Печатает id в stdout либо пусто. Использует jq → python3 → (пусто).
+# Extract the id of the node that advertised the exit route (0.0.0.0/0 in availableRoutes).
+# Prints id to stdout or empty. Uses jq → python3 → (empty).
 find_exit_node_id() {
   local json; json="$(hs_nodes_json)"
   [ -z "$json" ] && return 0
@@ -96,7 +96,7 @@ for n in nodes:
   return 0
 }
 
-# Проверить, аппрувнут ли exit-маршрут (0.0.0.0/0 в approvedRoutes).
+# Check whether the exit route is approved (0.0.0.0/0 in approvedRoutes).
 is_exit_approved() {
   local json; json="$(hs_nodes_json)"
   [ -z "$json" ] && return 1
@@ -141,83 +141,83 @@ approve_routes() {
 }
 
 manual_approve_hint() {
-  warn "Авто-approve не прошёл. Включите маршруты вручную одним из способов:"
-  info "  • Headplane: узел координатора → Routes → включить 0.0.0.0/0 и ::/0"
+  warn "Auto-approve failed. Enable the routes by hand in one of these ways:"
+  info "  • Headplane: coordinator node → Routes → enable 0.0.0.0/0 and ::/0"
   info "  • CLI (0.26+): docker exec ${HS_CONTAINER} headscale nodes approve-routes -i <id> -r ${EXIT_ROUTES}"
   info "  • CLI (0.23–0.25):"
-  info "      docker exec ${HS_CONTAINER} headscale nodes list | cat   # найти <id>"
-  info "      docker exec ${HS_CONTAINER} headscale routes list         # найти route-id'ы"
+  info "      docker exec ${HS_CONTAINER} headscale nodes list | cat   # find <id>"
+  info "      docker exec ${HS_CONTAINER} headscale routes list         # find route-ids"
   info "      docker exec ${HS_CONTAINER} headscale routes enable -r <route-id>"
 }
 
 cmd_status() {
-  info "=== Exit node — статус (хост) ==="
+  info "=== Exit node — status (host) ==="
   local f4 f6
   f4="$(sysctl -n net.ipv4.ip_forward 2>/dev/null || echo '?')"
   f6="$(sysctl -n net.ipv6.conf.all.forwarding 2>/dev/null || echo '?')"
   info "IP forwarding: IPv4=${f4}, IPv6=${f6}"
 
   if ! docker inspect -f '{{.State.Running}}' "$HS_CONTAINER" >/dev/null 2>&1; then
-    warn "Контейнер ${HS_CONTAINER} не найден/не запущен — статус Headscale недоступен."
+    warn "Container ${HS_CONTAINER} not found/not running — Headscale status unavailable."
     return 0
   fi
 
   local nid; nid="$(find_exit_node_id)"
   if [ -n "$nid" ]; then
-    ok "advertise: ✅ узел объявил exit-маршрут (id=${nid})"
+    ok "advertise: ✅ a node advertised the exit route (id=${nid})"
   else
-    warn "advertise: ❌ ни один узел не объявляет 0.0.0.0/0"
+    warn "advertise: ❌ no node advertises 0.0.0.0/0"
   fi
   if is_exit_approved; then
-    ok "approve:   ✅ exit-маршрут аппрувнут в Headscale"
+    ok "approve:   ✅ exit route is approved in Headscale"
   else
-    warn "approve:   ❌ exit-маршрут не аппрувнут"
+    warn "approve:   ❌ exit route is not approved"
   fi
   if [ -n "$nid" ] && is_exit_approved; then
-    ok "🟢 Exit node готов — выбирайте его на устройстве (Tailscale → Exit Node)."
+    ok "🟢 Exit node is ready — pick it on the device (Tailscale → Exit Node)."
   fi
 }
 
 cmd_on() {
   need_root
-  info "→ Объявляю хост exit node'ом..."
+  info "→ Advertising this host as an exit node..."
   if ! "$TS" set --advertise-exit-node; then
-    err "❌ tailscale set --advertise-exit-node не выполнен."
+    err "❌ tailscale set --advertise-exit-node failed."
     exit 1
   fi
-  ok "✅ advertise включён."
+  ok "✅ advertise enabled."
 
-  info "→ Включаю IP forwarding (runtime + persistent)..."
-  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || warn "⚠️ не удалось выставить net.ipv4.ip_forward"
-  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || warn "⚠️ не удалось выставить net.ipv6.conf.all.forwarding"
+  info "→ Enabling IP forwarding (runtime + persistent)..."
+  sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || warn "⚠️ failed to set net.ipv4.ip_forward"
+  sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || warn "⚠️ failed to set net.ipv6.conf.all.forwarding"
   if [ ! -f "$SYSCTL_PERSIST" ]; then
     printf 'net.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n' > "$SYSCTL_PERSIST" \
-      && ok "✅ forwarding закреплён в ${SYSCTL_PERSIST}" \
-      || warn "⚠️ не удалось записать ${SYSCTL_PERSIST} (forwarding активен только до ребута)"
+      && ok "✅ forwarding persisted in ${SYSCTL_PERSIST}" \
+      || warn "⚠️ failed to write ${SYSCTL_PERSIST} (forwarding is active only until reboot)"
   else
-    ok "✅ ${SYSCTL_PERSIST} уже существует."
+    ok "✅ ${SYSCTL_PERSIST} already exists."
   fi
 
   if ! docker inspect -f '{{.State.Running}}' "$HS_CONTAINER" >/dev/null 2>&1; then
-    warn "⚠️ Контейнер ${HS_CONTAINER} недоступен — approve пропущен."
+    warn "⚠️ Container ${HS_CONTAINER} is unavailable — approve skipped."
     manual_approve_hint
     return 0
   fi
 
-  info "→ Ищу узел и аппрувлю exit-маршрут в Headscale..."
-  # Дать headscale секунду «увидеть» свежий advertise.
+  info "→ Finding the node and approving the exit route in Headscale..."
+  # Give headscale a second to "see" the fresh advertise.
   sleep 2
   local nid; nid="$(find_exit_node_id)"
   if [ -z "$nid" ]; then
-    warn "⚠️ Headscale пока не видит exit-маршрут. Повторите через 5–10 сек или аппрувните вручную."
+    warn "⚠️ Headscale does not see the exit route yet. Retry in 5–10 s or approve by hand."
     manual_approve_hint
     return 0
   fi
   if approve_routes "$nid"; then
-    ok "✅ Exit-маршрут аппрувнут (узел id=${nid})."
+    ok "✅ Exit route approved (node id=${nid})."
     echo
-    ok "🎉 Exit node готов. На устройстве: Tailscale → Exit Node → выберите этот VPS."
-    info "   Проверка с устройства: https://ifconfig.me должен показать IP этого VPS."
+    ok "🎉 Exit node is ready. On the device: Tailscale → Exit Node → pick this VPS."
+    info "   Check from the device: https://ifconfig.me should show this VPS IP."
   else
     manual_approve_hint
   fi
@@ -225,12 +225,12 @@ cmd_on() {
 
 cmd_off() {
   need_root
-  info "→ Отключаю advertise exit node на хосте..."
+  info "→ Disabling advertise exit node on the host..."
   if "$TS" set --advertise-exit-node=false; then
-    ok "✅ Exit node выключен: хост больше не объявляет 0.0.0.0/0."
-    info "   Клиенты, выбравшие его, потеряют выход через VPS."
+    ok "✅ Exit node off: the host no longer advertises 0.0.0.0/0."
+    info "   Clients that picked it will lose internet via this VPS."
   else
-    err "❌ Не удалось отключить advertise."
+    err "❌ Failed to disable advertise."
     exit 1
   fi
 }
@@ -240,11 +240,11 @@ case "${1:-}" in
   off)    cmd_off ;;
   status) cmd_status ;;
   *)
-    info "Использование: $0 {on|off|status}"
+    info "Usage: $0 {on|off|status}"
     info ""
-    info "  on      — сделать VPS exit node'ом (advertise + forwarding + approve)"
-    info "  off     — перестать быть exit node'ом"
-    info "  status  — показать состояние"
+    info "  on      — make this VPS an exit node (advertise + forwarding + approve)"
+    info "  off     — stop being an exit node"
+    info "  status  — show state"
     exit 1
     ;;
 esac

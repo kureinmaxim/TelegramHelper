@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Точка входа для упрощённого Telegram бота с поддержкой VLESS-Reality.
+Entry point for the Telegram bot with VLESS-Reality support.
 
-TelegramHelper — это комплексное решение, объединяющее:
-1. Telegram-бот — управление API ключами, шифрованием и VLESS-Reality
-2. REST API — защищённый сервис для интеграции AI в сторонние приложения
+TelegramHelper combines:
+1. Telegram bot — API keys, encryption, and VLESS-Reality management
+2. REST API — protected service for integrating AI into third-party apps
 
-Запуск:
-    python main.py              # Бот + API
-    python main.py --api-only   # Только API
-    python main.py --bot-only   # Только бот
+Run:
+    python main.py              # Bot + API
+    python main.py --api-only   # API only
+    python main.py --bot-only   # Bot only
 """
 
 import asyncio
@@ -27,7 +27,7 @@ from email_manager import validate_smtp_env
 
 
 def load_environment():
-    """Загрузка переменных окружения из .env файла."""
+    """Load environment variables from the .env file."""
     env_path = Path('.env')
     if env_path.exists():
         load_dotenv(env_path)
@@ -37,7 +37,7 @@ def load_environment():
 
 
 class SensitiveDataFilter(logging.Filter):
-    """Маскирует чувствительные данные (в т.ч. токен Telegram бота) в логах."""
+    """Redact sensitive data (including the Telegram bot token) from logs."""
 
     _BOT_TOKEN_IN_URL_RE = re.compile(r"/bot(\d+:[A-Za-z0-9_-]+)/")
     _BOT_TOKEN_RE = re.compile(r"\b(\d+:[A-Za-z0-9_-]{20,})\b")
@@ -56,13 +56,13 @@ class SensitiveDataFilter(logging.Filter):
                 record.msg = sanitized
                 record.args = ()
         except Exception:
-            # Никогда не ломаем логирование из-за фильтра.
+            # Never break logging because of this filter.
             pass
         return True
 
 
 def _configure_logging() -> logging.Logger:
-    """Настройка логирования."""
+    """Configure logging."""
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     
@@ -70,13 +70,13 @@ def _configure_logging() -> logging.Logger:
         fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Логирование в stdout
+    # Log to stdout
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
     stream_handler.addFilter(SensitiveDataFilter())
     root_logger.addHandler(stream_handler)
     
-    # Попытка логирования в файл
+    # Try logging to a file
     try:
         file_handler = logging.FileHandler('bot.log')
         file_handler.setFormatter(formatter)
@@ -88,9 +88,9 @@ def _configure_logging() -> logging.Logger:
             file_error,
         )
 
-    # Снижаем шум в логах:
-    # - healthcheck access-логи FastAPI/Uvicorn
-    # - подробные INFO-логи httpx/httpcore (в т.ч. getUpdates)
+    # Reduce log noise:
+    # - FastAPI/Uvicorn healthcheck access logs
+    # - verbose httpx/httpcore INFO logs (including getUpdates)
     logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -102,7 +102,7 @@ logger = _configure_logging()
 
 
 def print_banner():
-    """Печать баннера при запуске."""
+    """Print the startup banner."""
     banner = """
 ╔══════════════════════════════════════════════════════════════╗
 ║                                                              ║
@@ -117,25 +117,25 @@ def print_banner():
 
 
 async def main():
-    """Главная функция для инициализации и запуска бота и API."""
+    """Initialize and start the bot and API."""
     try:
         print_banner()
         
-        # Загрузка переменных окружения
+        # Load environment variables
         load_environment()
 
         validate_smtp_env()
 
-        # Инициализация конфигурации
+        # Initialize configuration
         config = Config()
         
-        # Проверка токена бота
+        # Check bot token
         if not config.bot_token and not "--api-only" in sys.argv:
             logger.warning("⚠️  BOT_TOKEN is not set. Forcing API-only mode.")
-            # Если токена нет, принудительно включаем режим только API
+            # No token: force API-only mode
             sys.argv.append("--api-only")
         
-        # Парсинг аргументов командной строки
+        # Parse command-line arguments
         api_only = "--api-only" in sys.argv
         bot_only = "--bot-only" in sys.argv
         
@@ -143,22 +143,22 @@ async def main():
         bot_task = None
         
         if not api_only:
-            # Инициализация бота
+            # Initialize the bot
             bot = TelegramBotLite(config)
             
             if bot_only:
-                # Запуск только бота в блокирующем режиме
+                # Start the bot only, in blocking mode
                 logger.info("🤖 Starting Telegram bot (bot-only mode)...")
                 await bot.start_with_retry(blocking=True)
                 return
             else:
-                # Запуск бота в фоне: Telegram timeouts не должны валить API/healthcheck.
+                # Start the bot in the background: Telegram timeouts must not take down the API/healthcheck.
                 logger.info("🤖 Starting Telegram bot in background...")
                 bot_task = asyncio.create_task(bot.start_with_retry(blocking=False))
         else:
             logger.info("ℹ️ Running in API-only mode (Telegram bot disabled)")
         
-        # Запуск API сервера
+        # Start the API server
         import uvicorn
         from api import app
         

@@ -1,37 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-xui_manager.py — клиент 3x-ui (Sanaei) REST API + хранение кредов админа.
+xui_manager.py — 3x-ui (Sanaei) REST API client + admin credential storage.
 
-Назначение
-----------
-Бот опционально умеет **управлять отдельной панелью 3x-ui** на этом или
-соседнем VPS:
-  * проверять связь;
-  * перечислять inbound'ы (для выбора, в какой добавлять клиентов);
-  * создавать / удалять клиентов в выбранном inbound по email-имени.
+Purpose
+-------
+The bot can optionally **manage a separate 3x-ui panel** on this or
+a neighboring VPS:
+  * check connectivity;
+  * list inbounds (to choose which one to add clients to);
+  * create / delete clients in the selected inbound by email name.
 
-Это совершенно НЕ заменяет ботового Xray (`/usr/local/etc/xray` под
-`xray.service`). Это «вторая ветка» — для случая, когда админ хочет
-выдавать клиентам профили из 3x-ui (и наоборот, удалять их через бота),
-не теряя удобства Telegram-интерфейса.
+This does NOT replace the bot-managed Xray (`/usr/local/etc/xray` under
+`xray.service`). It is a "second branch" — for when an admin wants
+to issue client profiles from 3x-ui (and delete them via the bot),
+without losing the Telegram UI.
 
-Безопасность
------------
-* Файл конфига `xui_config.json` хранит пароль админа панели только в
-  зашифрованном виде (AES-256-GCM, существующий `SecureMessenger`).
-* Ключ шифрования берётся из `ENCRYPTION_KEY` (или, если он пуст, из
-  `API_SECRET_KEY`) — тех же переменных, которые уже используются для
-  шифрования других секретов в этом проекте (см. `encryption.py`,
+Security
+--------
+* The `xui_config.json` config file stores the panel admin password only in
+  encrypted form (AES-256-GCM, existing `SecureMessenger`).
+* The encryption key is taken from `ENCRYPTION_KEY` (or, if empty, from
+  `API_SECRET_KEY`) — the same variables already used to
+  encrypt other secrets in this project (see `encryption.py`,
   `app_keys.py`, `api.py`).
-* Если ключ не задан в окружении — бот не сохраняет пароль и явно
-  предупреждает админа в чате.
+* If the key is not set in the environment — the bot does not save the password
+  and warns the admin in chat.
 
-Совместимость с 3x-ui MHSanaei (v2.4+):
-  * `POST {base}/login`                            — форма (username/password)
-  * `POST {base}/panel/api/inbounds/list`          — список inbound'ов
-  * `POST {base}/panel/api/inbounds/get/<id>`      — один inbound (с клиентами)
-  * `POST {base}/panel/api/inbounds/addClient`     — добавить клиентов
-  * `POST {base}/panel/api/inbounds/<id>/delClient/<client_uuid>` — удалить
+Compatibility with 3x-ui MHSanaei (v2.4+):
+  * `POST {base}/login`                            — form (username/password)
+  * `POST {base}/panel/api/inbounds/list`          — list of inbounds
+  * `POST {base}/panel/api/inbounds/get/<id>`      — one inbound (with clients)
+  * `POST {base}/panel/api/inbounds/addClient`     — add clients
+  * `POST {base}/panel/api/inbounds/<id>/delClient/<client_uuid>` — delete
 """
 
 from __future__ import annotations
@@ -55,19 +55,19 @@ from encryption import EncryptionError, SecureMessenger
 logger = logging.getLogger(__name__)
 
 
-# === Пути и helper'ы ===
+# === Paths and helpers ===
 
 CONFIG_PATH = os.getenv("XUI_CONFIG_PATH", "xui_config.json")
 _DIR_FALLBACK_CONFIG_NAME = "config.json"
 
-# HTTPS-панели 3x-ui часто живут с self-signed сертификатом, поэтому по
-# умолчанию проверку TLS отключаем. Реальное значение хранится в конфиге
-# и задаётся админом в /xui_setup.
+# HTTPS 3x-ui panels often run with a self-signed certificate, so TLS
+# verification is off by default. The real value is stored in the config
+# and set by the admin in /xui_setup.
 _DEFAULT_TIMEOUT = 8.0
 
 
 def _encryption_key_from_env() -> Optional[str]:
-    """Ключ для шифрования пароля. Сначала ENCRYPTION_KEY, потом API_SECRET_KEY."""
+    """Key for encrypting the password. ENCRYPTION_KEY first, then API_SECRET_KEY."""
     for env_name in ("ENCRYPTION_KEY", "API_SECRET_KEY"):
         v = os.getenv(env_name)
         if v:
@@ -76,27 +76,27 @@ def _encryption_key_from_env() -> Optional[str]:
 
 
 def encryption_available() -> bool:
-    """True если из окружения можно собрать ключ для AES-GCM."""
+    """True if an AES-GCM key can be built from the environment."""
     return bool(_encryption_key_from_env())
 
 
 def _encrypt_password(plain: str) -> str:
-    """Зашифровать пароль и вернуть base64-строку для хранения в JSON."""
+    """Encrypt the password and return a base64 string for JSON storage."""
     key = _encryption_key_from_env()
     if not key:
         raise EncryptionError(
-            "ENCRYPTION_KEY/API_SECRET_KEY не заданы — пароль 3x-ui не сохранён"
+            "ENCRYPTION_KEY/API_SECRET_KEY are not set — 3x-ui password was not saved"
         )
     msg = SecureMessenger(key)
     return base64.b64encode(msg.encrypt(plain)).decode("ascii")
 
 
 def _decrypt_password(payload_b64: str) -> str:
-    """Расшифровать base64-строку обратно в пароль."""
+    """Decrypt a base64 string back into the password."""
     key = _encryption_key_from_env()
     if not key:
         raise EncryptionError(
-            "ENCRYPTION_KEY/API_SECRET_KEY не заданы — пароль 3x-ui не расшифровать"
+            "ENCRYPTION_KEY/API_SECRET_KEY are not set — cannot decrypt the 3x-ui password"
         )
     msg = SecureMessenger(key)
     raw = base64.b64decode(payload_b64.encode("ascii"))
@@ -124,21 +124,21 @@ def _empty_config() -> Dict[str, Any]:
         "password_enc_b64": "",
         "verify_tls": False,
         "default_inbound_id": 0,
-        # bot-managed inbound (клон из default_inbound_id, ставится при первом
-        # /provision'е). Используется только провизионинг-flow'ом, не
-        # подменяет default_inbound_id для прежней `/user`-логики.
+        # bot-managed inbound (clone of default_inbound_id, set on first
+        # /provision). Used only by the provisioning flow; does not
+        # replace default_inbound_id for the older `/user` logic.
         "bot_inbound_id": 0,
         "bot_inbound_remark": "VLESS",
         "bot_inbound_port": 0,
-        # Одноразовый флаг «inbound только что создан» — handler читает
-        # его в `consume_just_created_flag` и сбрасывает.
+        # One-shot flag "inbound just created" — the handler reads
+        # it in `consume_just_created_flag` and clears it.
         "bot_inbound_just_created": False,
         "configured_at": "",
     }
 
 
 def load_config() -> Dict[str, Any]:
-    """Загрузить xui_config.json. Если файла нет/битый — вернуть пустой шаблон."""
+    """Load xui_config.json. If the file is missing/corrupt — return an empty template."""
     path = _effective_config_path()
     if not os.path.exists(path):
         return _empty_config()
@@ -154,15 +154,15 @@ def load_config() -> Dict[str, Any]:
 
 
 def save_config(cfg: Dict[str, Any]) -> Tuple[bool, str]:
-    """Записать xui_config.json напрямую.
+    """Write xui_config.json directly.
 
-    Atomic rename (.tmp → real) не используется намеренно: Docker
-    bind-mount отдельного файла делает его mount-point'ом, и
-    `os.replace(tmp, real)` падает с `EBUSY: Device or resource busy`
-    (нельзя rename поверх mount). Прямой `open("w")` переписывает
-    содержимое того же inode и работает. Конфиг маленький, окно
-    частичной записи минимальное; такой же подход используется в
-    `naiveproxy_manager._save_config` и других *_manager.py.
+    Atomic rename (.tmp → real) is intentionally not used: a Docker
+    bind-mount of a single file makes it a mount-point, and
+    `os.replace(tmp, real)` fails with `EBUSY: Device or resource busy`
+    (cannot rename over a mount). A direct `open("w")` rewrites
+    the same inode and works. The config is small, so the partial-write
+    window is tiny; the same approach is used in
+    `naiveproxy_manager._save_config` and other *_manager.py files.
     """
     path = _effective_config_path()
     try:
@@ -177,19 +177,19 @@ def save_config(cfg: Dict[str, Any]) -> Tuple[bool, str]:
 
 
 def is_configured() -> bool:
-    """True, если есть base_url + username + зашифрованный пароль."""
+    """True if base_url + username + encrypted password are present."""
     cfg = load_config()
     return all((cfg.get("base_url"), cfg.get("username"), cfg.get("password_enc_b64")))
 
 
 def is_enabled() -> bool:
-    """True, если configured() и пользователь не выключал интеграцию."""
+    """True if configured() and the user has not turned the integration off."""
     cfg = load_config()
     return bool(cfg.get("enabled")) and is_configured()
 
 
 def status_summary() -> Dict[str, Any]:
-    """Безопасный (без пароля) снимок состояния — для /xui_status и /diag."""
+    """Safe (no password) state snapshot — for /xui_status and /diag."""
     cfg = load_config()
     return {
         "enabled": bool(cfg.get("enabled")),
@@ -210,44 +210,44 @@ def _mask_username(name: str) -> str:
     return name[0] + "·" * (len(name) - 2) + name[-1]
 
 
-# === Валидация ввода ===
+# === Input validation ===
 
 _BASE_URL_RE = re.compile(r"^https?://[^\s/$.?#][^\s]*$", re.IGNORECASE)
 
 
 def normalize_base_url(raw: str) -> Tuple[bool, str, str]:
     """
-    Привести URL к каноническому виду без хвостового слеша.
+    Canonicalize the URL with no trailing slash.
 
-    На входе ожидаем что-то вроде:
+    Input looks like:
         `https://195.238.122.137:35421/mxmurl/`
-    На выходе:
+    Output:
         `https://195.238.122.137:35421/mxmurl`
 
-    Возвращает (ok, normalized_url, message).
+    Returns (ok, normalized_url, message).
     """
     if not raw:
-        return False, "", "URL пуст"
+        return False, "", "URL is empty"
     raw = raw.strip()
     if not _BASE_URL_RE.match(raw):
-        return False, "", "URL должен быть вида https://host:port/web_base_path"
+        return False, "", "URL must look like https://host:port/web_base_path"
     parsed = urlsplit(raw)
     if not parsed.scheme or not parsed.netloc:
-        return False, "", "URL должен содержать схему и хост"
+        return False, "", "URL must contain a scheme and host"
     path = parsed.path.rstrip("/")
     out = f"{parsed.scheme}://{parsed.netloc}{path}"
     return True, out, "ok"
 
 
-# === Клиент 3x-ui ===
+# === 3x-ui client ===
 
 @dataclass
 class XUIClient:
     """
-    Тонкий обёртка над requests.Session.
+    Thin wrapper around requests.Session.
 
-    Жизненный цикл: создать → `login()` → серия методов → объект больше не
-    нужен. Cookie панели хранится только в session, никуда не пишется.
+    Lifecycle: create → `login()` → a series of methods → the object is no longer
+    needed. The panel cookie lives only in the session and is never written to disk.
     """
     base_url: str
     username: str
@@ -259,8 +259,8 @@ class XUIClient:
 
     def __post_init__(self) -> None:
         self._session.verify = self.verify_tls
-        # При self-signed cert urllib3 пишет шумный warning — приглушим его,
-        # потому что это сознательный выбор админа в /xui_setup.
+        # With a self-signed cert urllib3 logs a noisy warning — mute it,
+        # because this is a deliberate admin choice in /xui_setup.
         if not self.verify_tls:
             try:
                 from urllib3.exceptions import InsecureRequestWarning  # type: ignore
@@ -285,8 +285,8 @@ class XUIClient:
         data=None,
         json_body=None,
     ) -> Dict[str, Any]:
-        # В 3x-ui read-эндпоинты (`/panel/api/inbounds/list`, `.../get/<id>`)
-        # принимают только GET и отвечают 404 на POST. Запись (login,
+        # In 3x-ui, read endpoints (`/panel/api/inbounds/list`, `.../get/<id>`)
+        # accept only GET and return 404 on POST. Writes (login,
         # addClient, delClient) — POST.
         try:
             r = self._session.request(
@@ -300,7 +300,7 @@ class XUIClient:
         except requests.RequestException as exc:
             logger.warning("xui_manager: HTTP error %s %s: %s", method, path, exc)
             return {"success": False, "msg": f"network: {exc}"}
-        # 3x-ui всегда отвечает JSON; защищаемся от не-JSON.
+        # 3x-ui always replies with JSON; guard against non-JSON.
         try:
             payload = r.json() if r.content else {}
         except ValueError:
@@ -320,7 +320,7 @@ class XUIClient:
     # -- API --
 
     def _login_once(self) -> Tuple[bool, str]:
-        # 3x-ui принимает форму application/x-www-form-urlencoded.
+        # 3x-ui accepts application/x-www-form-urlencoded.
         payload = self._post(
             "/login",
             data={"username": self.username, "password": self.password},
@@ -331,12 +331,12 @@ class XUIClient:
         return False, str(payload.get("msg") or "login failed")
 
     def login(self) -> Tuple[bool, str]:
-        """Логин в панель. При недоступном mesh-URL — авто-fallback на loopback.
+        """Log in to the panel. If the mesh URL is unreachable — auto-fallback to loopback.
 
-        Если ``base_url`` указывает на Tailscale/Headscale CGNAT (100.64/10) и
-        login падает по сети (Tailscale stopped / hairpin), пробуем тот же
-        порт/path на ``127.0.0.1`` и при успехе переписываем ``xui_config.json``.
-        Это покрывает типичный кейс локальной 3x-ui на том же VPS.
+        If ``base_url`` points at Tailscale/Headscale CGNAT (100.64/10) and
+        login fails on the network (Tailscale stopped / hairpin), try the same
+        port/path on ``127.0.0.1`` and rewrite ``xui_config.json`` on success.
+        This covers the typical local 3x-ui on the same VPS.
         """
         ok, msg = self._login_once()
         if ok:
@@ -362,13 +362,13 @@ class XUIClient:
             _persist_base_url_fallback(old, alt)
             return True, f"ok (auto-fallback {old} → {alt})"
 
-        # Оба пути не сработали — вернём исходный URL для понятной ошибки.
+        # Both paths failed — restore the original URL for a clear error.
         self.base_url = old
         self._logged_in = False
         self._session = requests.Session()
         self.__post_init__()
         return False, (
-            f"{msg}\nАвто-fallback на {alt} тоже не удался: {msg2}"
+            f"{msg}\nAuto-fallback to {alt} also failed: {msg2}"
         )
 
     def list_inbounds(self) -> Tuple[bool, str, List[Dict[str, Any]]]:
@@ -394,7 +394,7 @@ class XUIClient:
         return True, "ok", obj if isinstance(obj, dict) else {}
 
     def list_clients(self, inbound_id: int) -> Tuple[bool, str, List[Dict[str, Any]]]:
-        """Вернуть распарсенный список clients из inbound.settings."""
+        """Return the parsed clients list from inbound.settings."""
         ok, msg, inbound = self.get_inbound(inbound_id)
         if not ok:
             return False, msg, []
@@ -407,7 +407,7 @@ class XUIClient:
             return False, f"settings parse: {exc}", []
 
     def find_client(self, inbound_id: int, email: str) -> Tuple[bool, Dict[str, Any]]:
-        """Найти клиента по email; возвращает (found, client_dict)."""
+        """Find a client by email; returns (found, client_dict)."""
         ok, _msg, clients = self.list_clients(inbound_id)
         if not ok:
             return False, {}
@@ -424,15 +424,15 @@ class XUIClient:
         flow: str = "xtls-rprx-vision",
     ) -> Tuple[bool, str, Dict[str, Any]]:
         """
-        Создать VLESS-клиента в указанном inbound.
+        Create a VLESS client in the given inbound.
 
-        Если клиент с таким `email` уже есть — вернёт `(False, "exists", existing)`.
+        If a client with this `email` already exists — returns `(False, "exists", existing)`.
         """
         if not self._logged_in:
             ok, msg = self.login()
             if not ok:
                 return False, msg, {}
-        # Проверим существование, чтобы не плодить дубликаты при повторном клике.
+        # Check existence so a double-click does not spawn duplicates.
         exists, current = self.find_client(inbound_id, email)
         if exists:
             return False, "exists", current
@@ -447,7 +447,7 @@ class XUIClient:
         return False, str(payload.get("msg") or "addClient failed"), {}
 
     def del_client(self, inbound_id: int, client_uuid: str) -> Tuple[bool, str]:
-        """Удалить клиента по UUID. 3x-ui требует именно UUID, не email."""
+        """Delete a client by UUID. 3x-ui requires UUID, not email."""
         if not self._logged_in:
             ok, msg = self.login()
             if not ok:
@@ -460,11 +460,11 @@ class XUIClient:
         return False, str(payload.get("msg") or "delClient failed")
 
     def add_inbound(self, payload: Dict[str, Any]) -> Tuple[bool, str, int]:
-        """`POST /panel/api/inbounds/add` — создать новый inbound.
+        """`POST /panel/api/inbounds/add` — create a new inbound.
 
-        3x-ui принимает form-encoded (как UI), где `settings`/
-        `streamSettings`/`sniffing`/`allocate` — JSON-strings.
-        Возвращает (ok, msg, new_id).
+        3x-ui accepts form-encoded (like the UI), where `settings`/
+        `streamSettings`/`sniffing`/`allocate` are JSON-strings.
+        Returns (ok, msg, new_id).
         """
         if not self._logged_in:
             ok, msg = self.login()
@@ -483,10 +483,10 @@ class XUIClient:
         return True, "created", new_id
 
 
-# === Helpers для VLESS-Reality client object ===
+# === Helpers for the VLESS-Reality client object ===
 
 def _random_sub_id() -> str:
-    """16 hex-символов как в 3x-ui по умолчанию."""
+    """16 hex characters, as 3x-ui uses by default."""
     return secrets.token_hex(8)
 
 
@@ -509,11 +509,11 @@ def _new_vless_reality_client(
     }
 
 
-# === Высокоуровневые функции для бота ===
+# === High-level helpers for the bot ===
 
 def panel_host(base_url: str) -> str:
-    """Извлечь host (без порта/пути) из base_url панели — на случай, когда
-    у inbound пустой `listen`."""
+    """Extract the host (no port/path) from the panel base_url — for when
+    the inbound has an empty `listen`."""
     try:
         return urlsplit(base_url).hostname or ""
     except Exception:
@@ -521,10 +521,10 @@ def panel_host(base_url: str) -> str:
 
 
 def url_host_is_mesh_ip(url: str) -> bool:
-    """True если хост URL — IP из CGNAT-диапазона
-    (Tailscale/Headscale: 100.64.0.0/10) или Tailscale-ULA
-    (fd7a:115c:a1e0::/48). Используется для подсказок про
-    `network_mode: host` в `/xui_setup`."""
+    """True if the URL host is a CGNAT-range IP
+    (Tailscale/Headscale: 100.64.0.0/10) or Tailscale ULA
+    (fd7a:115c:a1e0::/48). Used for `network_mode: host`
+    hints in `/xui_setup`."""
     import ipaddress
     try:
         host = urlsplit(url).hostname or ""
@@ -545,11 +545,11 @@ def url_host_is_mesh_ip(url: str) -> bool:
 
 
 def to_loopback_base_url(base_url: str) -> Optional[str]:
-    """Переписать mesh-URL панели на loopback того же порта/path.
+    """Rewrite a panel mesh URL to loopback on the same port/path.
 
-    Локальная 3x-ui на том же VPS часто задана как ``https://100.64.x.x:8081/...``,
-    но когда Tailscale/Headscale клиент остановлен, mesh-IP недоступен, а
-    ``127.0.0.1`` продолжает отвечать. Возвращает ``None``, если хост не mesh.
+    Local 3x-ui on the same VPS is often set as ``https://100.64.x.x:8081/...``,
+    but when the Tailscale/Headscale client is stopped the mesh IP is unreachable
+    while ``127.0.0.1`` still answers. Returns ``None`` if the host is not mesh.
     """
     if not base_url or not url_host_is_mesh_ip(base_url):
         return None
@@ -572,7 +572,7 @@ def to_loopback_base_url(base_url: str) -> Optional[str]:
 
 
 def _is_transient_network_error(msg: str) -> bool:
-    """Сетевые ошибки login, при которых имеет смысл loopback-fallback."""
+    """Login network errors where a loopback fallback makes sense."""
     m = (msg or "").lower()
     needles = (
         "network:",
@@ -591,7 +591,7 @@ def _is_transient_network_error(msg: str) -> bool:
 
 
 def _persist_base_url_fallback(old_url: str, new_url: str) -> None:
-    """Сохранить loopback URL в xui_config.json, если там ещё старый mesh."""
+    """Save the loopback URL in xui_config.json if the old mesh is still there."""
     try:
         cfg = load_config()
         if cfg.get("base_url") != old_url:
@@ -619,11 +619,10 @@ def build_vless_reality_link(
     fallback_host: str = "",
 ) -> Tuple[bool, str, str]:
     """
-    Построить `vless://...` URI из объекта inbound и client панели 3x-ui.
+    Build a `vless://...` URI from a 3x-ui panel inbound and client object.
 
-    Возвращает (ok, message, link). Поддерживается только VLESS-Reality
-    (`security=reality`), потому что только её бот сейчас умеет использовать
-    с своей стороны.
+    Returns (ok, message, link). Only VLESS-Reality (`security=reality`) is
+    supported, because that is the only mode the bot currently uses on its side.
     """
     try:
         protocol = (inbound.get("protocol") or "").lower()
@@ -632,21 +631,21 @@ def build_vless_reality_link(
 
         port = int(inbound.get("port") or 0)
         if not port:
-            return False, "у inbound нет порта", ""
+            return False, "inbound has no port", ""
 
         listen = (inbound.get("listen") or "").strip()
         host = listen or fallback_host
         if host in ("", "0.0.0.0", "::"):
             host = fallback_host
         if not host:
-            return False, "не удалось определить host для ссылки", ""
+            return False, "could not determine host for the link", ""
 
         client_uuid = str(client.get("id") or "").strip()
         if not client_uuid:
-            return False, "у клиента нет id", ""
+            return False, "client has no id", ""
         flow = (client.get("flow") or "").strip() or "xtls-rprx-vision"
 
-        # streamSettings приходит как JSON-строка
+        # streamSettings arrives as a JSON string
         ss_raw = inbound.get("streamSettings") or "{}"
         if isinstance(ss_raw, str):
             ss = json.loads(ss_raw)
@@ -657,9 +656,9 @@ def build_vless_reality_link(
         network = (ss.get("network") or "tcp").lower()
 
         if security != "reality":
-            # Бот сейчас работает только с Reality. Для других вариантов
-            # вернём ошибку — пусть оператор копирует ссылку из самой панели.
-            return False, f"inbound security={security or 'none'} (нужен reality)", ""
+            # The bot currently only works with Reality. For other variants
+            # return an error — the operator can copy the link from the panel itself.
+            return False, f"inbound security={security or 'none'} (reality required)", ""
 
         rs = ss.get("realitySettings") or {}
         rs_settings = rs.get("settings") or {}
@@ -675,9 +674,9 @@ def build_vless_reality_link(
         sid = (short_ids[0] if short_ids else "").strip()
 
         if not pbk:
-            return False, "у inbound нет realitySettings.publicKey", ""
+            return False, "inbound has no realitySettings.publicKey", ""
         if not sni:
-            return False, "у inbound пустой serverNames", ""
+            return False, "inbound has empty serverNames", ""
 
         from urllib.parse import quote
 
@@ -694,8 +693,8 @@ def build_vless_reality_link(
             params.append(("spx", spx))
         if flow:
             params.append(("flow", flow))
-        # Параметры строим вручную, потому что в spx часто `/` — её не
-        # надо percent-кодировать в путь, но в query безопасней закодировать.
+        # Build params by hand because spx often has `/` — it must not be
+        # percent-encoded as a path, but encoding in the query is safer.
         query = "&".join(f"{k}={quote(str(v), safe='')}" for k, v in params)
 
         remark = client.get("email") or inbound.get("remark") or "vless-reality"
@@ -703,16 +702,16 @@ def build_vless_reality_link(
         return True, "ok", link
     except (ValueError, TypeError, KeyError) as exc:
         logger.warning("xui_manager: build_vless_reality_link failed: %s", exc)
-        return False, f"ошибка сборки ссылки: {exc}", ""
+        return False, f"link build error: {exc}", ""
 
 
 def _clone_inbound_payload(
     source: Dict[str, Any], new_remark: str, new_port: int
 ) -> Dict[str, Any]:
-    """Подготовить payload для `add_inbound` клонированием существующего.
+    """Prepare an `add_inbound` payload by cloning an existing inbound.
 
-    Сохраняем streamSettings (Reality keys), sniffing, allocate, protocol,
-    меняем только: remark, port, settings.clients=[], обнуляем счётчики.
+    Keep streamSettings (Reality keys), sniffing, allocate, protocol;
+    change only: remark, port, settings.clients=[], and reset counters.
     """
     payload: Dict[str, Any] = {}
     for k, v in source.items():
@@ -722,7 +721,7 @@ def _clone_inbound_payload(
     payload["remark"] = new_remark
     payload["port"] = int(new_port)
     payload["enable"] = True
-    # `settings` приходит JSON-строкой; чистим список clients
+    # `settings` arrives as a JSON string; clear the clients list
     settings_raw = source.get("settings") or "{}"
     try:
         if isinstance(settings_raw, str):
@@ -741,40 +740,40 @@ def _clone_inbound_payload(
 def provision_named_client(
     client_name: str, telegram_id: int = 0
 ) -> Tuple[bool, str, str]:
-    """Создаёт canonical-клиента в `default_inbound_id` (manual inbound,
-    обычно на :443). Reality-стелс полный — не плодит отдельный
-    bot-managed inbound на нестандартном порту.
+    """Create a canonical client in `default_inbound_id` (manual inbound,
+    usually on :443). Full Reality stealth — does not spawn a separate
+    bot-managed inbound on a non-standard port.
 
-    Изоляция от ручных клиентов админа — по имени: бот трогает
-    только тех клиентов, чей email совпадает с canonical-паттерном
-    `<Prefix>_ID<first2>_<last2>`. Манипуляции `IPhone13`/`MacBook_Air`/
-    и прочих ручных клиентов не происходит.
+    Isolation from the admin's manual clients is by name: the bot only
+    touches clients whose email matches the canonical pattern
+    `<Prefix>_ID<first2>_<last2>`. It does not manipulate `IPhone13` /
+    `MacBook_Air` / other manual clients.
 
-    Идемпотентно: если клиент с таким именем уже есть — отдаёт
-    существующий + строит для него URI.
+    Idempotent: if a client with this name already exists — return the
+    existing one and build a URI for it.
 
-    Backward-compat: при наличии legacy `bot_inbound_id` (от старого
-    клон-flow) попытка снести там одноимённого клиента — чтобы не
-    плодились дубли при миграции.
+    Backward-compat: if a legacy `bot_inbound_id` (from the old clone
+    flow) is present, try to remove a same-named client there so
+    duplicates are not left after migration.
 
-    Возвращает (ok, message, vless_uri).
+    Returns (ok, message, vless_uri).
     """
     cfg = load_config()
     if not is_configured():
-        return False, "3x-ui интеграция не настроена (см. /xui_setup)", ""
+        return False, "3x-ui integration is not configured (see /xui_setup)", ""
 
     default_id = int(cfg.get("default_inbound_id") or 0)
     if not default_id:
         return False, (
-            "default_inbound_id не задан в /xui_setup — "
-            "не знаю, в какой inbound писать"
+            "default_inbound_id is not set in /xui_setup — "
+            "I do not know which inbound to write to"
         ), ""
 
     client = make_client_for_config(cfg)
     if client is None:
         return False, (
-            "не удалось восстановить XUIClient "
-            "(пароль не расшифровывается? проверьте ENCRYPTION_KEY)"
+            "failed to restore XUIClient "
+            "(password not decrypting? check ENCRYPTION_KEY)"
         ), ""
 
     ok, msg = client.login()
@@ -784,7 +783,7 @@ def provision_named_client(
     ok2, _msg2, inbound_obj = client.get_inbound(default_id)
     if not ok2 or not inbound_obj:
         return False, (
-            f"default inbound #{default_id} недоступен в панели"
+            f"default inbound #{default_id} is unavailable in the panel"
         ), ""
 
     ok, msg, client_obj = client.add_vless_reality_client(
@@ -794,14 +793,13 @@ def provision_named_client(
     if existed:
         ok = True
 
-    # 3x-ui применяет проверку email-уникальности **глобально по
-    # панели**. После Variant A (клон-inbound) и старых тестов в
-    # каком-то постороннем inbound мог остаться клиент с тем же
-    # canonical-именем — `add_vless_reality_client` тогда вернёт
-    # "Duplicate email". Сделаем активный sweep: пройдём по всем
-    # inbound'ам в панели, кроме default'а, удалим все находки с этим
-    # именем, и повторим add. Это и автоматическая миграция от Variant A,
-    # и self-heal от любых других дубликатов.
+    # 3x-ui applies email uniqueness **globally across the panel**.
+    # After Variant A (clone inbound) and older tests, a client with the
+    # same canonical name may still sit in some other inbound —
+    # `add_vless_reality_client` then returns "Duplicate email". Do an
+    # active sweep: walk every inbound except the default, delete all
+    # matches with this name, and retry add. This is both automatic
+    # migration from Variant A and self-heal from any other duplicates.
     if (not ok) and "duplicate email" in str(msg).lower():
         cleared_anywhere = False
         try:
@@ -844,7 +842,7 @@ def provision_named_client(
             logger.warning("xui_manager: dup-email sweep failed: %s", exc)
 
         if cleared_anywhere:
-            # Retry add — теперь email свободен.
+            # Retry add — the email is now free.
             ok, msg, client_obj = client.add_vless_reality_client(
                 default_id, email=client_name
             )
@@ -855,7 +853,7 @@ def provision_named_client(
     if not ok:
         return False, f"addClient: {msg}", ""
 
-    # Перечитаем inbound, чтобы Reality-поля были на актуальном.
+    # Re-read the inbound so Reality fields are up to date.
     ok2, _msg2, fresh = client.get_inbound(default_id)
     if ok2 and fresh:
         inbound_obj = fresh
@@ -870,8 +868,8 @@ def provision_named_client(
 
 
 def get_bot_inbound_port() -> Optional[int]:
-    """Cached порт bot-managed VLESS inbound'а — для firewall-подсказок
-    в handler'ах. Без обращения к панели."""
+    """Cached port of the bot-managed VLESS inbound — for firewall hints
+    in handlers. Does not talk to the panel."""
     cfg = load_config()
     try:
         p = int(cfg.get("bot_inbound_port") or 0)
@@ -881,9 +879,9 @@ def get_bot_inbound_port() -> Optional[int]:
 
 
 def consume_just_created_flag() -> bool:
-    """One-time flag «bot inbound только что создан». Возвращает True ровно
-    один раз после создания, потом всегда False — чтобы admin получил
-    подсказку про firewall именно в момент первого provision'а."""
+    """One-time flag "bot inbound just created". Returns True exactly
+    once after creation, then always False — so the admin gets the
+    firewall hint at the moment of the first provision."""
     cfg = load_config()
     flag = bool(cfg.get("bot_inbound_just_created"))
     if flag:
@@ -893,13 +891,13 @@ def consume_just_created_flag() -> bool:
 
 
 def find_named_client_uri(client_name: str) -> Tuple[bool, str, str]:
-    """Read-only: найти клиента по email в default (и legacy bot) inbound.
+    """Read-only: find a client by email in the default (and legacy bot) inbound.
 
-    Раньше искали только default inbound — из-за этого `/profiles` писал
-    «нет», хотя рабочий клиент жил в `bot_inbound_id` или под legacy-именем
-    (его передают отдельным вызовом). Никаких изменений в панели не делает.
+    Previously only the default inbound was searched, so `/profiles` said
+    "none" even though a working client lived in `bot_inbound_id` or under a
+    legacy name (passed in a separate call). Makes no changes in the panel.
 
-    Возвращает (exists, message, uri).
+    Returns (exists, message, uri).
     """
     return find_named_client_uri_any([client_name])[:3]
 
@@ -907,12 +905,12 @@ def find_named_client_uri(client_name: str) -> Tuple[bool, str, str]:
 def find_named_client_uri_any(
     client_names: List[str],
 ) -> Tuple[bool, str, str, str]:
-    """Как ``find_named_client_uri``, но перебор имён и inbound'ов.
+    """Like ``find_named_client_uri``, but walks names and inbounds.
 
-    Возвращает (exists, message, uri, matched_name).
+    Returns (exists, message, uri, matched_name).
     """
     names = [str(n).strip() for n in (client_names or []) if str(n).strip()]
-    # уникальные, порядок сохраняем
+    # unique, keep order
     seen: set[str] = set()
     ordered: List[str] = []
     for n in names:
@@ -959,13 +957,13 @@ def find_named_client_uri_any(
 
 
 def remove_named_client(client_name: str) -> Tuple[bool, str]:
-    """Удалить canonical-клиента по имени из default inbound (где живут
-    и manual-клиенты админа). Бот трогает только клиента с точно
-    указанным именем — manual клиенты не задеваются.
+    """Remove the canonical client by name from the default inbound (where
+    the admin's manual clients also live). The bot only touches the client
+    with the exact given name — manual clients are left alone.
 
-    Идемпотентно: если клиента нет — `(True, "not present")`.
-    Plus migration: если есть legacy `bot_inbound_id` от старой схемы и
-    клиент с таким именем там — снести и его, чтобы не было дубликатов.
+    Idempotent: if the client is missing — `(True, "not present")`.
+    Plus migration: if a legacy `bot_inbound_id` from the old scheme exists
+    and a same-named client is there — delete that too so duplicates are gone.
     """
     cfg = load_config()
     if not is_configured():
@@ -982,7 +980,7 @@ def remove_named_client(client_name: str) -> Tuple[bool, str]:
 
     removed_anywhere = False
 
-    # 1. Default inbound — основной источник истины.
+    # 1. Default inbound — the source of truth.
     found, client_obj = xclient.find_client(default_id, client_name)
     if found:
         uuid_val = str(client_obj.get("id") or "").strip()
@@ -993,7 +991,7 @@ def remove_named_client(client_name: str) -> Tuple[bool, str]:
             else:
                 return False, msg_d
 
-    # 2. Legacy bot_inbound (старая схема с клон-inbound на port+1).
+    # 2. Legacy bot_inbound (old scheme with a clone inbound on port+1).
     legacy_bot_id = int(cfg.get("bot_inbound_id") or 0)
     if legacy_bot_id and legacy_bot_id != default_id:
         try:
@@ -1013,8 +1011,8 @@ def remove_named_client(client_name: str) -> Tuple[bool, str]:
 
 def make_client_for_config(cfg: Dict[str, Any]) -> Optional[XUIClient]:
     """
-    Восстановить XUIClient из сохранённого конфига. Возвращает None, если
-    конфиг неполный или пароль не удалось расшифровать.
+    Restore an XUIClient from the saved config. Returns None if
+    the config is incomplete or the password could not be decrypted.
     """
     if not cfg or not all((cfg.get("base_url"), cfg.get("username"), cfg.get("password_enc_b64"))):
         return None
@@ -1040,18 +1038,18 @@ def save_credentials(
     default_inbound_id: int = 0,
 ) -> Tuple[bool, str]:
     """
-    Сохранить креденшелы 3x-ui (зашифровав пароль). НЕ выполняет логин —
-    это делает caller. Возвращает (ok, message).
+    Save 3x-ui credentials (encrypting the password). Does NOT log in —
+    the caller does that. Returns (ok, message).
     """
     if not encryption_available():
         return False, (
-            "В .env не задан ENCRYPTION_KEY (или API_SECRET_KEY). "
-            "Без него пароль панели не получится зашифровать."
+            "ENCRYPTION_KEY (or API_SECRET_KEY) is not set in .env. "
+            "Without it the panel password cannot be encrypted."
         )
     try:
         enc = _encrypt_password(password)
     except EncryptionError as exc:
-        return False, f"шифрование пароля: {exc}"
+        return False, f"password encryption: {exc}"
     cfg = load_config()
     cfg.update(
         {
@@ -1070,7 +1068,7 @@ def save_credentials(
 def set_default_inbound(inbound_id: int) -> Tuple[bool, str]:
     cfg = load_config()
     if not is_configured():
-        return False, "интеграция 3x-ui не настроена (см. /xui_setup)"
+        return False, "3x-ui integration is not configured (see /xui_setup)"
     cfg["default_inbound_id"] = int(inbound_id)
     return save_config(cfg)
 
@@ -1078,24 +1076,24 @@ def set_default_inbound(inbound_id: int) -> Tuple[bool, str]:
 def set_enabled(flag: bool) -> Tuple[bool, str]:
     cfg = load_config()
     if not is_configured() and flag:
-        return False, "сначала настройте /xui_setup"
+        return False, "configure /xui_setup first"
     cfg["enabled"] = bool(flag)
     return save_config(cfg)
 
 
 def clear_credentials() -> Tuple[bool, str]:
-    """Полностью обнулить xui_config.json (без удаления файла)."""
+    """Fully reset xui_config.json (without deleting the file)."""
     return save_config(_empty_config())
 
 
 def make_client_or_error() -> Tuple[Optional[XUIClient], str]:
-    """Удобный shortcut для команд: либо клиент, либо человеко-читаемая ошибка."""
+    """Handy shortcut for commands: either a client, or a human-readable error."""
     cfg = load_config()
     if not is_configured():
-        return None, "интеграция 3x-ui не настроена. Запустите /xui_setup."
+        return None, "3x-ui integration is not configured. Run /xui_setup."
     if not cfg.get("enabled"):
-        return None, "интеграция 3x-ui выключена. Включите её через /xui_enable."
+        return None, "3x-ui integration is disabled. Enable it via /xui_enable."
     client = make_client_for_config(cfg)
     if client is None:
-        return None, "не удалось расшифровать креды 3x-ui — проверьте ENCRYPTION_KEY."
+        return None, "failed to decrypt 3x-ui credentials — check ENCRYPTION_KEY."
     return client, ""

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ============================================================================
-# vps_setup.sh — bootstrap для интерактивного установщика (Python + rich).
-# Доставляет rich/prompt_toolkit на чистом VPS и запускает scripts/vps_setup.py.
-#   bash scripts/vps_setup.sh            # обычный режим
-#   bash scripts/vps_setup.sh --dry-run  # показать план без выполнения
+# vps_setup.sh — bootstrap for the interactive installer (Python + rich).
+# Installs rich/prompt_toolkit on a clean VPS and runs scripts/vps_setup.py.
+#   bash scripts/vps_setup.sh            # normal mode
+#   bash scripts/vps_setup.sh --dry-run  # show the plan without running it
 # ============================================================================
 set -euo pipefail
 
@@ -12,20 +12,20 @@ SUDO=""
 [[ "$(id -u)" -ne 0 ]] && SUDO="sudo"
 
 if ! command -v python3 >/dev/null 2>&1; then
-    echo "Ставлю python3..."
+    echo "Installing python3..."
     $SUDO apt-get update -y && $SUDO apt-get install -y python3
 fi
 
-# rich + prompt_toolkit: сперва системные пакеты Debian, иначе pip (PEP668).
+# rich + prompt_toolkit: Debian packages first, otherwise pip (PEP 668).
 if ! python3 -c "import rich, prompt_toolkit" >/dev/null 2>&1; then
-    echo "Доставляю rich / prompt_toolkit..."
+    echo "Installing rich / prompt_toolkit..."
     $SUDO apt-get update -y >/dev/null 2>&1 || true
     $SUDO apt-get install -y python3-rich python3-prompt-toolkit 2>/dev/null \
         || python3 -m pip install --break-system-packages rich prompt_toolkit
 fi
 
-# UTF-8 для stdin/stdout: на минимальном Debian с C-локалью (или при вводе
-# кириллицы) input() падает UnicodeDecodeError. PEP 540 + C.UTF-8 как fallback.
+# UTF-8 for stdin/stdout: on a minimal Debian with a C locale (or Cyrillic
+# input) input() raises UnicodeDecodeError. PEP 540 + C.UTF-8 as fallback.
 export PYTHONUTF8=1
 export PYTHONIOENCODING=utf-8
 export LANG="${LANG:-C.UTF-8}"

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""vps_setup.py — интерактивный установщик компонентов TelegramHelper (Python + rich).
+"""vps_setup.py — interactive TelegramHelper component installer (Python + rich).
 
-Запускать через `bash scripts/vps_setup.sh` (он доставит rich/prompt_toolkit на
-чистом VPS и вызовет этот скрипт). Оркестрирует существующие scripts/install_*.sh.
+Run via `bash scripts/vps_setup.sh` (it installs rich/prompt_toolkit on a
+clean VPS and invokes this script). Orchestrates existing scripts/install_*.sh.
 
-Базовый набор (ставится ВСЕГДА): Docker, Hysteria2.
-Опционально: API (Telegram-бот), VLESS-Reality, MTProto, NaiveProxy,
-Headscale(+Headplane), HA-сервер + Reticulum (заглушки).
+Base set (ALWAYS installed): Docker, Hysteria2.
+Optional: API (Telegram bot), VLESS-Reality, MTProto, NaiveProxy,
+Headscale(+Headplane), HA server + Reticulum (stubs).
 
-  bash scripts/vps_setup.sh            # обычный режим
-  bash scripts/vps_setup.sh --dry-run  # показать план без выполнения
+  bash scripts/vps_setup.sh            # normal mode
+  bash scripts/vps_setup.sh --dry-run  # show the plan without running it
 """
 
 import argparse
@@ -35,7 +35,7 @@ results = {}  # title -> "ok" | "FAILED" | "dry-run"
 
 
 def sh(cmd, shell=False):
-    """Выполнить команду (list или str). Возвращает True при успехе. Учитывает --dry-run."""
+    """Run a command (list or str). Returns True on success. Honours --dry-run."""
     pretty = cmd if isinstance(cmd, str) else " ".join(cmd)
     if DRY:
         console.print(f"  [dim][dry-run] {pretty}[/dim]")
@@ -50,7 +50,7 @@ def unit_active(unit):
 
 
 def wait_active(unit, tries=6, delay=1.0):
-    """Подождать, пока сервис станет active (бот поллит — стартует не мгновенно)."""
+    """Wait until the service is active (the bot polls — it does not start instantly)."""
     for _ in range(tries):
         if unit_active(unit):
             return True
@@ -64,9 +64,9 @@ def step(title, cmd, *, shell=False, check_unit=None, check_fn=None):
     if DRY:
         results[title] = "dry-run"
         return True
-    # Истина успеха — не код выхода бутстрапа (он может ругаться из-за
-    # предупреждения о плейсхолдерах .env), а реальная живость сервиса:
-    # check_fn — произвольная проверка (напр. Docker-контейнер), check_unit — systemd.
+    # Success is not the bootstrap exit code (it may complain about .env
+    # placeholders) but whether the service is actually alive:
+    # check_fn — arbitrary check (e.g. Docker container), check_unit — systemd.
     if check_fn is not None:
         ok = check_fn()
     elif check_unit:
@@ -77,13 +77,13 @@ def step(title, cmd, *, shell=False, check_unit=None, check_fn=None):
     console.print(
         f"[green]✓ {title}[/green]"
         if ok
-        else f"[red]✗ {title}[/red] — см. вывод выше / journalctl"
+        else f"[red]✗ {title}[/red] — see output above / journalctl"
     )
     return ok
 
 
 def docker_service_running(service):
-    """True если сервис compose в состоянии running."""
+    """True if the compose service is in the running state."""
     if DRY:
         return True
     try:
@@ -99,19 +99,19 @@ def docker_service_running(service):
 
 
 def detected_state():
-    table = Table(title="Уже установлено на этом VPS", show_header=False, box=None)
+    table = Table(title="Already installed on this VPS", show_header=False, box=None)
     checks = [
         ("Docker", shutil.which("docker") is not None),
-        ("Telegram-бот (systemd, telegramhelper)", unit_active("telegramhelper")),
+        ("Telegram bot (systemd, telegramhelper)", unit_active("telegramhelper")),
         (
-            "Telegram-бот (docker, telegram-helper)",
+            "Telegram bot (docker, telegram-helper)",
             docker_service_running("telegram-helper"),
         ),
         ("Hysteria2", unit_active("hysteria-server")),
         ("MTProto", unit_active("mtproto-proxy")),
         ("Xray/VLESS", shutil.which("xray") is not None),
-        ("HA-стек (reticulum-bridge)", unit_active("ha-reticulum-bridge")),
-        ("I2P-слой (i2pd, путь 2)", unit_active("i2pd")),
+        ("HA stack (reticulum-bridge)", unit_active("ha-reticulum-bridge")),
+        ("I2P layer (i2pd, path 2)", unit_active("i2pd")),
     ]
     for name, present in checks:
         table.add_row(
@@ -122,9 +122,9 @@ def detected_state():
 
 
 def headscale_coordinator(server_url):
-    """Сервер Headscale: config (server_url/listen_addr) + ТОЛЬКО сервис headscale
-    (не весь compose → нет конфликта 127.0.0.1:8000 с ботом) + Headplane."""
-    console.rule("[bold]Headscale (координатор)")
+    """Headscale server: config (server_url/listen_addr) + ONLY the headscale
+    service (not the full compose → no 127.0.0.1:8000 clash with the bot) + Headplane."""
+    console.rule("[bold]Headscale (coordinator)")
     sh(["mkdir", "-p", "headscale/config", "headscale/data"])
     cfg = "headscale/config/config.yaml"
     if not os.path.exists(os.path.join(REPO_ROOT, cfg)):
@@ -149,7 +149,7 @@ def headscale_coordinator(server_url):
             "headscale",
         ]
     )
-    results["Headscale (координатор)"] = (
+    results["Headscale (coordinator)"] = (
         "dry-run" if DRY else ("ok" if ok else "FAILED")
     )
     if not DRY:
@@ -157,28 +157,28 @@ def headscale_coordinator(server_url):
     if ok or DRY:
         step("Headplane Web UI", ["bash", "scripts/install_headplane.sh"])
     console.print(
-        "[dim]Внешним клиентам координатор доступен по публичному HTTPS "
-        "(reverse-proxy/домен); compose биндит 127.0.0.1:8080.[/dim]"
+        "[dim]External clients reach the coordinator over public HTTPS "
+        "(reverse-proxy/domain); compose binds 127.0.0.1:8080.[/dim]"
     )
 
 
 def tailscale_client(login_server, authkey):
-    """Поставить tailscale и подключить ноду к чужому координатору Headscale."""
-    console.rule("[bold]Tailscale-нода (клиент)")
+    """Install tailscale and join this node to another Headscale coordinator."""
+    console.rule("[bold]Tailscale node (client)")
     if shutil.which("tailscale") is None:
         sh("curl -fsSL https://tailscale.com/install.sh | sh", shell=True)
     cmd = SUDO + ["tailscale", "up", "--login-server", login_server]
     if authkey:
         cmd += ["--authkey", authkey]
     ok = sh(cmd)
-    results["Tailscale-нода (клиент)"] = (
+    results["Tailscale node (client)"] = (
         "dry-run" if DRY else ("ok" if ok else "FAILED")
     )
     if not DRY:
         console.print(
-            "[green]✓ Tailscale-нода подключена[/green]"
+            "[green]✓ Tailscale node connected[/green]"
             if ok
-            else "[red]✗ tailscale up не прошёл — проверь URL/authkey[/red]"
+            else "[red]✗ tailscale up failed — check URL/authkey[/red]"
         )
 
 
@@ -186,37 +186,37 @@ def main():
     global DRY
     parser = argparse.ArgumentParser(description="TelegramHelper VPS installer (rich)")
     parser.add_argument(
-        "--dry-run", action="store_true", help="показать план без выполнения"
+        "--dry-run", action="store_true", help="show the plan without running it"
     )
     DRY = parser.parse_args().dry_run
 
     console.print(
         Panel.fit(
-            "[bold cyan]TelegramHelper — установщик VPS[/bold cyan]\n"
-            f"репозиторий: {REPO_ROOT}",
+            "[bold cyan]TelegramHelper — VPS installer[/bold cyan]\n"
+            f"repository: {REPO_ROOT}",
             border_style="cyan",
         )
     )
     if DRY:
         console.print(
-            "[yellow]РЕЖИМ --dry-run: ничего не меняется, только показ команд.[/yellow]"
+            "[yellow]--dry-run MODE: nothing changes, commands are shown only.[/yellow]"
         )
     detected_state()
 
     console.print(
         Panel(
-            "[bold]Базовый набор устанавливается ВСЕГДА:[/bold]\n"
-            "  • [green]Docker[/green] (нужен боту/Headscale)\n"
-            "  • [green]Hysteria2[/green] (UDP VPN-транспорт)",
-            title="Обязательно",
+            "[bold]The base set is ALWAYS installed:[/bold]\n"
+            "  • [green]Docker[/green] (needed by the bot/Headscale)\n"
+            "  • [green]Hysteria2[/green] (UDP VPN transport)",
+            title="Required",
             border_style="green",
         )
     )
 
-    # --- выбор опциональных (с возможностью вернуться и переответить) ---
-    # Все ответы храним в want/params/hs_role и переспрашиваем в цикле: если в
-    # конце не подтвердить — прошлые ответы становятся значениями по умолчанию,
-    # так что правишь только ошибочный пункт, остальное проматываешь Enter.
+    # --- optional selection (can go back and re-answer) ---
+    # All answers live in want/params/hs_role and we re-ask in a loop: if you
+    # do not confirm at the end, previous answers become the new defaults, so
+    # you only fix the wrong item and skip the rest with Enter.
     want = {
         "api": True,
         "api_mode": "systemd",
@@ -233,202 +233,202 @@ def main():
     hs_role = "client"
 
     while True:
-        console.rule("Выбор опциональных компонентов")
+        console.rule("Optional components")
         console.print(
-            "[dim]Enter — прошлый ответ / умолчание. В конце можно вернуться "
-            "и переответить.[/dim]"
+            "[dim]Enter — previous answer / default. At the end you can go back "
+            "and re-answer.[/dim]"
         )
         want["api"] = Confirm.ask(
-            "API — Telegram-бот (будет [b]запущен[/b], спросит BOT_TOKEN / ADMIN_USER_IDS)?",
+            "API — Telegram bot (will be [b]started[/b], asks for BOT_TOKEN / ADMIN_USER_IDS)?",
             default=want["api"],
         )
         if want["api"]:
             console.print(
-                "[dim]systemd — рекомендуется, если на этом VPS будут ещё Docker-сервисы "
-                "(Headscale/Dockhand/HA-стек) — меньше конфликтов по портам/ресурсам.\n"
-                "docker — проще, если бот — единственный сервис на VPS.\n"
-                "Перед сборкой установщик настроит .env с подсказками: BOT_TOKEN, "
-                "ADMIN_USER_IDS; API_SECRET_KEY и HMAC_SECRET сгенерирует сам.\n"
-                "Если поля уже заполнены в .env — повторно не спросит.[/dim]"
+                "[dim]systemd — recommended if this VPS will also run Docker services "
+                "(Headscale/Dockhand/HA stack) — fewer port/resource clashes.\n"
+                "docker — simpler if the bot is the only service on the VPS.\n"
+                "Before the build the installer fills .env with prompts: BOT_TOKEN, "
+                "ADMIN_USER_IDS; API_SECRET_KEY and HMAC_SECRET are generated.\n"
+                "If the fields are already set in .env — it will not ask again.[/dim]"
             )
             want["api_mode"] = Prompt.ask(
-                "  Как ставить бота",
+                "  How to install the bot",
                 choices=["systemd", "docker"],
                 default=want.get("api_mode", "systemd"),
             )
         want["vless"] = Confirm.ask("VLESS-Reality?", default=want["vless"])
         want["naive"] = Confirm.ask(
-            "NaiveProxy (нужен домен + DNS)?", default=want["naive"]
+            "NaiveProxy (needs a domain + DNS)?", default=want["naive"]
         )
         want["mtproto"] = Confirm.ask("MTProto?", default=want["mtproto"])
         want["headscale"] = Confirm.ask(
-            "Headscale / Tailscale-нода?", default=want["headscale"]
+            "Headscale / Tailscale node?", default=want["headscale"]
         )
         if want["headscale"]:
             hs_role = Prompt.ask(
-                "  Роль этого VPS в mesh",
+                "  Role of this VPS in the mesh",
                 choices=["coordinator", "client"],
                 default=hs_role,
             )
-            # Параметры роли спрашиваем СРАЗУ, чтобы не мешались с другими вопросами.
+            # Ask role params NOW so they do not mix with the other questions.
             if hs_role == "coordinator":
                 params["hs_server_url"] = Prompt.ask(
-                    "  Headscale server_url (домен координатора; внешним клиентам нужен HTTPS)",
+                    "  Headscale server_url (coordinator domain; external clients need HTTPS)",
                     default=params.get(
                         "hs_server_url", "https://headscale.example.com"
                     ),
                 )
             else:  # client
                 params["hs_login"] = Prompt.ask(
-                    "  URL координатора Headscale (--login-server), напр. https://headscale.домен:8443",
+                    "  Headscale coordinator URL (--login-server), e.g. https://headscale.example.com:8443",
                     default=params.get("hs_login", ""),
                 )
                 params["hs_authkey"] = Prompt.ask(
-                    "  Pre-auth key координатора", default=params.get("hs_authkey", "")
+                    "  Coordinator pre-auth key", default=params.get("hs_authkey", "")
                 )
         want["ha"] = Confirm.ask(
-            "HA-сервер + Reticulum (заглушки Mi-Home, для тестов)?", default=want["ha"]
+            "HA server + Reticulum (Mi-Home stubs, for tests)?", default=want["ha"]
         )
-        # I2P-слой (путь 2: нативные туннели i2pd) оборачивает локальный порт моста
-        # в скрытый сервис I2P. Имеет смысл только вместе с HA-стеком.
+        # I2P layer (path 2: native i2pd tunnels) wraps the local bridge port
+        # as a hidden I2P service. Only makes sense together with the HA stack.
         if want["ha"]:
             want["i2p"] = Confirm.ask(
-                "  + I2P-доступ к мосту (i2pd, путь 2 — без публичного порта/SAM)?",
+                "  + I2P access to the bridge (i2pd, path 2 — no public port/SAM)?",
                 default=want["i2p"],
             )
             want["ha_adapter"] = Confirm.ask(
-                "  + ha-adapter → реальный HA на NAS (tailnet :8123, нужен mesh)?",
+                "  + ha-adapter → real HA on the NAS (tailnet :8123, needs mesh)?",
                 default=want["ha_adapter"],
             )
             if want["ha_adapter"]:
                 console.print(
-                    "[dim]Нужен Headscale-клиент на этом VPS и Long-Lived Token из HA.\n"
-                    "Адаптер :50057, мост переключится на него; опционально "
-                    "публичный :50061 для ApiHA без SSH.[/dim]"
+                    "[dim]Needs a Headscale client on this VPS and a Long-Lived Token from HA.\n"
+                    "Adapter :50057, the bridge will switch to it; optionally "
+                    "public :50061 for ApiHA without SSH.[/dim]"
                 )
                 params["ha_url"] = Prompt.ask(
-                    "  HA_URL (NAS в mesh)",
+                    "  HA_URL (NAS on the mesh)",
                     default=params.get("ha_url", "http://100.64.0.2:8123"),
                 )
                 params["ha_token"] = Prompt.ask(
-                    "  HA_TOKEN (Long-Lived из профиля HA)",
+                    "  HA_TOKEN (Long-Lived from the HA profile)",
                     default=params.get("ha_token", ""),
                     password=True,
                 )
                 want["ha_switch_bridge"] = Confirm.ask(
-                    "  Переключить мост на adapter :50057?",
+                    "  Switch the bridge to adapter :50057?",
                     default=want.get("ha_switch_bridge", True),
                 )
                 want["ha_public_rns"] = Confirm.ask(
-                    "  Открыть мост наружу (0.0.0.0:50061) для ApiHA без SSH?",
+                    "  Open the bridge to the internet (0.0.0.0:50061) for ApiHA without SSH?",
                     default=want.get("ha_public_rns", True),
                 )
                 if not (params.get("ha_token") or "").strip():
                     console.print(
-                        "[yellow]Без HA_TOKEN adapter пропущу — "
-                        "потом: bash scripts/install_ha_adapter.sh[/yellow]"
+                        "[yellow]No HA_TOKEN — skipping adapter — "
+                        "later: bash scripts/install_ha_adapter.sh[/yellow]"
                     )
                     want["ha_adapter"] = False
         else:
             want["i2p"] = False
             want["ha_adapter"] = False
         want["dockhand"] = Confirm.ask(
-            "Dockhand (Streamlit-диагностика Docker, :8501 localhost)?",
+            "Dockhand (Streamlit Docker diagnostics, :8501 localhost)?",
             default=want["dockhand"],
         )
 
-        # --- конфликт 443: VLESS vs NaiveProxy (без выхода) ---
+        # --- port 443 clash: VLESS vs NaiveProxy (must pick one) ---
         if want["vless"] and want["naive"]:
             console.print(
-                "[yellow]VLESS-Reality и NaiveProxy оба занимают 443/TCP — нужен один владелец.[/yellow]"
+                "[yellow]VLESS-Reality and NaiveProxy both need 443/TCP — pick one owner.[/yellow]"
             )
             owner = Prompt.ask(
-                "Кто владеет 443/TCP?", choices=["vless", "naiveproxy"], default="vless"
+                "Who owns 443/TCP?", choices=["vless", "naiveproxy"], default="vless"
             )
             want["vless"] = owner == "vless"
             want["naive"] = owner == "naiveproxy"
 
-        # --- параметры ---
+        # --- parameters ---
         params["hy2_port"] = Prompt.ask(
-            "Hysteria2 порт (UDP)", default=params.get("hy2_port", "443")
+            "Hysteria2 port (UDP)", default=params.get("hy2_port", "443")
         )
         if want["mtproto"]:
             params["mtp_port"] = Prompt.ask(
-                "MTProto порт", default=params.get("mtp_port", "993")
+                "MTProto port", default=params.get("mtp_port", "993")
             )
             params["mtp_domain"] = Prompt.ask(
-                "MTProto fake-TLS домен", default=params.get("mtp_domain", "google.com")
+                "MTProto fake-TLS domain", default=params.get("mtp_domain", "google.com")
             )
         if want["naive"]:
             params["naive_domain"] = Prompt.ask(
-                "NaiveProxy домен (обязателен)", default=params.get("naive_domain", "")
+                "NaiveProxy domain (required)", default=params.get("naive_domain", "")
             )
             params["naive_port"] = Prompt.ask(
-                "NaiveProxy HTTPS порт", default=params.get("naive_port", "443")
+                "NaiveProxy HTTPS port", default=params.get("naive_port", "443")
             )
             if not params["naive_domain"].strip():
-                console.print("[red]NaiveProxy без домена — пропускаю.[/red]")
+                console.print("[red]NaiveProxy without a domain — skipping.[/red]")
                 want["naive"] = False
 
-        # --- пре-флайт сводка ---
-        plan = Table(title="Будет выполнено", box=None)
-        plan.add_column("Компонент")
-        plan.add_column("Действие")
-        plan.add_row("Docker", "поставить, если нет (всегда)")
+        # --- preflight summary ---
+        plan = Table(title="Will run", box=None)
+        plan.add_column("Component")
+        plan.add_column("Action")
+        plan.add_row("Docker", "install if missing (always)")
         plan.add_row(
-            "Hysteria2", f"установить на порт {params['hy2_port']}/UDP (всегда)"
+            "Hysteria2", f"install on port {params['hy2_port']}/UDP (always)"
         )
         if want["api"]:
             plan.add_row(
-                "Telegram-бот (API)",
-                f"установить и запустить через {want['api_mode']} (спросит токен)",
+                "Telegram bot (API)",
+                f"install and start via {want['api_mode']} (will ask for token)",
             )
         if want["vless"]:
-            plan.add_row("VLESS-Reality", "установить (из /opt/TelegramHelper)")
+            plan.add_row("VLESS-Reality", "install (from /opt/TelegramHelper)")
         if want["mtproto"]:
             plan.add_row(
-                "MTProto", f"порт {params['mtp_port']}, домен {params['mtp_domain']}"
+                "MTProto", f"port {params['mtp_port']}, domain {params['mtp_domain']}"
             )
         if want["naive"]:
             plan.add_row(
                 "NaiveProxy",
-                f"домен {params['naive_domain']}, порт {params['naive_port']}",
+                f"domain {params['naive_domain']}, port {params['naive_port']}",
             )
         if want["headscale"] and hs_role == "coordinator":
             plan.add_row(
-                "Headscale (координатор)",
-                f"сервер headscale + Headplane, server_url {params['hs_server_url']}",
+                "Headscale (coordinator)",
+                f"headscale server + Headplane, server_url {params['hs_server_url']}",
             )
         elif want["headscale"]:
             plan.add_row(
-                "Tailscale-нода (клиент)", f"подключить к {params['hs_login']}"
+                "Tailscale node (client)", f"join {params['hs_login']}"
             )
         if want["ha"]:
-            plan.add_row("HA + Reticulum", "stub-сервер + мост (127.0.0.1)")
+            plan.add_row("HA + Reticulum", "stub server + bridge (127.0.0.1)")
         if want.get("ha_adapter"):
             plan.add_row(
                 "HA adapter",
                 f"{params.get('ha_url')} → :50057"
-                + ("; мост→adapter" if want.get("ha_switch_bridge") else "")
+                + ("; bridge→adapter" if want.get("ha_switch_bridge") else "")
                 + ("; public :50061" if want.get("ha_public_rns") else ""),
             )
         if want["i2p"]:
-            plan.add_row("I2P (путь 2)", "i2pd + server-туннель ha-bridge → мост")
+            plan.add_row("I2P (path 2)", "i2pd + server tunnel ha-bridge → bridge")
         if want["dockhand"]:
             plan.add_row("Dockhand", "docker compose up -d dockhand (:8501 localhost)")
         console.print(plan)
 
-        if Confirm.ask("[bold]Подтвердить и начать установку?[/bold]", default=True):
+        if Confirm.ask("[bold]Confirm and start the install?[/bold]", default=True):
             break
         if not Confirm.ask(
-            "Вернуться и переответить (прошлые ответы — по умолчанию)?", default=True
+            "Go back and re-answer (previous answers become defaults)?", default=True
         ):
-            console.print("[yellow]Отменено.[/yellow]")
+            console.print("[yellow]Cancelled.[/yellow]")
             return 0
-        # иначе — повтор цикла с текущими ответами как умолчаниями
+        # otherwise — loop again with current answers as defaults
 
-    # --- установка в порядке зависимостей ---
-    # 1) Docker (всегда)
+    # --- install in dependency order ---
+    # 1) Docker (always)
     if shutil.which("docker") is None:
         step(
             "Docker (get.docker.com)",
@@ -436,11 +436,11 @@ def main():
             shell=True,
         )
     else:
-        console.print("[dim]Docker уже установлен — пропускаю.[/dim]")
+        console.print("[dim]Docker already installed — skipping.[/dim]")
         results["Docker"] = "ok"
 
-    # 2) Hysteria2 (всегда). check_unit — судим по реальной живости сервиса,
-    # а не по коду выхода установщика (Type=simple может крашнуться после старта).
+    # 2) Hysteria2 (always). check_unit — judge by whether the service is
+    # actually alive, not by the installer exit code (Type=simple can crash after start).
     step(
         "Hysteria2",
         SUDO + ["bash", "scripts/install_hysteria2.sh", "--port", params["hy2_port"]],
@@ -448,22 +448,22 @@ def main():
     )
     if not DRY and results.get("Hysteria2") == "FAILED":
         console.print(
-            "[yellow]Hysteria2 установлен, но сервис не active — "
-            "после установки глянь: journalctl -u hysteria-server -n 30[/yellow]"
+            "[yellow]Hysteria2 is installed, but the service is not active — "
+            "after install check: journalctl -u hysteria-server -n 30[/yellow]"
         )
 
-    # 3) API/бот (если выбран) — установить и проверить живость. Способ — выбор выше
-    # (want["api_mode"]): systemd (install_telegramhelper_vps.sh) или docker
-    # (install_telegramhelper_docker.sh, сервис telegram-helper из compose.yaml).
+    # 3) API/bot (if chosen) — install and check liveness. Mode was chosen above
+    # (want["api_mode"]): systemd (install_telegramhelper_vps.sh) or docker
+    # (install_telegramhelper_docker.sh, telegram-helper service from compose.yaml).
     if want["api"] and want["api_mode"] == "docker":
         step(
-            "Telegram-бот (API, docker)",
+            "Telegram bot (API, docker)",
             SUDO + ["bash", "scripts/install_telegramhelper_docker.sh"],
             check_fn=lambda: docker_service_running("telegram-helper"),
         )
-        if not DRY and results.get("Telegram-бот (API, docker)") == "FAILED":
+        if not DRY and results.get("Telegram bot (API, docker)") == "FAILED":
             console.print(
-                "[yellow]Контейнер не running — пробую force-recreate...[/yellow]"
+                "[yellow]Container is not running — trying force-recreate...[/yellow]"
             )
             sh(
                 SUDO
@@ -477,34 +477,34 @@ def main():
                 ]
             )
             if docker_service_running("telegram-helper"):
-                results["Telegram-бот (API, docker)"] = "ok"
+                results["Telegram bot (API, docker)"] = "ok"
                 console.print(
-                    "[green]✓ Telegram-бот (API, docker) — поднялся после force-recreate[/green]"
+                    "[green]✓ Telegram bot (API, docker) — came up after force-recreate[/green]"
                 )
             else:
                 console.print(
-                    "[red]API выбран, но контейнер telegram-helper не running — проверь "
-                    "docker compose logs telegram-helper и BOT_TOKEN/ADMIN_USER_IDS в .env.[/red]"
+                    "[red]API was selected, but container telegram-helper is not running — check "
+                    "docker compose logs telegram-helper and BOT_TOKEN/ADMIN_USER_IDS in .env.[/red]"
                 )
     elif want["api"]:
         step(
-            "Telegram-бот (API)",
+            "Telegram bot (API)",
             SUDO + ["bash", "scripts/install_telegramhelper_vps.sh"],
             check_unit="telegramhelper",
         )
-        if not DRY and results.get("Telegram-бот (API)") == "FAILED":
-            # API выбран → бот ОБЯЗАН работать: пробуем поднять и перепроверить
-            console.print("[yellow]Бот не active — пробую перезапустить...[/yellow]")
+        if not DRY and results.get("Telegram bot (API)") == "FAILED":
+            # API selected → the bot MUST run: try to bring it up and re-check
+            console.print("[yellow]Bot is not active — trying restart...[/yellow]")
             sh(SUDO + ["systemctl", "restart", "telegramhelper"])
             if wait_active("telegramhelper"):
-                results["Telegram-бот (API)"] = "ok"
+                results["Telegram bot (API)"] = "ok"
                 console.print(
-                    "[green]✓ Telegram-бот (API) — поднялся после restart[/green]"
+                    "[green]✓ Telegram bot (API) — came up after restart[/green]"
                 )
             else:
                 console.print(
-                    "[red]API выбран, но бот не active — проверь "
-                    "journalctl -u telegramhelper и BOT_TOKEN/ADMIN_USER_IDS в .env.[/red]"
+                    "[red]API was selected, but the bot is not active — check "
+                    "journalctl -u telegramhelper and BOT_TOKEN/ADMIN_USER_IDS in .env.[/red]"
                 )
 
     # 4) VLESS
@@ -541,7 +541,7 @@ def main():
             ],
         )
 
-    # 7) Headscale координатор ИЛИ Tailscale-клиент (Docker уже есть)
+    # 7) Headscale coordinator OR Tailscale client (Docker is already there)
     if want["headscale"] and hs_role == "coordinator":
         headscale_coordinator(params["hs_server_url"])
     elif want["headscale"]:
@@ -551,7 +551,7 @@ def main():
     if want["ha"]:
         step("HA + Reticulum", ["bash", "scripts/install_ha_stack.sh"])
 
-    # 8a) Реальный HA через tailnet (после stubs + желательно после Headscale client)
+    # 8a) Real HA via tailnet (after stubs + preferably after Headscale client)
     if want.get("ha_adapter"):
         adapter_cmd = [
             "bash",
@@ -571,17 +571,17 @@ def main():
             check_unit="ha-adapter-grpc",
         )
 
-    # 8b) I2P-слой (путь 2) — i2pd + server-туннель поверх уже поднятого моста.
-    #     check_unit=i2pd: судим по живости демона (b32 строится дольше, асинхронно).
+    # 8b) I2P layer (path 2) — i2pd + server tunnel on top of the already-up bridge.
+    #     check_unit=i2pd: judge by daemon liveness (b32 is built later, asynchronously).
     if want["i2p"]:
         step(
-            "I2P (путь 2)", ["bash", "scripts/install_i2p_bridge.sh"], check_unit="i2pd"
+            "I2P (path 2)", ["bash", "scripts/install_i2p_bridge.sh"], check_unit="i2pd"
         )
 
-    # 9) Dockhand (Streamlit-диагностика) — слушает 127.0.0.1:8501 (через SSH-туннель).
-    #    --no-deps: НЕ тянуть telegram-helper (бот стоит как systemd и держит :8000 →
-    #    иначе контейнер-бот конфликтует). docker-socket-proxy поднимаем явно — он
-    #    нужен dockhand для доступа к Docker.
+    # 9) Dockhand (Streamlit diagnostics) — listens on 127.0.0.1:8501 (via SSH tunnel).
+    #    --no-deps: do NOT pull telegram-helper (the bot is systemd and holds :8000 →
+    #    otherwise the bot container clashes). docker-socket-proxy is started
+    #    explicitly — dockhand needs it for Docker access.
     if want["dockhand"]:
         step(
             "Dockhand",
@@ -598,11 +598,11 @@ def main():
             ],
         )
 
-    # --- финальный отчёт ---
-    console.rule("[bold]Итог")
+    # --- final report ---
+    console.rule("[bold]Summary")
     report = Table(box=None)
-    report.add_column("Компонент")
-    report.add_column("Статус")
+    report.add_column("Component")
+    report.add_column("Status")
     for title, status in results.items():
         mark = {
             "ok": "[green]active/ok[/green]",
@@ -616,21 +616,21 @@ def main():
     if failed:
         console.print(
             Panel(
-                f"Ошибки в: [red]{', '.join(failed)}[/red]\n"
-                "Проверь journalctl -u <сервис>. Детали — DEPLOY.md.",
+                f"Errors in: [red]{', '.join(failed)}[/red]\n"
+                "Check journalctl -u <service>. Details — DEPLOY.md.",
                 border_style="red",
             )
         )
         return 1
     done_msg = (
-        "[green]Готово. Все выбранные компоненты установлены.[/green]\n"
-        "HA-стек: hash моста — journalctl -u ha-reticulum-bridge | grep destination.\n"
-        "Тесты Reticulum — RETICULUM_TESTING.md (репо ApiRgRPC)."
+        "[green]Done. All selected components are installed.[/green]\n"
+        "HA stack: bridge hash — journalctl -u ha-reticulum-bridge | grep destination.\n"
+        "Reticulum tests — RETICULUM_GUIDE.md (this repo). The bot does not start the stack."
     )
     if want["i2p"]:
         done_msg += (
-            "\nI2P (путь 2): b32 моста — curl -s http://127.0.0.1:7070/?page=i2p_tunnels "
-            "| sed 's/<[^>]*>/ /g' | grep -iE 'ha-bridge|\\.b32'. Детали — I2P_GUIDE.md."
+            "\nI2P (path 2): bridge b32 — curl -s http://127.0.0.1:7070/?page=i2p_tunnels "
+            "| sed 's/<[^>]*>/ /g' | grep -iE 'ha-bridge|\\.b32'. Details — RETICULUM_GUIDE.md §8."
         )
     console.print(Panel(done_msg, border_style="green"))
     return 0
@@ -641,6 +641,6 @@ if __name__ == "__main__":
         sys.exit(main())
     except KeyboardInterrupt:
         console.print(
-            "\n[yellow]Прервано (Ctrl+C). Ничего не установлено — запусти заново.[/yellow]"
+            "\n[yellow]Interrupted (Ctrl+C). Nothing installed — run again.[/yellow]"
         )
         sys.exit(130)

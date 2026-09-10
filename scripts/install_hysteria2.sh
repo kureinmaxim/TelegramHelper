@@ -167,16 +167,16 @@ fi
 # ============================================================================
 # Fix TLS key permissions for the service user
 # ============================================================================
-# Официальный unit hysteria работает под User=hysteria (а не root), а openssl
-# создал ключ root:root 600 → FATAL "tls.key: permission denied". Берём реального
-# пользователя из unit-файла и отдаём ему ключ; если User= нет (root) — 600.
+# The official hysteria unit runs as User=hysteria (not root), while openssl
+# created the key as root:root 600 → FATAL "tls.key: permission denied". Take
+# the real user from the unit file and chown the key; if there is no User= (root) — 600.
 SVC_USER="$(grep -oP '^User=\s*\K\S+' /etc/systemd/system/hysteria-server.service 2>/dev/null | head -1)"
 $SUDO chmod 644 "$CERT_PATH" 2>/dev/null || true
 if [ -n "${SVC_USER:-}" ] && [ "$SVC_USER" != "root" ] && id "$SVC_USER" >/dev/null 2>&1; then
     $SUDO chown "$SVC_USER":"$SVC_USER" "$KEY_PATH" "$CERT_PATH" 2>/dev/null \
         || $SUDO chown "$SVC_USER" "$KEY_PATH" "$CERT_PATH" 2>/dev/null || true
     $SUDO chmod 640 "$KEY_PATH"
-    echo -e "${GREEN}TLS-ключ отдан пользователю сервиса: ${SVC_USER}${NC}"
+    echo -e "${GREEN}TLS key owned by service user: ${SVC_USER}${NC}"
 else
     $SUDO chmod 600 "$KEY_PATH"
 fi

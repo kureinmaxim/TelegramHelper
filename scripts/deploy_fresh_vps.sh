@@ -33,20 +33,20 @@ next() { STEP=$((STEP+1)); echo -e "\n${CYAN}[$STEP/$TOTAL] $1${NC}"; }
 
 # ── Protocol selection dialog ────────────────────────────────
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  🚀 TelegramHelper VPS Deploy — Фаза 1                 ${NC}"
+echo -e "${GREEN}  🚀 TelegramHelper VPS Deploy — Phase 1                ${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${BOLD}Что установить как основной transport stack?${NC}"
+echo -e "${BOLD}What to install as the main transport stack?${NC}"
 echo ""
-echo -e "  ${CYAN}[1]${NC} VLESS-Reality legacy xray.service     — без 3x-ui, бот управляет Xray"
-echo -e "  ${CYAN}[2]${NC} VLESS-Reality через 3x-ui + x-ui menu — терминальное меню панели"
-echo -e "  ${CYAN}[3]${NC} VLESS-Reality через 3x-ui browser UI  — браузерная панель"
-echo -e "  ${CYAN}[4]${NC} NaiveProxy (Caddy)                    — HTTPS-прокси, нужен домен"
-echo -e "  ${CYAN}[5]${NC} Mieru (mita)                           — отдельный TCP/UDP порт, default 29999/tcp"
+echo -e "  ${CYAN}[1]${NC} VLESS-Reality legacy xray.service     — no 3x-ui, the bot owns Xray"
+echo -e "  ${CYAN}[2]${NC} VLESS-Reality via 3x-ui + x-ui menu   — terminal panel menu"
+echo -e "  ${CYAN}[3]${NC} VLESS-Reality via 3x-ui browser UI    — browser panel"
+echo -e "  ${CYAN}[4]${NC} NaiveProxy (Caddy)                    — HTTPS proxy, needs a domain"
+echo -e "  ${CYAN}[5]${NC} Mieru (mita)                           — dedicated TCP/UDP port, default 29999/tcp"
 echo ""
-echo -e "${YELLOW}Важно: 1/2/3/4 владеют TCP/443. Mieru по умолчанию НЕ занимает 443.${NC}"
+echo -e "${YELLOW}Note: 1/2/3/4 own TCP/443. Mieru does NOT take 443 by default.${NC}"
 echo ""
-read -rp "Выбор [1/2/3/4/5] (Enter = 1): " PROTO_CHOICE
+read -rp "Choice [1/2/3/4/5] (Enter = 1): " PROTO_CHOICE
 PROTO_CHOICE="${PROTO_CHOICE:-1}"
 XUI_ACCESS_MODE=""
 
@@ -54,96 +54,96 @@ case "$PROTO_CHOICE" in
     1)
         PROTOCOL="vless"
         echo ""
-        echo -e "${YELLOW}Будет установлен legacy host-Xray без 3x-ui.${NC}"
-        echo -e "${YELLOW}/provision, /profiles, /my_profile будут работать через vless_config.json + xray.service.${NC}"
+        echo -e "${YELLOW}Legacy host-Xray will be installed without 3x-ui.${NC}"
+        echo -e "${YELLOW}/provision, /profiles, /my_profile will work via vless_config.json + xray.service.${NC}"
         ;;
     2)
         PROTOCOL="xui"
         XUI_ACCESS_MODE="terminal"
         echo ""
-        echo -e "${YELLOW}Будет запущен официальный интерактивный installer 3x-ui.${NC}"
-        echo -e "${YELLOW}Основное управление панелью: команда x-ui в терминале.${NC}"
-        echo -e "${YELLOW}После установки создайте VLESS-Reality inbound и выполните /xui_setup в боте.${NC}"
+        echo -e "${YELLOW}The official interactive 3x-ui installer will run.${NC}"
+        echo -e "${YELLOW}Primary panel control: the x-ui command in the terminal.${NC}"
+        echo -e "${YELLOW}After install, create a VLESS-Reality inbound and run /xui_setup in the bot.${NC}"
         ;;
     3)
         PROTOCOL="xui"
         XUI_ACCESS_MODE="browser"
         echo ""
-        echo -e "${YELLOW}Будет запущен официальный интерактивный installer 3x-ui.${NC}"
-        echo -e "${YELLOW}Основное управление панелью: браузерный URL панели 3x-ui.${NC}"
-        echo -e "${YELLOW}После установки создайте VLESS-Reality inbound и выполните /xui_setup в боте.${NC}"
+        echo -e "${YELLOW}The official interactive 3x-ui installer will run.${NC}"
+        echo -e "${YELLOW}Primary panel control: the 3x-ui browser URL.${NC}"
+        echo -e "${YELLOW}After install, create a VLESS-Reality inbound and run /xui_setup in the bot.${NC}"
         ;;
     4)
         PROTOCOL="naiveproxy"
         echo ""
-        echo -e "${YELLOW}NaiveProxy требует домен с DNS A-записью на этот сервер.${NC}"
-        echo -e "${YELLOW}Пример: naive.example.com → $(curl -s ifconfig.me 2>/dev/null || echo 'YOUR_IP')${NC}"
+        echo -e "${YELLOW}NaiveProxy needs a domain with a DNS A record pointing at this server.${NC}"
+        echo -e "${YELLOW}Example: naive.example.com → $(curl -s ifconfig.me 2>/dev/null || echo 'YOUR_IP')${NC}"
         echo ""
-        read -rp "Домен для NaiveProxy (например naive.example.com): " NAIVE_DOMAIN
+        read -rp "Domain for NaiveProxy (e.g. naive.example.com): " NAIVE_DOMAIN
         if [[ -z "$NAIVE_DOMAIN" ]]; then
-            echo -e "${RED}❌ Домен обязателен для NaiveProxy. Используйте вариант 1/2/3 для VLESS или 5 для Mieru без домена.${NC}"
+            echo -e "${RED}❌ Domain is required for NaiveProxy. Use option 1/2/3 for VLESS or 5 for Mieru without a domain.${NC}"
             exit 1
         fi
         NAIVE_PORT="443"
-        echo -e "${YELLOW}⚠️  Сборка Caddy с плагином займёт 3-5 минут (Go компиляция).${NC}"
+        echo -e "${YELLOW}⚠️  Building Caddy with the plugin takes 3-5 minutes (Go compile).${NC}"
         ;;
     5)
         PROTOCOL="mieru"
         echo ""
-        echo -e "${YELLOW}Mieru будет установлен как mita на отдельный порт.${NC}"
-        echo -e "${YELLOW}По умолчанию: ${MIERU_PORT}/${MIERU_PROTOCOL}. Это не конфликтует с 443/tcp VLESS/NaiveProxy и 443/udp Hysteria2.${NC}"
-        read -rp "Порт Mieru (Enter = ${MIERU_PORT}): " MIERU_PORT_INPUT
+        echo -e "${YELLOW}Mieru will be installed as mita on a dedicated port.${NC}"
+        echo -e "${YELLOW}Default: ${MIERU_PORT}/${MIERU_PROTOCOL}. This does not clash with 443/tcp VLESS/NaiveProxy or 443/udp Hysteria2.${NC}"
+        read -rp "Mieru port (Enter = ${MIERU_PORT}): " MIERU_PORT_INPUT
         MIERU_PORT="${MIERU_PORT_INPUT:-$MIERU_PORT}"
-        read -rp "Протокол Mieru [tcp/udp] (Enter = tcp): " MIERU_PROTOCOL_INPUT
+        read -rp "Mieru protocol [tcp/udp] (Enter = tcp): " MIERU_PROTOCOL_INPUT
         MIERU_PROTOCOL="${MIERU_PROTOCOL_INPUT:-tcp}"
         MIERU_PROTOCOL="${MIERU_PROTOCOL,,}"
         if ! [[ "$MIERU_PORT" =~ ^[0-9]+$ ]] || [ "$MIERU_PORT" -lt 1025 ] || [ "$MIERU_PORT" -gt 65535 ]; then
-            echo -e "${RED}❌ Порт Mieru должен быть числом 1025..65535.${NC}"
+            echo -e "${RED}❌ Mieru port must be a number 1025..65535.${NC}"
             exit 1
         fi
         if [[ "$MIERU_PROTOCOL" != "tcp" && "$MIERU_PROTOCOL" != "udp" ]]; then
-            echo -e "${RED}❌ Протокол Mieru должен быть tcp или udp.${NC}"
+            echo -e "${RED}❌ Mieru protocol must be tcp or udp.${NC}"
             exit 1
         fi
         if [[ "$MIERU_PORT" = "443" ]]; then
-            echo -e "${RED}❌ Не используйте 443 для Mieru при fresh install: он конфликтует с VLESS/NaiveProxy/Hysteria2.${NC}"
+            echo -e "${RED}❌ Do not use 443 for Mieru on a fresh install: it clashes with VLESS/NaiveProxy/Hysteria2.${NC}"
             exit 1
         fi
         ;;
     *)
-        echo -e "${RED}❌ Неверный выбор: $PROTO_CHOICE${NC}"
+        echo -e "${RED}❌ Invalid choice: $PROTO_CHOICE${NC}"
         exit 1
         ;;
 esac
 
 # ── Deployment target dialog ─────────────────────────────────
-# Сам скрипт `docker compose up` не выполняет (нет ещё кода проекта на сервере).
-# Выбор влияет только на финальные подсказки и на CREDENTIALS.txt.
+# This script does not run `docker compose up` (project code is not on the server yet).
+# The choice only affects the final hints and CREDENTIALS.txt.
 echo ""
-echo -e "${BOLD}Что планируете поднимать после копирования кода?${NC}"
+echo -e "${BOLD}What will you bring up after copying the code?${NC}"
 echo ""
-echo -e "  ${CYAN}[1]${NC} Только бот (telegram-helper)              — стандартный вариант"
-echo -e "  ${CYAN}[2]${NC} Только Dockhand (диагностика)             — добавить панель к работающему боту"
-echo -e "  ${CYAN}[3]${NC} Оба контейнера (telegram-helper + dockhand) — полный стек ${YELLOW}(рекомендуется)${NC}"
+echo -e "  ${CYAN}[1]${NC} Bot only (telegram-helper)                 — standard option"
+echo -e "  ${CYAN}[2]${NC} Dockhand only (diagnostics)                — add the panel to a running bot"
+echo -e "  ${CYAN}[3]${NC} Both containers (telegram-helper + dockhand) — full stack ${YELLOW}(recommended)${NC}"
 echo ""
-read -rp "Выбор [1/2/3] (Enter = 3): " DEPLOY_CHOICE
+read -rp "Choice [1/2/3] (Enter = 3): " DEPLOY_CHOICE
 DEPLOY_CHOICE="${DEPLOY_CHOICE:-3}"
 
 case "$DEPLOY_CHOICE" in
     1)
         DEPLOY_TARGET="bot"
-        DEPLOY_TARGET_HUMAN="Только telegram-helper"
+        DEPLOY_TARGET_HUMAN="telegram-helper only"
         DEPLOY_CMD="bash scripts/rebuild_bot.sh"
         ;;
     2)
         DEPLOY_TARGET="dockhand"
-        DEPLOY_TARGET_HUMAN="Только dockhand"
+        DEPLOY_TARGET_HUMAN="dockhand only"
         DEPLOY_CMD="docker compose up -d --build dockhand"
         echo ""
-        echo -e "${YELLOW}⚠️  Dockhand жёстко смотрит на контейнер 'telegram-helper-lite'${NC}"
-        echo -e "${YELLOW}   и API http://telegram-helper:8000/health. Без бота UI${NC}"
-        echo -e "${YELLOW}   будет показывать 'Container Not Found' / 'API Unreachable'.${NC}"
-        echo -e "${YELLOW}   См. DOCKHAND_SETUP.md §4.B.2 — как поднять в одиночку.${NC}"
+        echo -e "${YELLOW}⚠️  Dockhand hard-codes container 'telegram-helper-lite'${NC}"
+        echo -e "${YELLOW}   and API http://telegram-helper:8000/health. Without the bot the UI${NC}"
+        echo -e "${YELLOW}   will show 'Container Not Found' / 'API Unreachable'.${NC}"
+        echo -e "${YELLOW}   See DOCKHAND_SETUP.md §4.B.2 — how to run it alone.${NC}"
         ;;
     *)
         DEPLOY_TARGET="both"
@@ -172,15 +172,15 @@ case "$PROTOCOL" in
     *) PROTOCOL_HUMAN="$PROTOCOL" ;;
 esac
 
-echo -e "${GREEN}  Протокол: $PROTOCOL_HUMAN${NC}"
+echo -e "${GREEN}  Protocol: $PROTOCOL_HUMAN${NC}"
 echo -e "${GREEN}  IP:        $SERVER_IP${NC}"
-[ "$PROTOCOL" = "naiveproxy" ] && echo -e "${GREEN}  Домен:     $NAIVE_DOMAIN${NC}"
+[ "$PROTOCOL" = "naiveproxy" ] && echo -e "${GREEN}  Domain:    $NAIVE_DOMAIN${NC}"
 [ "$PROTOCOL" = "mieru" ] && echo -e "${GREEN}  Mieru:     ${MIERU_PORT}/${MIERU_PROTOCOL}${NC}"
-echo -e "${GREEN}  Развор:    $DEPLOY_TARGET_HUMAN${NC}"
+echo -e "${GREEN}  Deploy:    $DEPLOY_TARGET_HUMAN${NC}"
 echo ""
 
 # ── 1. Swap (critical for 1GB RAM) ──────────────────────────
-next "Создание swap 1GB..."
+next "Creating 1GB swap..."
 if [ ! -f /swapfile ]; then
     fallocate -l 1G /swapfile
     chmod 600 /swapfile
@@ -189,18 +189,18 @@ if [ ! -f /swapfile ]; then
     echo '/swapfile none swap sw 0 0' >> /etc/fstab
     echo 'vm.swappiness=10' >> /etc/sysctl.conf
     sysctl vm.swappiness=10
-    echo -e "${GREEN}✅ Swap 1GB создан${NC}"
+    echo -e "${GREEN}✅ Swap 1GB created${NC}"
 else
-    echo "Swap уже существует"
+    echo "Swap already exists"
     swapon --show
 fi
 
 # ── 2. Disable IPv6 (close VPN-egress leak) ─────────────────
-# Без этого dual-stack VPS делает egress по IPv6, и геолокатор у клиента
-# видит IPv6 сервера → ChatGPT/Spotify/банки решают, что клиент сидит
-# из неправильной страны (sing-box client: пилл "IPv6 LEAK DETECTED").
-# Возврат: rm /etc/sysctl.d/99-disable-ipv6.conf && sysctl --system.
-next "Отключение IPv6 (защита от egress-leak региона)..."
+# Without this a dual-stack VPS egresses over IPv6, and the client's geo-locator
+# sees the server IPv6 → ChatGPT/Spotify/banks decide the client is in the
+# wrong country (sing-box client: "IPv6 LEAK DETECTED" pill).
+# Revert: rm /etc/sysctl.d/99-disable-ipv6.conf && sysctl --system.
+next "Disabling IPv6 (region egress-leak protection)..."
 if [ ! -f /etc/sysctl.d/99-disable-ipv6.conf ]; then
     cat > /etc/sysctl.d/99-disable-ipv6.conf <<'EOF'
 # IPv6 disabled by deploy_fresh_vps.sh — closes egress leak that lets
@@ -210,18 +210,18 @@ net.ipv6.conf.all.disable_ipv6 = 1
 net.ipv6.conf.default.disable_ipv6 = 1
 EOF
     sysctl --system >/dev/null 2>&1 || true
-    echo -e "${GREEN}✅ IPv6 отключён системно (/etc/sysctl.d/99-disable-ipv6.conf)${NC}"
+    echo -e "${GREEN}✅ IPv6 disabled system-wide (/etc/sysctl.d/99-disable-ipv6.conf)${NC}"
 else
-    echo "IPv6 уже отключён (/etc/sysctl.d/99-disable-ipv6.conf существует)"
+    echo "IPv6 already disabled (/etc/sysctl.d/99-disable-ipv6.conf exists)"
 fi
 
 # ── 3. System update ────────────────────────────────────────
-next "Обновление системы..."
+next "Updating the system..."
 apt-get update -qq
 apt-get upgrade -y -qq
 
 # ── 4. Install packages ─────────────────────────────────────
-next "Установка пакетов..."
+next "Installing packages..."
 PKGS="curl jq openssl ca-certificates qrencode git python3 python3-pip ufw fail2ban unattended-upgrades"
 if [ "$PROTOCOL" = "naiveproxy" ]; then
     PKGS="$PKGS golang-go"
@@ -229,86 +229,86 @@ fi
 apt-get install -y -qq $PKGS
 
 # ── 5. Install Docker ───────────────────────────────────────
-next "Установка Docker..."
+next "Installing Docker..."
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com | sh
     systemctl enable docker
     systemctl start docker
-    echo -e "${GREEN}✅ Docker установлен${NC}"
+    echo -e "${GREEN}✅ Docker installed${NC}"
 else
-    echo "Docker уже установлен: $(docker --version)"
+    echo "Docker already installed: $(docker --version)"
 fi
 
-# ── 5b. Pre-flight: TCP 443 должен быть свободен ИЛИ уже занят нашим стеком ──
-# Цель: не тратить минуты на сборку Caddy, если :443 уже держит 3x-ui/nginx/…
-# При повторном запуске скрипта на том же VPS порт часто слушает уже наш
-# `xray` или `caddy-naive` — тогда не блокируем (см. ниже).
+# ── 5b. Pre-flight: TCP 443 must be free OR already held by our stack ──
+# Goal: do not spend minutes building Caddy if :443 is already held by 3x-ui/nginx/…
+# On a re-run of this script on the same VPS the port is often already listening
+# as our `xray` or `caddy-naive` — then do not block (see below).
 preflight_tcp443_for_protocol_install() {
     if ! command -v ss >/dev/null 2>&1; then
-        echo -e "${YELLOW}⚠️  Утилита ss недоступна — пропускаем pre-flight :443/tcp.${NC}"
+        echo -e "${YELLOW}⚠️  ss is unavailable — skipping pre-flight :443/tcp.${NC}"
         return 0
     fi
-    # LISTEN на TCP :443 (IPv4 *:443 / 0.0.0.0:443 или IPv6 [::]:443)
+    # LISTEN on TCP :443 (IPv4 *:443 / 0.0.0.0:443 or IPv6 [::]:443)
     if ! ss -ltn 2>/dev/null | awk '$1 == "LISTEN" && $4 ~ /:443$/ { f = 1 } END { exit !f }'; then
         return 0
     fi
-    # Что-то слушает :443 — повторный запуск разрешаем только если это
-    # сервис выбранного режима. Иначе можно случайно поставить второй Xray.
+    # Something is listening on :443 — allow a re-run only if it is the
+    # service of the selected mode. Otherwise we might accidentally install a second Xray.
     if [ "$PROTOCOL" = "vless" ] && systemctl is-active --quiet xray 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  :443/tcp уже занят xray — считаем это legacy VLESS и продолжаем (повторный запуск?).${NC}"
+        echo -e "${YELLOW}⚠️  :443/tcp is already held by xray — treating as legacy VLESS and continuing (re-run?).${NC}"
         ss -ltn 2>/dev/null | awk '$1=="LISTEN" && $4 ~ /:443$/ {print}' || true
         return 0
     fi
     if [ "$PROTOCOL" = "xui" ] && systemctl is-active --quiet x-ui 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  :443/tcp уже занят x-ui — считаем это 3x-ui mode и продолжаем (повторный запуск?).${NC}"
+        echo -e "${YELLOW}⚠️  :443/tcp is already held by x-ui — treating as 3x-ui mode and continuing (re-run?).${NC}"
         ss -ltn 2>/dev/null | awk '$1=="LISTEN" && $4 ~ /:443$/ {print}' || true
         return 0
     fi
     if [ "$PROTOCOL" = "naiveproxy" ] && systemctl is-active --quiet caddy-naive 2>/dev/null; then
-        echo -e "${YELLOW}⚠️  :443/tcp уже занят caddy-naive — считаем это NaiveProxy и продолжаем (повторный запуск?).${NC}"
+        echo -e "${YELLOW}⚠️  :443/tcp is already held by caddy-naive — treating as NaiveProxy and continuing (re-run?).${NC}"
         ss -ltn 2>/dev/null | awk '$1=="LISTEN" && $4 ~ /:443$/ {print}' || true
         return 0
     fi
-    echo -e "${RED}❌ TCP-порт 443 уже занят посторонним процессом.${NC}"
-    echo -e "${YELLOW}Текущие слушатели :443:${NC}"
+    echo -e "${RED}❌ TCP port 443 is already taken by a foreign process.${NC}"
+    echo -e "${YELLOW}Current :443 listeners:${NC}"
     ss -ltnp 2>/dev/null | awk '$1=="LISTEN" && $4 ~ /:443$/ {print}' || ss -ltnp 2>/dev/null | grep ':443' || true
     echo ""
-    echo -e "${YELLOW}Освободите порт (остановите 3x-ui/nginx/другой Xray и т.п.) либо используйте другой VPS.${NC}"
-    echo -e "${YELLOW}Подсказка: ss -ltnp | grep 443${NC}"
+    echo -e "${YELLOW}Free the port (stop 3x-ui/nginx/another Xray, etc.) or use another VPS.${NC}"
+    echo -e "${YELLOW}Hint: ss -ltnp | grep 443${NC}"
     exit 1
 }
 if [[ "$PROTOCOL" =~ ^(vless|xui|naiveproxy)$ ]]; then
     preflight_tcp443_for_protocol_install
 else
-    echo -e "${YELLOW}Mieru выбран на ${MIERU_PORT}/${MIERU_PROTOCOL}: pre-flight TCP/443 пропущен.${NC}"
+    echo -e "${YELLOW}Mieru selected on ${MIERU_PORT}/${MIERU_PROTOCOL}: TCP/443 pre-flight skipped.${NC}"
 fi
 
 # ── 6. Install primary protocol ──────────────────────────────
 if [ "$PROTOCOL" = "xui" ]; then
 
-    next "Установка 3x-ui panel для VLESS-Reality..."
-    echo -e "${YELLOW}Официальный installer 3x-ui интерактивный: задайте порт панели, webBasePath, логин и пароль.${NC}"
-    echo -e "${YELLOW}Не используйте 443 как порт панели: 443 нужен VLESS inbound'у Xray.${NC}"
-    echo -e "${YELLOW}После установки доступны оба интерфейса: терминальная команда x-ui и браузерная панель.${NC}"
+    next "Installing 3x-ui panel for VLESS-Reality..."
+    echo -e "${YELLOW}The official 3x-ui installer is interactive: set panel port, webBasePath, login and password.${NC}"
+    echo -e "${YELLOW}Do not use 443 as the panel port: 443 is needed for the VLESS Xray inbound.${NC}"
+    echo -e "${YELLOW}After install both interfaces are available: the x-ui terminal command and the browser panel.${NC}"
     if systemctl list-unit-files 2>/dev/null | grep -q '^x-ui\.service'; then
-        echo "3x-ui уже установлен: x-ui.service найден"
+        echo "3x-ui already installed: x-ui.service found"
         systemctl enable x-ui || true
         systemctl restart x-ui || true
     else
         bash <(curl -Ls https://raw.githubusercontent.com/MHSanaei/3x-ui/master/install.sh)
     fi
-    echo -e "${GREEN}✅ 3x-ui installer завершён${NC}"
-    echo -e "${YELLOW}Дальше в панели создайте VLESS-Reality inbound на TCP/443.${NC}"
-    echo -e "${YELLOW}После запуска бота выполните: /xui_setup → /xui_status → /provision <telegram_user_id>${NC}"
+    echo -e "${GREEN}✅ 3x-ui installer finished${NC}"
+    echo -e "${YELLOW}Next in the panel: create a VLESS-Reality inbound on TCP/443.${NC}"
+    echo -e "${YELLOW}After the bot starts, run: /xui_setup → /xui_status → /provision <telegram_user_id>${NC}"
 
 elif [ "$PROTOCOL" = "vless" ]; then
 
-    next "Установка Xray-core + VLESS-Reality..."
+    next "Installing Xray-core + VLESS-Reality..."
     if ! command -v xray &> /dev/null; then
         bash -c "$(curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
-        echo -e "${GREEN}✅ Xray установлен${NC}"
+        echo -e "${GREEN}✅ Xray installed${NC}"
     else
-        echo "Xray уже установлен: $(xray version | head -1)"
+        echo "Xray already installed: $(xray version | head -1)"
     fi
 
     VLESS_PORT="443"
@@ -317,14 +317,14 @@ elif [ "$PROTOCOL" = "vless" ]; then
     PRIVATE_KEY=$(echo "$X25519_OUTPUT" | grep -i "private" | awk -F': ' '{print $2}' | tr -d ' ')
     PUBLIC_KEY=$(echo "$X25519_OUTPUT"  | grep -i "public"  | awk -F': ' '{print $2}' | tr -d ' ')
     SHORT_ID=$(cat /dev/urandom | tr -dc 'a-f0-9' | head -c 8)
-    # yahoo.com по умолчанию: www.microsoft.com у ряда мобильных операторов
-    # блокируется DPI (Reality-хендшейк не доходит до Xray). Сменить потом
-    # можно из бота: /vless_set_sni
+    # yahoo.com by default: www.microsoft.com is DPI-blocked by some mobile
+    # operators (the Reality handshake never reaches Xray). Change later
+    # from the bot: /vless_set_sni
     SNI="yahoo.com"
     FINGERPRINT="chrome"
 
     if [ -z "$PRIVATE_KEY" ] || [ -z "$PUBLIC_KEY" ]; then
-        echo -e "${YELLOW}⚠️ Повторная генерация ключей...${NC}"
+        echo -e "${YELLOW}⚠️ Regenerating keys...${NC}"
         X25519_OUTPUT=$(/usr/local/bin/xray x25519)
         PRIVATE_KEY=$(echo "$X25519_OUTPUT" | head -1 | awk -F': ' '{print $2}' | tr -d ' ')
         PUBLIC_KEY=$(echo "$X25519_OUTPUT"  | tail -1 | awk -F': ' '{print $2}' | tr -d ' ')
@@ -362,11 +362,11 @@ EOF
     chmod o+w /usr/local/etc/xray/config.json
     systemctl enable xray
     systemctl restart xray
-    echo -e "${GREEN}✅ Xray VLESS-Reality запущен на TCP/$VLESS_PORT${NC}"
+    echo -e "${GREEN}✅ Xray VLESS-Reality running on TCP/$VLESS_PORT${NC}"
 
 elif [ "$PROTOCOL" = "naiveproxy" ]; then
 
-    next "Сборка Caddy + NaiveProxy..."
+    next "Building Caddy + NaiveProxy..."
     CADDY_BIN="/usr/local/bin/caddy-naive"
     CADDY_DIR="/etc/caddy-naive"
     SERVICE_NAME="caddy-naive"
@@ -436,26 +436,26 @@ EOF
     sleep 2
 
     if systemctl is-active --quiet "$SERVICE_NAME"; then
-        echo -e "${GREEN}✅ NaiveProxy (Caddy) запущен на TCP/$NAIVE_PORT${NC}"
+        echo -e "${GREEN}✅ NaiveProxy (Caddy) running on TCP/$NAIVE_PORT${NC}"
     else
-        echo -e "${RED}❌ NaiveProxy не запустился!${NC}"
+        echo -e "${RED}❌ NaiveProxy failed to start!${NC}"
         journalctl -u "$SERVICE_NAME" -n 20
     fi
 
 else  # mieru
 
-    next "Установка Mieru server (mita)..."
+    next "Installing Mieru server (mita)..."
     INSTALL_MIERU="/tmp/install_mieru.sh"
     curl -fsSL "https://raw.githubusercontent.com/your-github-user/TelegramHelper/main/scripts/install_mieru.sh" -o "$INSTALL_MIERU"
     chmod +x "$INSTALL_MIERU"
     bash "$INSTALL_MIERU" --port "$MIERU_PORT" --protocol "$MIERU_PROTOCOL"
-    echo -e "${GREEN}✅ Mieru/mita установлен. Порт: ${MIERU_PORT}/${MIERU_PROTOCOL}${NC}"
-    echo -e "${YELLOW}После запуска бота выполните: /mieru_set_server $SERVER_IP → /mieru_set_port $MIERU_PORT $MIERU_PROTOCOL → /mieru_add_client phone → /mieru_apply → /mieru_start${NC}"
+    echo -e "${GREEN}✅ Mieru/mita installed. Port: ${MIERU_PORT}/${MIERU_PROTOCOL}${NC}"
+    echo -e "${YELLOW}After the bot starts, run: /mieru_set_server $SERVER_IP → /mieru_set_port $MIERU_PORT $MIERU_PROTOCOL → /mieru_add_client phone → /mieru_apply → /mieru_start${NC}"
 
 fi
 
 # ── 7. Install & Configure Hysteria2 ────────────────────────
-next "Установка и настройка Hysteria2..."
+next "Installing and configuring Hysteria2..."
 if ! command -v hysteria &> /dev/null; then
     bash <(curl -fsSL https://get.hy2.sh/)
 fi
@@ -512,29 +512,29 @@ systemctl restart hysteria-server
 sleep 2
 
 if systemctl is-active --quiet hysteria-server; then
-    echo -e "${GREEN}✅ Hysteria2 запущен на UDP/$HY2_PORT${NC}"
+    echo -e "${GREEN}✅ Hysteria2 running on UDP/$HY2_PORT${NC}"
 else
-    echo -e "${RED}❌ Hysteria2 не запустился!${NC}"
+    echo -e "${RED}❌ Hysteria2 failed to start!${NC}"
     journalctl -u hysteria-server -n 10
 fi
 
 # ── 8. Firewall + Security ──────────────────────────────────
-next "Настройка UFW, Fail2ban..."
+next "Configuring UFW, Fail2ban..."
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow $SSH_PORT/tcp    # SSH
 if [[ "$PROTOCOL" =~ ^(vless|xui|naiveproxy)$ ]]; then
-    ufw allow 443/tcp      # VLESS или NaiveProxy
+    ufw allow 443/tcp      # VLESS or NaiveProxy
 fi
 ufw allow 443/udp          # Hysteria2
 ufw allow 8000/tcp         # TelegramHelper bot API
 ufw allow 993/tcp          # MTProto
-[ "$PROTOCOL" = "naiveproxy" ] && ufw allow 80/tcp  # ACME challenge для Let's Encrypt
+[ "$PROTOCOL" = "naiveproxy" ] && ufw allow 80/tcp  # ACME challenge for Let's Encrypt
 [ "$PROTOCOL" = "mieru" ] && ufw allow "$MIERU_PORT/$MIERU_PROTOCOL"  # Mieru/mita
 if [ "$PROTOCOL" = "xui" ]; then
-    echo -e "${YELLOW}Если 3x-ui panel слушает отдельный публичный порт, откройте его вручную:${NC}"
+    echo -e "${YELLOW}If the 3x-ui panel listens on a separate public port, open it by hand:${NC}"
     echo -e "${YELLOW}  ufw allow <PANEL_PORT>/tcp${NC}"
-    echo -e "${YELLOW}Для mesh-only панели публично открывать panel port не нужно.${NC}"
+    echo -e "${YELLOW}For a mesh-only panel you do not need to open the panel port publicly.${NC}"
 fi
 ufw --force enable
 
@@ -557,20 +557,20 @@ systemctl restart fail2ban
 
 echo 'APT::Periodic::Update-Package-Lists "1";' | tee    /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
 echo 'APT::Periodic::Unattended-Upgrade "1";'   | tee -a /etc/apt/apt.conf.d/20auto-upgrades > /dev/null
-echo -e "${GREEN}✅ UFW, Fail2ban настроены${NC}"
+echo -e "${GREEN}✅ UFW, Fail2ban configured${NC}"
 
 # ── 9. SSH port ──────────────────────────────────────────────
-next "Смена SSH порта на $SSH_PORT..."
+next "Changing SSH port to $SSH_PORT..."
 if ! grep -q "Port $SSH_PORT" /etc/ssh/sshd_config; then
     sed -i "s/^#*Port .*/Port $SSH_PORT/" /etc/ssh/sshd_config
     systemctl restart ssh || systemctl restart sshd
-    echo -e "${GREEN}✅ SSH переведён на порт $SSH_PORT${NC}"
+    echo -e "${GREEN}✅ SSH moved to port $SSH_PORT${NC}"
 else
-    echo "SSH уже на порту $SSH_PORT"
+    echo "SSH already on port $SSH_PORT"
 fi
 
 # ── 10. Prepare /opt/TelegramHelper ────────────────────────────
-next "Подготовка /opt/TelegramHelper..."
+next "Preparing /opt/TelegramHelper..."
 PROJECT_DIR="/opt/TelegramHelper"
 mkdir -p $PROJECT_DIR
 
@@ -659,8 +659,8 @@ echo '{}' > $PROJECT_DIR/users.json
 echo '{}' > $PROJECT_DIR/hysteria2_config.json
 echo '{}' > $PROJECT_DIR/mtproto_config.json
 echo '{}' > $PROJECT_DIR/headscale_config.json
-# Пустые конфиги под docker bind-mount (compose.yaml) — иначе Docker
-# создаст директорию вместо файла и бот упадёт с Errno 21.
+# Empty configs for docker bind-mount (compose.yaml) — otherwise Docker
+# creates a directory instead of a file and the bot dies with Errno 21.
 echo '{}' > $PROJECT_DIR/tuic_config.json
 echo '{}' > $PROJECT_DIR/anytls_config.json
 echo '{}' > $PROJECT_DIR/xhttp_config.json
@@ -679,14 +679,14 @@ chmod 600 $PROJECT_DIR/app_keys.json $PROJECT_DIR/users.json \
           $PROJECT_DIR/mieru_config.json
 chmod 640 $PROJECT_DIR/bot.log
 
-echo -e "${GREEN}✅ Директория и файлы данных готовы${NC}"
+echo -e "${GREEN}✅ Directory and data files are ready${NC}"
 
-# ── 11. Авто-чистка диска ────────────────────────────────────
-# Ставим таймер сразу: build cache и journald растут с первого же билда,
-# а упереться в 100% диска на VPS проще, чем кажется (CLEANUP_SERVER.md).
-# На этой фазе кода проекта на сервере может ещё не быть — тогда чистка
-# включится позже, при деплое (install_telegramhelper_*.sh).
-next "Авто-чистка диска..."
+# ── 11. Disk auto-cleanup ────────────────────────────────────
+# Install the timer now: build cache and journald grow from the first build,
+# and hitting 100% disk on a VPS is easier than it looks (CLEANUP_SERVER.md).
+# At this phase project code may not be on the server yet — then cleanup
+# will be enabled later, at deploy (install_telegramhelper_*.sh).
+next "Disk auto-cleanup..."
 MAINT_SH=""
 for cand in "$(dirname "$0")/vps_maintenance.sh" "$PROJECT_DIR/scripts/vps_maintenance.sh"; do
     if [ -f "$cand" ]; then MAINT_SH="$cand"; break; fi
@@ -694,36 +694,36 @@ done
 
 if [ -n "$MAINT_SH" ]; then
     if bash "$MAINT_SH" --install; then
-        MAINT_STATE="включена (вс 04:00 UTC)"
+        MAINT_STATE="enabled (Sun 04:00 UTC)"
     else
-        MAINT_STATE="ОШИБКА — включи вручную: bash scripts/vps_maintenance.sh --install"
+        MAINT_STATE="ERROR — enable by hand: bash scripts/vps_maintenance.sh --install"
     fi
-    echo -e "${GREEN}✅ Авто-чистка диска включена${NC}"
+    echo -e "${GREEN}✅ Disk auto-cleanup enabled${NC}"
 else
-    MAINT_STATE="включится при деплое кода (install_telegramhelper_*.sh)"
-    echo -e "${YELLOW}vps_maintenance.sh ещё не на сервере — чистка включится при деплое кода${NC}"
+    MAINT_STATE="will enable when code is deployed (install_telegramhelper_*.sh)"
+    echo -e "${YELLOW}vps_maintenance.sh is not on the server yet — cleanup will enable when code is deployed${NC}"
 fi
 
 # ── 12. Summary & Credentials ───────────────────────────────
-next "Готово! Сводка:"
+next "Done! Summary:"
 
 if [ "$PROTOCOL" = "xui" ]; then
-    PROTO_LINK="Создаётся в панели 3x-ui после настройки VLESS-Reality inbound."
+    PROTO_LINK="Created in the 3x-ui panel after configuring the VLESS-Reality inbound."
     PROTO_SECTION="━━━ VLESS-Reality via 3x-ui (TCP/443) ━━━━━━━━━━━━━
 Source of truth: 3x-ui panel / x-ui.service
-Выбранный интерфейс: ${XUI_ACCESS_MODE:-browser}
+Selected interface: ${XUI_ACCESS_MODE:-browser}
 
-Важно:
-- terminal menu: команда x-ui на VPS
+Notes:
+- terminal menu: x-ui command on the VPS
 - browser UI: https://<IP>:<PANEL_PORT>/<WEB_PATH>/
-- оба интерфейса управляют одним и тем же x-ui.service
+- both interfaces control the same x-ui.service
 
-Что сделать в панели:
-1. Создать VLESS-Reality inbound на TCP/443.
-2. Добавить хотя бы одного manual client для проверки.
-3. Скопировать URL панели, login, password и inbound id.
+What to do in the panel:
+1. Create a VLESS-Reality inbound on TCP/443.
+2. Add at least one manual client for a check.
+3. Copy the panel URL, login, password and inbound id.
 
-Что сделать в TelegramHelper:
+What to do in TelegramHelper:
 /xui_setup
 /xui_status
 /provision <telegram_user_id>
@@ -751,14 +751,14 @@ Service:  caddy-naive
 Client URI:
 $PROTO_LINK"
 else
-    PROTO_LINK="Создаётся через /mieru_add_client и /mieru_export после запуска бота."
+    PROTO_LINK="Created via /mieru_add_client and /mieru_export after the bot starts."
     PROTO_SECTION="━━━ Mieru / mita (${MIERU_PROTOCOL^^}/${MIERU_PORT}) ━━━━━━━━━━━━━━━━━━━━
 Server:   $SERVER_IP
 Port:     $MIERU_PORT
 Protocol: ${MIERU_PROTOCOL^^}
 Service:  mita
 
-Что сделать в TelegramHelper:
+What to do in TelegramHelper:
 /mieru_status
 /mieru_add_client phone
 /mieru_apply
@@ -788,13 +788,13 @@ API Key:        $API_KEY
 HMAC Key:       $HMAC_KEY
 Encryption Key: $ENC_KEY
 
-━━━ Развор контейнеров ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Выбрано: $DEPLOY_TARGET_HUMAN
-Команда: $DEPLOY_CMD
+━━━ Container deploy ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Selected: $DEPLOY_TARGET_HUMAN
+Command:  $DEPLOY_CMD
 
-━━━ Следующий шаг ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-С локального Mac выполните загрузку проекта и docker compose up.
-Инструкция: DEPLOY_GUIDE.md → Фаза 2.
+━━━ Next step ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+From the local Mac, upload the project and run docker compose up.
+Guide: DEPLOY_GUIDE.md → Phase 2.
 ═══════════════════════════════════════════════════════════════
 EOF
 
@@ -802,13 +802,13 @@ chmod 600 $PROJECT_DIR/CREDENTIALS.txt
 
 echo ""
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
-echo -e "${GREEN}  ✅ Фаза 1 завершена!${NC}"
+echo -e "${GREEN}  ✅ Phase 1 finished!${NC}"
 echo -e "${GREEN}═══════════════════════════════════════════════════════${NC}"
 echo ""
 
 if [ "$PROTOCOL" = "xui" ]; then
     echo -e "  🛠️  3x-ui panel:    $(systemctl is-active x-ui 2>/dev/null || echo unknown)"
-    echo -e "  🛡️  VLESS-Reality: создайте inbound TCP/443 в панели"
+    echo -e "  🛡️  VLESS-Reality: create inbound TCP/443 in the panel"
 elif [ "$PROTOCOL" = "vless" ]; then
     echo -e "  🛡️  VLESS-Reality: TCP/443 — $(systemctl is-active xray)"
 elif [ "$PROTOCOL" = "naiveproxy" ]; then
@@ -820,16 +820,16 @@ echo -e "  ⚡  Hysteria2:     UDP/443 — $(systemctl is-active hysteria-server
 echo -e "  🔥  UFW:           $(ufw status | head -1)"
 echo -e "  🛑  Fail2ban:      $(systemctl is-active fail2ban)"
 echo -e "  💾  Swap:          $(swapon --show --noheadings | awk '{print $3}')"
-echo -e "  🧹  Авто-чистка:   $MAINT_STATE"
+echo -e "  🧹  Auto-cleanup:  $MAINT_STATE"
 echo -e "  📁  Data dir:      $PROJECT_DIR"
 echo ""
-echo -e "${YELLOW}📋 Credentials сохранены в: $PROJECT_DIR/CREDENTIALS.txt${NC}"
-echo -e "${YELLOW}   cat $PROJECT_DIR/CREDENTIALS.txt — просмотреть${NC}"
-echo -e "${YELLOW}   rm $PROJECT_DIR/CREDENTIALS.txt  — удалить после копирования${NC}"
+echo -e "${YELLOW}📋 Credentials saved in: $PROJECT_DIR/CREDENTIALS.txt${NC}"
+echo -e "${YELLOW}   cat $PROJECT_DIR/CREDENTIALS.txt — view${NC}"
+echo -e "${YELLOW}   rm $PROJECT_DIR/CREDENTIALS.txt  — delete after copying${NC}"
 echo ""
-echo -e "${CYAN}━━━ Следующий шаг (с Mac): ━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+echo -e "${CYAN}━━━ Next step (from Mac): ━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo -e "  ${BOLD}Выбрано к развору:${NC} $DEPLOY_TARGET_HUMAN"
+echo -e "  ${BOLD}Selected for deploy:${NC} $DEPLOY_TARGET_HUMAN"
 echo ""
 echo "  cd /Users/<USER>/Project/ProjectPython/TelegramHelper"
 echo "  cp example.env .env.deploy && nano .env.deploy"
@@ -842,40 +842,40 @@ echo ""
 echo "  scp -P $SSH_PORT .env.deploy root@$SERVER_IP:$PROJECT_DIR/.env"
 echo "  ssh -p $SSH_PORT root@$SERVER_IP 'cd $PROJECT_DIR && $DEPLOY_CMD'"
 echo ""
-echo -e "${CYAN}━━━ Чистка диска (после деплоя кода): ━━━━━━━━━━━━━━━${NC}"
-echo "  Состояние: $MAINT_STATE"
-echo "  bash scripts/vps_maintenance.sh --install   # еженедельный таймер"
-echo "  bash scripts/vps_maintenance.sh --report    # диагностика: что съело диск"
-echo -e "  ${YELLOW}Подробнее — CLEANUP_SERVER.md${NC}"
+echo -e "${CYAN}━━━ Disk cleanup (after code deploy): ━━━━━━━━━━━━━━${NC}"
+echo "  State: $MAINT_STATE"
+echo "  bash scripts/vps_maintenance.sh --install   # weekly timer"
+echo "  bash scripts/vps_maintenance.sh --report    # diagnose: what ate the disk"
+echo -e "  ${YELLOW}Details — CLEANUP_SERVER.md${NC}"
 
 if [ "$PROTOCOL" = "xui" ]; then
     echo ""
-    echo -e "${CYAN}━━━ После запуска бота (3x-ui mode): ━━━━━━━━━━━━━━━━━${NC}"
-    echo "  1. Управление 3x-ui: команда x-ui или браузерный URL панели."
-    echo "  2. Создайте VLESS-Reality inbound на TCP/443."
-    echo "  3. В Telegram выполните: /xui_setup"
-    echo "  4. Затем: /xui_status && /provision <telegram_user_id>"
+    echo -e "${CYAN}━━━ After the bot starts (3x-ui mode): ━━━━━━━━━━━━━━━${NC}"
+    echo "  1. Control 3x-ui: x-ui command or the browser panel URL."
+    echo "  2. Create a VLESS-Reality inbound on TCP/443."
+    echo "  3. In Telegram run: /xui_setup"
+    echo "  4. Then: /xui_status && /provision <telegram_user_id>"
 elif [ "$PROTOCOL" = "vless" ]; then
     echo ""
-    echo -e "${CYAN}━━━ После запуска бота (legacy VLESS mode): ━━━━━━━━━━${NC}"
-    echo "  1. В Telegram проверьте: /vless_status"
-    echo "  2. Затем выдавайте профили: /provision <telegram_user_id>"
-    echo "  3. Пользователь забирает: /my_profile"
+    echo -e "${CYAN}━━━ After the bot starts (legacy VLESS mode): ━━━━━━━━${NC}"
+    echo "  1. In Telegram check: /vless_status"
+    echo "  2. Then issue profiles: /provision <telegram_user_id>"
+    echo "  3. The user fetches: /my_profile"
 elif [ "$PROTOCOL" = "mieru" ]; then
     echo ""
-    echo -e "${CYAN}━━━ После запуска бота (Mieru mode): ━━━━━━━━━━━━━━━━${NC}"
-    echo "  1. В Telegram проверьте: /mieru_status"
-    echo "  2. Создайте клиента: /mieru_add_client phone"
-    echo "  3. Примените сервер: /mieru_apply && /mieru_start"
-    echo "  4. Выдайте профиль: /mieru_export phone"
+    echo -e "${CYAN}━━━ After the bot starts (Mieru mode): ━━━━━━━━━━━━━━━${NC}"
+    echo "  1. In Telegram check: /mieru_status"
+    echo "  2. Create a client: /mieru_add_client phone"
+    echo "  3. Apply the server: /mieru_apply && /mieru_start"
+    echo "  4. Export the profile: /mieru_export phone"
 fi
 
 if [ "$DEPLOY_TARGET" != "bot" ]; then
     echo ""
-    echo -e "${CYAN}━━━ Доступ к Dockhand (с Mac, после старта): ━━━━━━━━${NC}"
+    echo -e "${CYAN}━━━ Dockhand access (from Mac, after start): ━━━━━━━━${NC}"
     echo ""
     echo "  ssh -L 8501:localhost:8501 -p $SSH_PORT root@$SERVER_IP"
-    echo "  # затем открыть в браузере: http://localhost:8501"
+    echo "  # then open in the browser: http://localhost:8501"
     echo ""
-    echo -e "  ${YELLOW}Подробнее — DOCKHAND_GUIDE.md / DOCKHAND_SETUP.md${NC}"
+    echo -e "  ${YELLOW}Details — DOCKHAND_GUIDE.md / DOCKHAND_SETUP.md${NC}"
 fi

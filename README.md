@@ -145,6 +145,7 @@ Project docs only — no generic tutorials.
 | [EMAIL.md](EMAIL.md) | SMTP for `/email_profile` |
 | [SSHvsTelegramBOT.md](SSHvsTelegramBOT.md) | CLI dashboard when Telegram is down |
 | [HEADSCALE_GUIDE.md](HEADSCALE_GUIDE.md) | Headscale / Headplane |
+| [RETICULUM_GUIDE.md](RETICULUM_GUIDE.md) | Optional HA stubs + Reticulum (bot does not start it) |
 | [DOCKHAND_GUIDE.md](DOCKHAND_GUIDE.md) | Docker diagnostics UI |
 
 ## License

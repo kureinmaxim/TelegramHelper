@@ -1,10 +1,11 @@
-"""Запуск RNS-моста на VPS.
+"""Start the RNS bridge on the VPS.
 
-Связывает приём запроса по Reticulum (DeviceControlBridge) с локальным gRPC
-DeviceControlService (GrpcCommandBackend). Транспорт (TCP сейчас, I2P позже)
-задаётся конфигом RNS в --config; код моста при смене интерфейса не меняется.
+Ties Reticulum request intake (DeviceControlBridge) to the local gRPC
+DeviceControlService (GrpcCommandBackend). Transport (TCP now, I2P later)
+is set by the RNS config in --config; bridge code does not change when
+the interface changes.
 
-Пример:
+Example:
     python -m bridge.run_bridge --grpc 127.0.0.1:50051 \
         --config ./_rnscfg --storage ./_rnsdata
 """
@@ -16,14 +17,14 @@ import time
 from bridge.bridge import DeviceControlBridge
 from bridge.grpc_backend import GrpcCommandBackend
 
-# Интервал повторного announce, сек (чтобы клиенты находили путь к мосту).
+# Re-announce interval, seconds (so clients can find a path to the bridge).
 ANNOUNCE_INTERVAL = 60
 HEARTBEAT_PATH = os.environ.get("HA_RNS_HEARTBEAT", "/tmp/ha-rns-bridge.heartbeat")
 HEARTBEAT_EVERY = float(os.environ.get("HA_RNS_HEARTBEAT_EVERY", "20"))
 
 
 def _heartbeat_loop() -> None:
-    """Пишет mtime-файл для ha-rns-watchdog (soft hang всего процесса)."""
+    """Write an mtime file for ha-rns-watchdog (whole-process soft hang)."""
     while True:
         try:
             with open(HEARTBEAT_PATH, "w", encoding="utf-8") as f:
@@ -36,12 +37,12 @@ def _heartbeat_loop() -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="RNS bridge for DeviceControlService")
     parser.add_argument("--grpc", default="127.0.0.1:50051",
-                        help="адрес локального DeviceControlService (gRPC)")
-    parser.add_argument("--config", required=True, help="configdir для RNS")
+                        help="local DeviceControlService address (gRPC)")
+    parser.add_argument("--config", required=True, help="RNS configdir")
     parser.add_argument("--storage", required=True,
-                        help="storagepath (хранит стабильную identity моста)")
+                        help="storagepath (holds the stable bridge identity)")
     parser.add_argument("--udp-target", default=None,
-                        help="HOST:PORT UDP-прокси для пути /udp_raw (опционально)")
+                        help="HOST:PORT UDP proxy for the /udp_raw path (optional)")
     args = parser.parse_args()
 
     udp_target = None
@@ -67,7 +68,7 @@ def main() -> None:
 
     while True:
         time.sleep(ANNOUNCE_INTERVAL)
-        bridge.start()  # периодический повторный announce
+        bridge.start()  # periodic re-announce
 
 
 if __name__ == "__main__":

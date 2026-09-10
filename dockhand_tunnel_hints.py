@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Параметры SSH для подсказки /dockhand (туннель к Dockhand на 127.0.0.1:8501 сервера).
+SSH parameters for the /dockhand hint (tunnel to Dockhand on 127.0.0.1:8501 of the server).
 
-Приоритет хоста: переменные окружения → server из VLESS → автоопределение публичного IP.
-Приоритет порта: DOCKHAND_SSH_PORT / TELEGRAMHELPER_SSH_PORT / SSH_PORT → 22.
-Пользователь SSH: DOCKHAND_SSH_USER / TELEGRAMHELPER_SSH_USER → root.
+Host priority: env vars → VLESS server → auto-detect public IP.
+Port priority: DOCKHAND_SSH_PORT / TELEGRAMHELPER_SSH_PORT / SSH_PORT → 22.
+SSH user: DOCKHAND_SSH_USER / TELEGRAMHELPER_SSH_USER → root.
 
-В строке -L удалённая цель — 127.0.0.1 (не localhost), см. build_ssh_tunnel_command.
+In the -L string the remote target is 127.0.0.1 (not localhost); see build_ssh_tunnel_command.
 """
 
 from __future__ import annotations
@@ -46,10 +46,10 @@ def _parse_ssh_port(raw: str, default: int = 22) -> int:
 
 
 def get_dockhand_ssh_params(*, resolve_public_ip: bool = True) -> DockhandSshParams:
-    """Вернуть хост, порт и пользователя для строки ssh -L … (и флаг «подставьте вручную»).
+    """Return host, port, and user for an ssh -L line (plus a 'fill in manually' flag).
 
     Args:
-        resolve_public_ip: если False — не вызывать сетевое автоопределение публичного IP (быстрее для /start).
+        resolve_public_ip: if False, skip network auto-detect of the public IP (faster for /start).
     """
     notes: List[str] = []
 
@@ -97,8 +97,8 @@ def get_dockhand_ssh_params(*, resolve_public_ip: bool = True) -> DockhandSshPar
         logger.debug("vless_manager hints for dockhand: %s", e)
 
     notes.append(
-        "Не удалось определить IP/домен сервера. Задайте в .env рядом с compose, "
-        "например: DOCKHAND_SSH_HOST=ваш.ip или домен, при нестандартном SSH — DOCKHAND_SSH_PORT=2222"
+        "Could not determine the server IP/domain. Set it in .env next to compose, "
+        "for example: DOCKHAND_SSH_HOST=your.ip or a domain; for a non-standard SSH port use DOCKHAND_SSH_PORT=2222"
     )
     return DockhandSshParams(
         host="YOUR_SERVER_IP",
@@ -112,12 +112,12 @@ def get_dockhand_ssh_params(*, resolve_public_ip: bool = True) -> DockhandSshPar
 def build_ssh_tunnel_command(
     params: DockhandSshParams, *, local_port: int = 8501, background: bool = False
 ) -> str:
-    """Одна строка для копирования (без Markdown).
+    """One copy-paste line (no Markdown).
 
-    На удалённой стороне forward используем **127.0.0.1**, не ``localhost``: на macOS/Linux
-    ``localhost`` может резолвиться в IPv6 (::1), тогда туннель не попадает в Streamlit на 127.0.0.1.
+    On the remote side of the forward we use **127.0.0.1**, not ``localhost``: on macOS/Linux
+    ``localhost`` may resolve to IPv6 (::1), and then the tunnel misses Streamlit on 127.0.0.1.
 
-    Фоновый режим: отдельные флаги ``-f -N -L`` (совместимо с OpenSSH на macOS; склеенное ``-fNL`` у части оболочек парсится непредсказуемо).
+    Background mode: separate ``-f -N -L`` flags (compatible with OpenSSH on macOS; glued ``-fNL`` is parsed unpredictably by some shells).
     """
     inner = f"{local_port}:127.0.0.1:{local_port}"
     remote = f"{params.user}@{params.host}"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Скрипт для тестирования шифрования API.
-Эмулирует клиент (compatible AES-256-GCM clients), отправляющий зашифрованный запрос.
+Script to test API encryption.
+Emulates a client (compatible AES-256-GCM clients) sending an encrypted request.
 """
 import os
 import sys
@@ -10,92 +10,89 @@ import requests
 import logging
 from dotenv import load_dotenv
 
-# Добавляем корневую директорию в путь, чтобы импортировать модули
+# Add project root to the path so we can import modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from encryption import SecureMessenger
 from security import create_signed_headers
 
-# Настройка логирования
+# Logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def test_encryption():
-    # Загружаем переменные окружения
+    # Load environment
     load_dotenv()
-    
+
     api_key = os.getenv("API_SECRET_KEY")
     encryption_key = os.getenv("ENCRYPTION_KEY", api_key)
     hmac_secret = os.getenv("HMAC_SECRET")
     base_url = os.getenv("API_URL", "http://localhost:8000")
-    
+
     if not api_key or not hmac_secret:
         logger.error("API_SECRET_KEY or HMAC_SECRET not set in .env")
         return
 
     logger.info(f"Using Encryption Key: {encryption_key[:4]}...{encryption_key[-4:]}")
-    
-    # Инициализация мессенджера
+
+    # Init messenger
     messenger = SecureMessenger(encryption_key)
-    
-    # Тестовые данные
+
+    # Test payload
     payload = {
         "prompt": "Hello, are you encrypted?",
         "provider": "anthropic",
         "max_tokens": 100
     }
-    
+
     logger.info(f"Original Payload: {json.dumps(payload, indent=2)}")
-    
-    # 1. Шифруем данные
+
+    # 1. Encrypt
     encrypted_data = messenger.encrypt(payload)
     logger.info(f"Encrypted Data Size: {len(encrypted_data)} bytes")
     logger.info(f"Encrypted Hex (first 32 bytes): {encrypted_data.hex()[:64]}...")
-    
-    # 2. Формируем заголовки (используем create_signed_headers для подписи)
-    # Важно: для зашифрованного эндпоинта подпись может проверяться 
-    # либо по зашифрованному телу, либо по расшифрованному.
-    # В нашей реализации api.py full_security_check проверяет подпись ДО расшифровки,
-    # но verify_signature ожидает payload: dict.
-    # В текущей реализации api.py full_security_check вызывается ДО ai_query_encrypted.
-    # Но verify_signature требует payload.
-    # В случае encrypted endpoint, full_security_check не сможет проверить подпись тела, 
-    # так как тело - это байты, а не JSON.
-    # 
-    # ВАЖНО: В текущей реализации api.py full_security_check пытается читать тело запроса?
-    # Нет, verify_signature принимает payload.
-    # Но FastAPI Request body можно прочитать только один раз.
-    # 
-    # Давайте посмотрим на api.py внимательнее.
-    # full_security_check не читает body. verify_signature принимает payload.
-    # Но verify_signature вызывается внутри full_security_check?
-    # Нет, verify_signature импортируется, но full_security_check его НЕ вызывает для проверки тела!
-    # full_security_check проверяет headers (timestamp, nonce, api_key).
-    # А verify_signature вызывается отдельно?
-    # В api.py:
+
+    # 2. Build headers (create_signed_headers is for signing JSON payloads).
+    # For the encrypted endpoint the signature could be checked on the
+    # ciphertext or on the plaintext. In our api.py, full_security_check
+    # runs BEFORE decrypt, but verify_signature expects payload: dict.
+    # full_security_check is called before ai_query_encrypted, and cannot
+    # verify the body signature because the body is bytes, not JSON.
+    #
+    # IMPORTANT: does full_security_check try to read the request body?
+    # No — verify_signature takes a payload. FastAPI can read Request.body
+    # only once.
+    #
+    # Looking at api.py more carefully:
+    # full_security_check does not read the body. verify_signature takes a payload.
+    # Is verify_signature called inside full_security_check?
+    # No — it is imported, but full_security_check does NOT call it for the body.
+    # full_security_check checks headers (timestamp, nonce, api_key).
+    # Is verify_signature called separately?
+    # In api.py:
     # async def full_security_check(...):
     #    ... verify_api_key ... verify_nonce ...
     #    return { ... }
-    # 
-    # Опа! В full_security_check НЕТ вызова verify_signature!
-    # Значит подпись тела не проверяется в full_security_check.
-    # 
-    # В ai_query (обычном) тоже нет явного вызова verify_signature.
-    # Значит подпись вообще не проверялась в v1?
-    # Давайте проверим security.py verify_signature usage.
-    # Она там определена, но используется ли?
-    # 
-    # В api.py v1 (до моих изменений) verify_signature импортировалась, но не вызывалась.
-    # Это баг или фича? 
-    # Возможно, проверка подписи была в middleware или я пропустил.
-    # 
-    # В любом случае, для encrypted endpoint нам достаточно API Key + Nonce + Encryption Tag.
-    # GCM Tag уже гарантирует целостность тела.
-    # Так что подпись HMAC для тела избыточна, если мы используем AES-GCM.
-    # Но заголовки (Timestamp, Nonce) все равно стоит защитить.
-    # 
-    # В текущей схеме мы просто отправляем заголовки для прохождения full_security_check.
-    
+    #
+    # full_security_check does NOT call verify_signature!
+    # So the body signature is not checked in full_security_check.
+    #
+    # The plain ai_query also has no explicit verify_signature call.
+    # So the signature was not checked in v1 at all?
+    # Check security.py verify_signature usage.
+    # It is defined — but is it used?
+    #
+    # In api.py v1 (before these changes) verify_signature was imported but never called.
+    # Bug or feature?
+    # Maybe the signature check lived in middleware, or it was missed.
+    #
+    # Either way, for the encrypted endpoint API Key + Nonce + Encryption Tag is enough.
+    # The GCM Tag already guarantees body integrity.
+    # So HMAC of the body is redundant when we use AES-GCM.
+    # Headers (Timestamp, Nonce) are still worth protecting.
+    #
+    # In the current scheme we just send headers to pass full_security_check.
+
     headers = {
         "X-API-KEY": api_key,
         "X-APP-ID": "test-client",
@@ -103,19 +100,18 @@ def test_encryption():
         "X-Nonce": os.urandom(8).hex(),
         "Content-Type": "application/octet-stream"
     }
-    
-    # Добавляем timestamp/nonce корректно
+
+    # Set timestamp/nonce correctly
     from security import create_signed_headers
-    # Мы не можем использовать create_signed_headers "как есть", потому что она подписывает JSON payload.
-    # А у нас payload - байты.
-    # Сделаем вручную заголовки.
-    
+    # Cannot use create_signed_headers as-is: it signs a JSON payload.
+    # Ours is bytes. Build headers by hand.
+
     import time
     import uuid
-    
+
     timestamp = str(int(time.time()))
     nonce = str(uuid.uuid4())
-    
+
     headers = {
         "X-API-KEY": api_key,
         "X-APP-ID": "test-client",
@@ -124,25 +120,25 @@ def test_encryption():
         "Content-Type": "application/octet-stream"
     }
 
-    # 3. Отправляем запрос
+    # 3. Send request
     url = f"{base_url}/ai_query/encrypted"
     logger.info(f"Sending POST to {url}")
-    
+
     try:
         response = requests.post(url, data=encrypted_data, headers=headers)
-        
+
         if response.status_code != 200:
             logger.error(f"Error {response.status_code}: {response.text}")
             return
 
-        # 4. Расшифровываем ответ
+        # 4. Decrypt response
         encrypted_response = response.content
         logger.info(f"Response Size: {len(encrypted_response)} bytes")
-        
+
         decrypted_response = messenger.decrypt(encrypted_response)
         logger.info("Decryption Successful!")
         logger.info(f"Response: {json.dumps(decrypted_response, indent=2)}")
-        
+
     except Exception as e:
         logger.error(f"Test failed: {e}")
 

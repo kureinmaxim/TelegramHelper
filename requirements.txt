@@ -11,17 +11,17 @@ httpx>=0.27.0,<0.28.0
 python-dotenv>=1.0.0
 aiofiles>=23.0.0
 
-# CLI-дашборд по SSH (cli_dashboard.py) — таблицы/панели в терминале
+# SSH CLI dashboard (cli_dashboard.py) — terminal tables/panels
 rich>=13.0.0
-# Автодополнение команд (TAB) + история с поиском (Ctrl+R) в CLI-дашборде
+# Command autocomplete (TAB) + searchable history (Ctrl+R) in the CLI dashboard
 prompt_toolkit>=3.0.0
 
-# Опционально: отправка через Gmail API (переменная GMAIL_OAUTH_CREDENTIALS)
+# Optional: send via Gmail API (GMAIL_OAUTH_CREDENTIALS)
 google-api-python-client>=2.140.0
 google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
 
-# Устойчивый провайдер поиска для /factcheck
+# Resilient search provider for /factcheck
 ddgs>=1.0.0
 
 # API Server

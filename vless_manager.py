@@ -1,19 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для управления VLESS-Reality конфигурацией.
+Module for managing VLESS-Reality configuration.
 
-VLESS-Reality — это протокол маскировки трафика, который делает соединение
-неотличимым от обычного HTTPS трафика к популярным сайтам.
+VLESS-Reality is a traffic-camouflage protocol that makes the connection
+indistinguishable from ordinary HTTPS traffic to popular websites.
 
-Структура конфигурации:
+Configuration structure:
 {
     "enabled": false,
-    "server": "IP или домен VPS",
+    "server": "VPS IP or domain",
     "port": 443,
     "uuid": "VLESS UUID",
-    "public_key": "Reality публичный ключ (x25519)",
-    "private_key": "Reality приватный ключ (только для сервера)",
-    "short_id": "hex строка 1-16 символов",
+    "public_key": "Reality public key (x25519)",
+    "private_key": "Reality private key (server only)",
+    "short_id": "hex string 1-16 characters",
     "sni": "yahoo.com",
     "fingerprint": "chrome",
     "flow": "xtls-rprx-vision",
@@ -40,22 +40,22 @@ logger = logging.getLogger(__name__)
 # Thread safety
 _vless_lock = threading.Lock()
 
-# Путь к файлу конфигурации VLESS
+# Path to the VLESS configuration file
 _VLESS_CONFIG_PATH = os.getenv(
     "VLESS_CONFIG_PATH", os.path.join(os.getcwd(), "vless_config.json")
 )
 
-# SNI варианты для маскировки (Reality "dest").
+# SNI options for camouflage (Reality "dest").
 #
-# ВАЖНО: это общеизвестные варианты, а НЕ гарантия обхода DPI. На
-# практике мобильные операторы (особенно в РФ) всё активнее
-# фингерпринтят Reality-трафик именно к «типовым для VPN-гайдов»
-# доменам — в первую очередь www.microsoft.com. Известный кейс: у конкретного
-# мобильного оператора SNI www.microsoft.com блокировался (хендшейк не доходил
-# до Xray вообще, хотя сам IP:порт были доступны), а смена на yahoo.com
-# на том же VPS/порту/ключах сразу решила проблему. Если клиент не
-# подключается при рабочих сети/порте/ключах — первое, что стоит
-# попробовать: сменить SNI на менее «типовой» для VPN-гайдов домен.
+# IMPORTANT: these are well-known options, NOT a guarantee of DPI bypass. In
+# practice mobile operators (especially in RU) increasingly fingerprint
+# Reality traffic toward "typical VPN-guide" domains — first of all
+# www.microsoft.com. Known case: a specific mobile operator blocked SNI
+# www.microsoft.com (the handshake never reached Xray at all, even though
+# the IP:port were reachable), and switching to yahoo.com on the same
+# VPS/port/keys immediately fixed it. If the client will not connect while
+# network/port/keys work — the first thing to try is switching SNI to a
+# less "typical VPN-guide" domain.
 AVAILABLE_SNI = [
     "yahoo.com",
     "www.cloudflare.com",
@@ -78,9 +78,9 @@ AVAILABLE_FINGERPRINTS = [
     "randomized",
 ]
 
-# Рекомендуемые порты для VLESS-Reality (в порядке приоритета)
-# - 443: Стандартный HTTPS (мониторится DPI)
-# - 8443: Альтернативный HTTPS (⭐ рекомендуемый)
+# Recommended ports for VLESS-Reality (priority order)
+# - 443: Standard HTTPS (watched by DPI)
+# - 8443: Alternative HTTPS (⭐ recommended)
 # - 2053: DNS-over-HTTPS (Cloudflare)
 # - 2083: cPanel SSL
 # - 2087: WHM SSL
@@ -99,7 +99,7 @@ LEGACY_VLESS_REQUIRED_FIELDS = (
     "flow",
 )
 
-# Дефолтная конфигурация
+# Default configuration
 DEFAULT_CONFIG = {
     "enabled": False,
     "server": "",
@@ -108,10 +108,10 @@ DEFAULT_CONFIG = {
     "public_key": "",
     "private_key": "",
     "short_id": "",
-    # yahoo.com вместо www.microsoft.com: microsoft — самый «типовой для
-    # VPN-гайдов» SNI, и у ряда мобильных операторов он блокируется DPI ещё до
-    # Xray (см. комментарий к AVAILABLE_SNI). Проверено: yahoo.com работает там,
-    # где microsoft резался, при тех же VPS/порте/ключах.
+    # yahoo.com instead of www.microsoft.com: microsoft is the most "typical
+    # VPN-guide" SNI, and some mobile operators DPI-block it before Xray
+    # (see the comment on AVAILABLE_SNI). Verified: yahoo.com works where
+    # microsoft was cut, with the same VPS/port/keys.
     "sni": "yahoo.com",
     "fingerprint": "chrome",
     "flow": "xtls-rprx-vision",
@@ -129,10 +129,10 @@ DEFAULT_CONFIG = {
 
 def build_legacy_vless_contract(config: Dict) -> Dict:
     """
-    Собрать минимальный legacy Reality/VLESS контракт для старых клиентских экспортов.
+    Build a minimal legacy Reality/VLESS contract for older client exports.
 
-    Этот формат должен оставаться стабильным, чтобы `TelegramHelper` мог читать и
-    переиспользовать legacy-артефакты `TelegramSimple` без немедленной миграции VPS.
+    This format must stay stable so `TelegramHelper` can read and reuse
+    `TelegramSimple` legacy artifacts without an immediate VPS migration.
     """
     return {
         "server": config.get("server", ""),
@@ -148,7 +148,7 @@ def build_legacy_vless_contract(config: Dict) -> Dict:
 
 def validate_legacy_vless_contract(payload: Dict) -> Tuple[bool, List[str]]:
     """
-    Проверить, что legacy Reality/VLESS артефакт содержит все обязательные поля.
+    Check that a legacy Reality/VLESS artifact contains all required fields.
     """
     missing = [
         field
@@ -160,13 +160,13 @@ def validate_legacy_vless_contract(payload: Dict) -> Tuple[bool, List[str]]:
 
 def _normalize_clients(config: Dict) -> None:
     """
-    Нормализовать список клиентов VLESS.
+    Normalize the VLESS client list.
     """
     clients = config.get("clients") or []
     if not isinstance(clients, list):
         clients = []
 
-    # Если клиентов нет, но есть uuid - создаём дефолтного клиента.
+    # If there are no clients but uuid is set — create a default client.
     if not clients and config.get("uuid"):
         clients = [
             {
@@ -176,7 +176,7 @@ def _normalize_clients(config: Dict) -> None:
             }
         ]
 
-    # Убедимся, что дефолтный клиент синхронизирован с config["uuid"]
+    # Make sure the default client is synced with config["uuid"]
     if config.get("uuid"):
         for client in clients:
             if client.get("name") == "default":
@@ -196,10 +196,10 @@ def _normalize_clients(config: Dict) -> None:
 
 def _effective_uuid(config: Dict) -> str:
     """
-    UUID для проверки полноты конфига: корневой или любого клиента в clients[].
+    UUID used to check whether the config is complete: root or any client in clients[].
 
-    Раньше в /ver и «configured» учитывался только config[\"uuid\"], из‑за чего при
-    нескольких клиентах без дублирования UUID в корне показывало «нет UUID».
+    Previously /ver and "configured" only looked at config["uuid"], so with
+    several clients and no root UUID duplicate it showed "no UUID".
     """
     u = (config.get("uuid") or "").strip()
     if u:
@@ -214,7 +214,7 @@ def _effective_uuid(config: Dict) -> str:
 
 
 def _load_config() -> Dict:
-    """Загрузить конфигурацию VLESS из файла"""
+    """Load VLESS configuration from file"""
     with _vless_lock:
         if not os.path.exists(_VLESS_CONFIG_PATH):
             return dict(DEFAULT_CONFIG)
@@ -233,7 +233,7 @@ def _load_config() -> Dict:
 
 
 def _save_config(config: Dict) -> bool:
-    """Сохранить конфигурацию VLESS в файл"""
+    """Save VLESS configuration to file"""
     with _vless_lock:
         try:
             config["updated_at"] = datetime.now().isoformat()
@@ -258,68 +258,68 @@ def _save_config(config: Dict) -> bool:
 
 
 def is_vless_enabled() -> bool:
-    """Проверить, включён ли VLESS-Reality"""
+    """Check whether VLESS-Reality is enabled"""
     config = _load_config()
     return config.get("enabled", False)
 
 
 def enable_vless() -> Tuple[bool, str]:
     """
-    Включить VLESS-Reality
+    Enable VLESS-Reality
 
     Returns:
-        Tuple[bool, str]: (успех, сообщение)
+        Tuple[bool, str]: (success, message)
     """
     config = _load_config()
-    # Подтягиваем UUID из clients[], если в корне пусто (исторический формат).
+    # Pull UUID from clients[] if the root field is empty (historical format).
     eu = _effective_uuid(config)
     if eu and not (config.get("uuid") or "").strip():
         config["uuid"] = eu
         _normalize_clients(config)
 
-    # Проверяем, что все необходимые параметры настроены
+    # Check that all required parameters are set
     required = ["server", "uuid", "public_key", "short_id"]
     missing = [key for key in required if not (config.get(key) or "").strip()]
 
     if missing:
-        return False, f"Не настроены обязательные параметры: {', '.join(missing)}"
+        return False, f"Required parameters are not set: {', '.join(missing)}"
 
     config["enabled"] = True
     if _save_config(config):
         logger.info("VLESS-Reality enabled")
-        return True, "✅ VLESS-Reality включён"
+        return True, "✅ VLESS-Reality enabled"
 
-    return False, "❌ Ошибка при сохранении конфигурации"
+    return False, "❌ Failed to save configuration"
 
 
 def disable_vless() -> Tuple[bool, str]:
     """
-    Выключить VLESS-Reality
+    Disable VLESS-Reality
 
     Returns:
-        Tuple[bool, str]: (успех, сообщение)
+        Tuple[bool, str]: (success, message)
     """
     config = _load_config()
     config["enabled"] = False
 
     if _save_config(config):
         logger.info("VLESS-Reality disabled")
-        return True, "🔴 VLESS-Reality выключен"
+        return True, "🔴 VLESS-Reality disabled"
 
-    return False, "❌ Ошибка при сохранении конфигурации"
+    return False, "❌ Failed to save configuration"
 
 
 def get_vless_status() -> Dict:
     """
-    Получить статус VLESS-Reality
+    Get VLESS-Reality status
 
     Returns:
-        Dict с информацией о статусе
+        Dict with status information
     """
     config = _load_config()
     eff_uuid = _effective_uuid(config)
 
-    # Проверяем конфигурацию (UUID может быть только у записей в clients[])
+    # Check the configuration (UUID may exist only on clients[] entries)
     configured = all(
         [
             bool((config.get("server") or "").strip()),
@@ -346,10 +346,10 @@ def get_vless_status() -> Dict:
 
 def get_vless_version_card_fields() -> Dict:
     """
-    Поля для блока VLESS в /ver: сервер в конфиге, подсказка адреса VPS из .env, список недостающих ключей.
+    Fields for the VLESS block in /ver: server in the config, VPS address hint from .env, list of missing keys.
 
-    «Сервер» в VLESS — это публичный IP или домен, который клиенты используют для подключения;
-    если поле пустое, Reality не знает, куда стучаться, даже если остальные поля заполнены.
+    "Server" in VLESS is the public IP or domain clients use to connect;
+    if the field is empty, Reality does not know where to dial even if the other fields are filled.
     """
     status = get_vless_status()
     server = (status.get("server") or "").strip()
@@ -385,18 +385,18 @@ def get_vless_version_card_fields() -> Dict:
 
 def get_vless_config(include_secrets: bool = False) -> Dict:
     """
-    Получить конфигурацию VLESS (опционально с секретами)
+    Get VLESS configuration (optionally with secrets)
 
     Args:
-        include_secrets: включать ли приватные ключи
+        include_secrets: whether to include private keys
 
     Returns:
-        Dict с конфигурацией
+        Dict with the configuration
     """
     config = _load_config()
 
     if not include_secrets:
-        # Маскируем секретные данные
+        # Mask secret data
         if config.get("uuid"):
             uuid = config["uuid"]
             config["uuid"] = f"{uuid[:8]}...{uuid[-4:]}" if len(uuid) > 12 else "***"
@@ -413,17 +413,17 @@ def get_vless_config(include_secrets: bool = False) -> Dict:
 
 
 _PUBLIC_IP_CACHE: Dict[str, object] = {"ip": None, "ts": 0.0}
-_PUBLIC_IP_TTL = 3600.0  # публичный IP VPS стабилен — кешируем на час
+_PUBLIC_IP_TTL = 3600.0  # public VPS IP is stable — cache for an hour
 
 
 def get_server_public_ip() -> Optional[str]:
     """
-    Получить публичный IP адрес сервера.
-    Использует несколько методов для надёжности. Результат кешируется на
-    _PUBLIC_IP_TTL секунд, чтобы /start не дёргал сеть на каждый вызов.
+    Get the server's public IP address.
+    Uses several methods for reliability. The result is cached for
+    _PUBLIC_IP_TTL seconds so /start does not hit the network on every call.
 
     Returns:
-        IP адрес или None если не удалось определить
+        IP address or None if it could not be determined
     """
     import time
     import urllib.request
@@ -436,7 +436,7 @@ def get_server_public_ip() -> Optional[str]:
     ):
         return cached_ip  # type: ignore[return-value]
 
-    # Список сервисов для определения IP
+    # List of services for IP detection
     ip_services = [
         "https://api.ipify.org",
         "https://ipinfo.io/ip",
@@ -449,7 +449,7 @@ def get_server_public_ip() -> Optional[str]:
         try:
             with urllib.request.urlopen(service, timeout=5) as response:
                 ip = response.read().decode("utf-8").strip()
-                # Базовая валидация IP
+                # Basic IP validation
                 parts = ip.split(".")
                 if len(parts) == 4 and all(
                     p.isdigit() and 0 <= int(p) <= 255 for p in parts
@@ -461,7 +461,7 @@ def get_server_public_ip() -> Optional[str]:
             logger.debug(f"Failed to get IP from {service}: {e}")
             continue
 
-    # Fallback: попробовать получить через socket
+    # Fallback: try to obtain it via socket
     try:
         import socket
 
@@ -469,7 +469,7 @@ def get_server_public_ip() -> Optional[str]:
         s.connect(("8.8.8.8", 80))
         ip = s.getsockname()[0]
         s.close()
-        # Проверяем что это не локальный IP
+        # Check that this is not a local IP
         if not ip.startswith(("10.", "172.", "192.168.", "127.")):
             logger.info(f"Detected server IP via socket: {ip}")
             _PUBLIC_IP_CACHE.update(ip=ip, ts=now)
@@ -482,15 +482,15 @@ def get_server_public_ip() -> Optional[str]:
 
 def set_vless_server(server: Optional[str] = None) -> Tuple[bool, str]:
     """
-    Установить адрес сервера VLESS.
+    Set the VLESS server address.
 
     Args:
-        server: IP или домен. Если None - автоопределение.
+        server: IP or domain. If None — auto-detect.
 
     Returns:
-        Tuple[bool, str]: (успех, сообщение)
+        Tuple[bool, str]: (success, message)
     """
-    # Автоопределение IP если не указан
+    # Auto-detect IP if not specified
     if not server or not server.strip():
         detected_ip = get_server_public_ip()
         if detected_ip:
@@ -499,7 +499,7 @@ def set_vless_server(server: Optional[str] = None) -> Tuple[bool, str]:
         else:
             return (
                 False,
-                "❌ Не удалось автоматически определить IP сервера\n\nИспользуйте: /vless_set_server <IP>",
+                "❌ Could not auto-detect the server IP\n\nUse: /vless_set_server <IP>",
             )
     else:
         auto_detected = False
@@ -509,52 +509,52 @@ def set_vless_server(server: Optional[str] = None) -> Tuple[bool, str]:
 
     if _save_config(config):
         if auto_detected:
-            return True, f"✅ Сервер установлен автоматически: {server}"
-        return True, f"✅ Сервер установлен: {server}"
-    return False, "❌ Ошибка при сохранении"
+            return True, f"✅ Server set automatically: {server}"
+        return True, f"✅ Server set: {server}"
+    return False, "❌ Failed to save"
 
 
 def set_vless_port(port: int) -> Tuple[bool, str]:
     """
-    Установить порт сервера VLESS.
+    Set the VLESS server port.
 
-    Рекомендуемые порты: 443, 8443, 2053, 2083, 2087, 2096, 8880
+    Recommended ports: 443, 8443, 2053, 2083, 2087, 2096, 8880
     """
     if not isinstance(port, int) or port < 1 or port > 65535:
-        return False, "❌ Порт должен быть числом от 1 до 65535"
+        return False, "❌ Port must be a number from 1 to 65535"
 
     config = _load_config()
     old_port = config.get("port", 443)
     config["port"] = port
 
     if _save_config(config):
-        msg = f"✅ Порт установлен: {port}"
+        msg = f"✅ Port set: {port}"
         if old_port != port:
-            msg += f"\n📝 Предыдущий порт: {old_port}"
+            msg += f"\n📝 Previous port: {old_port}"
         if port in RECOMMENDED_PORTS:
-            msg += "\n⭐ Это рекомендуемый порт"
+            msg += "\n⭐ This is a recommended port"
         else:
-            msg += f"\n💡 Рекомендуемые порты: {', '.join(map(str, RECOMMENDED_PORTS[:4]))}..."
-        # Next-steps (systemctl / ufw / /xray_restart / перевыдача URI)
-        # показывает handlers._legacy_vless_apply_followup после apply.
+            msg += f"\n💡 Recommended ports: {', '.join(map(str, RECOMMENDED_PORTS[:4]))}..."
+        # Next-steps (systemctl / ufw / /xray_restart / re-issue URI)
+        # are shown by handlers._legacy_vless_apply_followup after apply.
         return True, msg
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def get_recommended_ports() -> list:
-    """Получить список рекомендуемых портов для VLESS-Reality."""
+    """Get the list of recommended ports for VLESS-Reality."""
     return RECOMMENDED_PORTS.copy()
 
 
 def set_vless_uuid(uuid: str) -> Tuple[bool, str]:
-    """Установить UUID клиента VLESS"""
+    """Set the VLESS client UUID"""
     if not uuid or not uuid.strip():
-        return False, "❌ UUID не может быть пустым"
+        return False, "❌ UUID cannot be empty"
 
-    # Базовая валидация UUID формата
+    # Basic UUID format validation
     uuid = uuid.strip()
     if len(uuid) < 32:
-        return False, "❌ UUID слишком короткий"
+        return False, "❌ UUID is too short"
 
     config = _load_config()
     config["uuid"] = uuid
@@ -565,62 +565,62 @@ def set_vless_uuid(uuid: str) -> Tuple[bool, str]:
             break
 
     if _save_config(config):
-        return True, f"✅ UUID установлен: {uuid[:8]}...{uuid[-4:]}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ UUID set: {uuid[:8]}...{uuid[-4:]}"
+    return False, "❌ Failed to save"
 
 
 def set_vless_public_key(public_key: str) -> Tuple[bool, str]:
-    """Установить публичный ключ Reality"""
+    """Set the Reality public key"""
     if not public_key or not public_key.strip():
-        return False, "❌ Публичный ключ не может быть пустым"
+        return False, "❌ Public key cannot be empty"
 
     config = _load_config()
     config["public_key"] = public_key.strip()
 
     if _save_config(config):
-        return True, f"✅ Публичный ключ установлен"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Public key set"
+    return False, "❌ Failed to save"
 
 
 def set_vless_private_key(private_key: str) -> Tuple[bool, str]:
-    """Установить приватный ключ Reality (только для сервера)"""
+    """Set the Reality private key (server only)"""
     if not private_key or not private_key.strip():
-        return False, "❌ Приватный ключ не может быть пустым"
+        return False, "❌ Private key cannot be empty"
 
     config = _load_config()
     config["private_key"] = private_key.strip()
 
     if _save_config(config):
-        return True, f"✅ Приватный ключ установлен"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Private key set"
+    return False, "❌ Failed to save"
 
 
 def set_vless_short_id(short_id: str) -> Tuple[bool, str]:
-    """Установить Short ID для сессии"""
+    """Set the session Short ID"""
     if not short_id or not short_id.strip():
-        return False, "❌ Short ID не может быть пустым"
+        return False, "❌ Short ID cannot be empty"
 
     short_id = short_id.strip()
 
-    # Валидация: должен быть hex строкой 1-16 символов
+    # Validation: must be a hex string of 1-16 characters
     if not all(c in "0123456789abcdefABCDEF" for c in short_id):
-        return False, "❌ Short ID должен быть hex строкой (0-9, a-f)"
+        return False, "❌ Short ID must be a hex string (0-9, a-f)"
 
     if len(short_id) > 16:
-        return False, "❌ Short ID не должен превышать 16 символов"
+        return False, "❌ Short ID must not exceed 16 characters"
 
     config = _load_config()
     config["short_id"] = short_id.lower()
 
     if _save_config(config):
-        return True, f"✅ Short ID установлен: {short_id[:4]}..."
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Short ID set: {short_id[:4]}..."
+    return False, "❌ Failed to save"
 
 
 def set_vless_sni(sni: str) -> Tuple[bool, str]:
-    """Установить SNI для маскировки"""
+    """Set SNI for camouflage"""
     if not sni or not sni.strip():
-        return False, "❌ SNI не может быть пустым"
+        return False, "❌ SNI cannot be empty"
 
     sni = sni.strip().lower()
 
@@ -628,52 +628,52 @@ def set_vless_sni(sni: str) -> Tuple[bool, str]:
     config["sni"] = sni
 
     if _save_config(config):
-        msg = f"✅ SNI установлен: {sni}"
-        # Не отговариваем от кастомного SNI — наоборот, часто именно он решает
-        # проблему (см. комментарий к AVAILABLE_SNI выше про www.microsoft.com).
+        msg = f"✅ SNI set: {sni}"
+        # Do not discourage a custom SNI — often it is exactly what fixes
+        # the problem (see the AVAILABLE_SNI comment above about www.microsoft.com).
         if sni not in AVAILABLE_SNI:
             msg += (
-                "\n💡 Если клиент не подключается с этим SNI при рабочих сети/порте/ключах — "
-                "попробуйте один из: " + ", ".join(AVAILABLE_SNI[:3])
+                "\n💡 If the client will not connect with this SNI while network/port/keys work — "
+                "try one of: " + ", ".join(AVAILABLE_SNI[:3])
             )
         return True, msg
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_vless_fingerprint(fingerprint: str) -> Tuple[bool, str]:
-    """Установить TLS fingerprint"""
+    """Set the TLS fingerprint"""
     if not fingerprint or not fingerprint.strip():
-        return False, "❌ Fingerprint не может быть пустым"
+        return False, "❌ Fingerprint cannot be empty"
 
     fingerprint = fingerprint.strip().lower()
 
     if fingerprint not in AVAILABLE_FINGERPRINTS:
         return (
             False,
-            f"❌ Неизвестный fingerprint. Доступные: {', '.join(AVAILABLE_FINGERPRINTS)}",
+            f"❌ Unknown fingerprint. Available: {', '.join(AVAILABLE_FINGERPRINTS)}",
         )
 
     config = _load_config()
     config["fingerprint"] = fingerprint
 
     if _save_config(config):
-        return True, f"✅ Fingerprint установлен: {fingerprint}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Fingerprint set: {fingerprint}"
+    return False, "❌ Failed to save"
 
 
 def set_nginx_fallback(enabled: bool, port: int = 8443) -> Tuple[bool, str]:
     """Enable/disable Nginx SNI fallback in Xray config."""
     if port < 1 or port > 65535:
-        return False, "❌ Порт должен быть от 1 до 65535"
+        return False, "❌ Port must be from 1 to 65535"
 
     config = _load_config()
     config["nginx_fallback_enabled"] = enabled
     config["nginx_fallback_port"] = port
 
     if _save_config(config):
-        state = "включён" if enabled else "выключен"
-        return True, f"✅ Nginx fallback {state} (порт {port})"
-    return False, "❌ Ошибка при сохранении"
+        state = "enabled" if enabled else "disabled"
+        return True, f"✅ Nginx fallback {state} (port {port})"
+    return False, "❌ Failed to save"
 
 
 def set_nginx_domains(headscale_domain: str, ha_domain: str = "") -> Tuple[bool, str]:
@@ -682,18 +682,18 @@ def set_nginx_domains(headscale_domain: str, ha_domain: str = "") -> Tuple[bool,
     ha_domain = ha_domain.strip()
 
     if not headscale_domain:
-        return False, "❌ Домен Headscale не может быть пустым"
+        return False, "❌ Headscale domain cannot be empty"
 
     config = _load_config()
     config["headscale_domain"] = headscale_domain
     config["ha_domain"] = ha_domain
 
     if _save_config(config):
-        msg = f"✅ Headscale домен: {headscale_domain}"
+        msg = f"✅ Headscale domain: {headscale_domain}"
         if ha_domain:
-            msg += f"\n✅ Home Assistant домен: {ha_domain}"
+            msg += f"\n✅ Home Assistant domain: {ha_domain}"
         return True, msg
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def get_nginx_sni_config() -> Tuple[bool, str]:
@@ -704,7 +704,7 @@ def get_nginx_sni_config() -> Tuple[bool, str]:
     nginx_port = config.get("nginx_fallback_port", 8443)
 
     if not headscale_domain:
-        return False, "❌ Домен Headscale не установлен. Используйте /nginx_set_domain"
+        return False, "❌ Headscale domain is not set. Use /nginx_set_domain"
 
     # Build map entries and upstreams
     map_entries = f"        {headscale_domain}  headscale_backend;"
@@ -741,14 +741,14 @@ stream {{
 
 
 def generate_uuid() -> str:
-    """Генерация нового UUID для VLESS"""
+    """Generate a new UUID for VLESS"""
     import uuid
 
     return str(uuid.uuid4())
 
 
 def generate_short_id(length: int = 8) -> str:
-    """Генерация нового Short ID (hex строка)"""
+    """Generate a new Short ID (hex string)"""
     if length < 1:
         length = 1
     if length > 16:
@@ -758,15 +758,14 @@ def generate_short_id(length: int = 8) -> str:
 
 def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
     """
-    Генерация пары ключей x25519 для Reality
+    Generate an x25519 key pair for Reality.
 
-    Пытается использовать xray x25519 если доступен,
-    иначе генерирует программно.
+    Tries `xray x25519` if available, otherwise generates in Python.
 
     Returns:
-        Tuple[private_key, public_key, method]: ключи и метод генерации
+        Tuple[private_key, public_key, method]: keys and generation method
     """
-    # Пробуем использовать xray для генерации ключей
+    # Try xray for key generation
     try:
         result = subprocess.run(
             ["xray", "x25519"], capture_output=True, text=True, timeout=5
@@ -777,9 +776,9 @@ def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
             private_key = None
             public_key = None
 
-            # Поддержка двух форматов вывода `xray x25519`:
-            #   старый:  "Private key: ..."         / "Public key: ..."
-            #   новый (26.x): "PrivateKey: ..."     / "Password (PublicKey): ..."
+            # Support both `xray x25519` output formats:
+            #   old:      "Private key: ..."         / "Public key: ..."
+            #   new (26.x): "PrivateKey: ..."     / "Password (PublicKey): ..."
             for line in lines:
                 low = line.strip().lower()
                 if low.startswith("privatekey") or low.startswith("private key"):
@@ -801,7 +800,7 @@ def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
     except Exception as e:
         logger.warning(f"xray x25519 failed: {e}")
 
-    # Fallback: генерация программно с использованием cryptography
+    # Fallback: generate with cryptography
     try:
         import base64
 
@@ -811,7 +810,7 @@ def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
         private_key_obj = X25519PrivateKey.generate()
         public_key_obj = private_key_obj.public_key()
 
-        # Получаем raw bytes и конвертируем в base64
+        # Raw bytes → URL-safe base64
         private_bytes = private_key_obj.private_bytes(
             encoding=serialization.Encoding.Raw,
             format=serialization.PrivateFormat.Raw,
@@ -833,8 +832,8 @@ def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
     except Exception as e:
         logger.error(f"Failed to generate keys with cryptography: {e}")
 
-    # WARNING: нельзя подменять x25519-ключи случайными байтами.
-    # Это приводит к невалидным Reality-конфигам и трудноуловимым ошибкам подключения.
+    # WARNING: do not substitute x25519 keys with random bytes.
+    # That yields invalid Reality configs and hard-to-debug connection failures.
     logger.error(
         "Unable to generate valid Reality keys: xray and cryptography are unavailable"
     )
@@ -843,7 +842,7 @@ def generate_reality_keys() -> Tuple[Optional[str], Optional[str], str]:
 
 def generate_all_keys() -> Tuple[bool, Dict, str]:
     """
-    Генерация всех ключей для VLESS-Reality
+    Generate all keys for VLESS-Reality.
 
     Returns:
         Tuple[success, keys_dict, message]
@@ -854,7 +853,7 @@ def generate_all_keys() -> Tuple[bool, Dict, str]:
         private_key, public_key, method = generate_reality_keys()
 
         if not private_key or not public_key:
-            return False, {}, "❌ Не удалось сгенерировать ключи Reality"
+            return False, {}, "❌ Failed to generate Reality keys"
 
         keys = {
             "uuid": uuid,
@@ -864,32 +863,32 @@ def generate_all_keys() -> Tuple[bool, Dict, str]:
             "generation_method": method,
         }
 
-        # Сохраняем в конфигурацию
+        # Persist to configuration
         config = _load_config()
         config["uuid"] = uuid
         config["short_id"] = short_id
         config["private_key"] = private_key
         config["public_key"] = public_key
         _normalize_clients(config)
-        # Синхронизируем default клиента с новым UUID
+        # Keep the default client UUID in sync
         for client in config.get("clients", []):
             if client.get("name") == "default":
                 client["uuid"] = uuid
                 break
 
         if _save_config(config):
-            return True, keys, f"✅ Ключи сгенерированы (метод: {method})"
+            return True, keys, f"✅ Keys generated (method: {method})"
 
-        return True, keys, "⚠️ Ключи сгенерированы, но не сохранены в конфиг"
+        return True, keys, "⚠️ Keys generated but not saved to config"
 
     except Exception as e:
         logger.error(f"Error generating keys: {e}")
-        return False, {}, f"❌ Ошибка генерации ключей: {e}"
+        return False, {}, f"❌ Key generation error: {e}"
 
 
 def test_connection() -> Tuple[bool, str]:
     """
-    Тестирование подключения к VLESS серверу
+    Test connectivity to the VLESS server.
 
     Returns:
         Tuple[success, message]
@@ -897,15 +896,15 @@ def test_connection() -> Tuple[bool, str]:
     config = _load_config()
 
     if not config.get("enabled"):
-        return False, "⚠️ VLESS-Reality не включён"
+        return False, "⚠️ VLESS-Reality is not enabled"
 
     server = config.get("server")
     port = config.get("port", 443)
 
     if not server:
-        return False, "❌ Сервер не настроен"
+        return False, "❌ Server is not configured"
 
-    # Простая проверка доступности порта
+    # Simple port reachability check
     import socket
 
     try:
@@ -915,23 +914,23 @@ def test_connection() -> Tuple[bool, str]:
         sock.close()
 
         if result == 0:
-            return True, f"✅ Сервер {server}:{port} доступен"
+            return True, f"✅ Server {server}:{port} is reachable"
         else:
-            return False, f"❌ Сервер {server}:{port} недоступен (код: {result})"
+            return False, f"❌ Server {server}:{port} is unreachable (code: {result})"
     except socket.gaierror:
-        return False, f"❌ Не удалось разрешить имя: {server}"
+        return False, f"❌ Could not resolve hostname: {server}"
     except socket.timeout:
-        return False, f"❌ Таймаут подключения к {server}:{port}"
+        return False, f"❌ Connection timed out to {server}:{port}"
     except Exception as e:
-        return False, f"❌ Ошибка подключения: {e}"
+        return False, f"❌ Connection error: {e}"
 
 
 def export_client_config() -> Dict:
     """
-    Экспорт конфигурации для клиента (без приватного ключа)
+    Export client configuration (without the private key).
 
     Returns:
-        Dict с конфигурацией клиента
+        Dict with client configuration
     """
     config = _load_config()
 
@@ -940,24 +939,24 @@ def export_client_config() -> Dict:
 
 def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str]]:
     """
-    Сохранить VLESS конфигурацию в файлы (JSON и TXT).
+    Save VLESS configuration to files (JSON and TXT).
 
-    Создаёт файлы аналогичные тем, что скачивает auto_setup_vps.sh:
+    Creates files similar to those downloaded by auto_setup_vps.sh:
     - vless_config_<IP>.json
     - vless_config_<IP>.txt
 
     Args:
-        output_dir: Папка для сохранения (по умолчанию ./vless_configs)
+        output_dir: Output folder (default ./vless_configs)
 
     Returns:
         Tuple[success, message, list_of_created_files]
     """
     config = _load_config()
 
-    # Проверяем что конфигурация заполнена
+    # Ensure configuration is complete
     server = config.get("server", "")
     if not server:
-        return False, "❌ Сервер не настроен. Сначала используйте /vless_set_server", []
+        return False, "❌ Server is not configured. Use /vless_set_server first", []
 
     port = config.get("port", 443)
     uuid = config.get("uuid", "")
@@ -969,30 +968,30 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
     if not uuid or not public_key:
         return (
             False,
-            "❌ UUID или Public Key не настроены. Используйте /vless_gen_keys",
+            "❌ UUID or Public Key is not set. Use /vless_gen_keys",
             [],
         )
 
-    # Генерируем VLESS ссылку
+    # Generate VLESS link
     vless_link = generate_vless_link("VPS-Reality")
 
-    # Определяем папку для сохранения
+    # Resolve output folder
     if output_dir is None:
-        # Ищем vless_configs относительно текущего файла или CWD
+        # Look for vless_configs relative to this file or CWD
         base_dir = os.path.dirname(os.path.abspath(__file__))
         output_dir = os.path.join(base_dir, "vless_configs")
 
     try:
         os.makedirs(output_dir, exist_ok=True)
     except Exception as e:
-        return False, f"❌ Не удалось создать папку {output_dir}: {e}", []
+        return False, f"❌ Failed to create folder {output_dir}: {e}", []
 
     created_files = []
 
-    # Имя файла на основе IP сервера
+    # Filename based on server IP
     safe_server = server.replace(":", "_").replace("/", "_")
 
-    # 1. Сохраняем JSON конфиг
+    # 1. Save JSON config
     json_path = os.path.join(output_dir, f"vless_config_{safe_server}.json")
     # WARNING: private_key must never be written into client-facing exports.
     json_config = {
@@ -1012,9 +1011,9 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
         created_files.append(json_path)
         logger.info(f"Saved VLESS JSON config to {json_path}")
     except Exception as e:
-        return False, f"❌ Ошибка записи {json_path}: {e}", created_files
+        return False, f"❌ Write error {json_path}: {e}", created_files
 
-    # 2. Сохраняем текстовый конфиг
+    # 2. Save text config
     txt_path = os.path.join(output_dir, f"vless_config_{safe_server}.txt")
     txt_content = f"""═══════════════════════════════════════════════════════════════
           🛡️  VLESS-Reality Configuration for Client
@@ -1029,7 +1028,7 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
 🎭 Fingerprint: {fingerprint}
 
 ───────────────────────────────────────────────────────────────
-🔗 VLESS Link (для Hiddify/Foxray/v2rayNG/NekoRay):
+🔗 VLESS Link (for Hiddify/Foxray/v2rayNG/NekoRay):
 
 {vless_link}
 
@@ -1042,28 +1041,29 @@ def save_vless_config_files(output_dir: str = None) -> Tuple[bool, str, List[str
         created_files.append(txt_path)
         logger.info(f"Saved VLESS TXT config to {txt_path}")
     except Exception as e:
-        return False, f"❌ Ошибка записи {txt_path}: {e}", created_files
+        return False, f"❌ Write error {txt_path}: {e}", created_files
 
-    return True, f"✅ Конфиги сохранены в {output_dir}", created_files
+    return True, f"✅ Configs saved to {output_dir}", created_files
 
 
 def _reconcile_reality_from_live_xray(
     xray_config_path: str = "/usr/local/etc/xray/config.json",
 ) -> None:
-    """Подтянуть Reality-параметры из живого Xray-конфига перед генерацией ссылки.
+    """Pull Reality parameters from the live Xray config before generating a link.
 
-    Зачем: ссылки строятся из ``vless_config.json``. Если админ правит
-    ``/usr/local/etc/xray/config.json`` напрямую (типичный кейс — сменить SNI на
-    менее «типовой» домен, обойдя бот), то бот молча отдаёт ссылку со СТАРЫМ
-    ``sni``/``pbk`` — клиент по ней не подключается, хотя сервер здоров и рабочая
-    прямая ссылка есть. Здесь мы сверяемся с живым конфигом и подтягиваем
-    ``sni``/``short_id``/``port``/``uuid``/ключи, чтобы бот всегда выдавал то, что
-    реально слушает Xray.
+    Why: links are built from ``vless_config.json``. If an admin edits
+    ``/usr/local/etc/xray/config.json`` directly (typical case — change SNI to a
+    less generic domain, bypassing the bot), the bot silently returns a link with
+    the OLD ``sni``/``pbk`` — the client cannot connect even though the server
+    is healthy and a working direct link exists. We compare against the live
+    config and pull ``sni``/``short_id``/``port``/``uuid``/keys so the bot always
+    emits what Xray is actually listening on.
 
-    No-op, если: файла нет; в нём нет vless+Reality inbound (panel-managed 3x-ui и
-    т.п.); параметры уже совпадают. Тяжёлый вывод ``public_key`` из ``privateKey``
-    (subprocess/cryptography внутри ``sync_from_xray_config``) запускается только
-    при реальном расхождении — обычная генерация ссылки остаётся дешёвой.
+    No-op if: the file is missing; it has no vless+Reality inbound (panel-managed
+    3x-ui, etc.); parameters already match. The expensive derivation of
+    ``public_key`` from ``privateKey`` (subprocess/cryptography inside
+    ``sync_from_xray_config``) runs only on a real drift — ordinary link
+    generation stays cheap.
     """
     try:
         if not os.path.exists(xray_config_path):
@@ -1094,7 +1094,7 @@ def _reconcile_reality_from_live_xray(
     except Exception:
         return
 
-    # Нет Reality-инбаунда — бот не управляет этим локальным Xray (panel-managed).
+    # No Reality inbound — the bot does not manage this local Xray (panel-managed).
     if live_sni is None and live_priv is None:
         return
 
@@ -1112,15 +1112,15 @@ def _reconcile_reality_from_live_xray(
     ok, msg = sync_from_xray_config(xray_config_path)
     if ok:
         logger.info(
-            "VLESS: авто-сверка с живым Xray перед генерацией ссылки (%s)", msg
+            "VLESS: auto-reconcile with live Xray before link generation (%s)", msg
         )
     else:
-        logger.warning("VLESS: авто-сверка с живым Xray не удалась: %s", msg)
+        logger.warning("VLESS: auto-reconcile with live Xray failed: %s", msg)
 
 
 def generate_vless_link(comment: str = "sing-box-VLESS") -> str:
     """
-    Генерация стандартной ссылки vless:// для импорта в клиенты (Hiddify, v2rayNG, etc)
+    Generate a standard vless:// link for import into clients (Hiddify, v2rayNG, etc)
     Format: vless://uuid@ip:port?security=reality&encryption=none&pbk=...&fp=...&type=tcp&flow=...&sni=...&sid=...#Name
     """
     _reconcile_reality_from_live_xray()
@@ -1164,7 +1164,7 @@ def generate_vless_link(comment: str = "sing-box-VLESS") -> str:
 
 def generate_vless_link_for_uuid(client_uuid: str, comment: str) -> str:
     """
-    Генерация ссылки vless:// для заданного UUID.
+    Generate a vless:// link for the given UUID.
     """
     _reconcile_reality_from_live_xray()
     config = _load_config()
@@ -1200,7 +1200,7 @@ def generate_vless_link_for_uuid(client_uuid: str, comment: str) -> str:
 
 def get_client(name_or_uuid: str) -> Optional[Dict]:
     """
-    Найти клиента VLESS по имени или UUID.
+    Find a VLESS client by name or UUID.
     """
     if not name_or_uuid or not name_or_uuid.strip():
         return None
@@ -1214,32 +1214,32 @@ def get_client(name_or_uuid: str) -> Optional[Dict]:
 
 def generate_client_link(name_or_uuid: str) -> Tuple[bool, str, str]:
     """
-    Сгенерировать vless:// ссылку для конкретного клиента.
+    Generate a vless:// link for a specific client.
     """
     _reconcile_reality_from_live_xray()
     client = get_client(name_or_uuid)
     if not client:
-        return False, "❌ Клиент не найден", ""
+        return False, "❌ Client not found", ""
 
     client_name = client.get("name") or "client"
     client_uuid = client.get("uuid") or ""
     if not client_uuid:
-        return False, f"❌ У клиента {client_name} отсутствует UUID", ""
+        return False, f"❌ Client {client_name} has no UUID", ""
 
     config = _load_config()
     if not (config.get("server") or "").strip():
         return (
             False,
-            "❌ В конфиге VLESS не задан `server` (IP или домен).\n"
-            "Выполните `/vless_set_server` с IP или доменом сервера, либо `/vless_sync` "
-            "после настройки Xray.",
+            "❌ VLESS config has no `server` (IP or domain).\n"
+            "Run `/vless_set_server` with the server IP or domain, or `/vless_sync` "
+            "after configuring Xray.",
             "",
         )
     if not (config.get("public_key") or "").strip():
         return (
             False,
-            "❌ Нет Reality `public_key` в конфиге бота.\n"
-            "Сгенерируйте ключи: `/vless_gen_keys` или подтяните из Xray: `/vless_sync`.",
+            "❌ No Reality `public_key` in the bot config.\n"
+            "Generate keys: `/vless_gen_keys` or pull from Xray: `/vless_sync`.",
             "",
         )
 
@@ -1250,19 +1250,19 @@ def generate_client_link(name_or_uuid: str) -> Tuple[bool, str, str]:
     if not link:
         return (
             False,
-            "❌ Не удалось сгенерировать VLESS ссылку. Проверьте настройки сервера, UUID и Public Key",
+            "❌ Failed to generate VLESS link. Check server, UUID, and Public Key settings",
             "",
         )
 
-    return True, f"✅ Ссылка для клиента {client_name} готова", link
+    return True, f"✅ Link for client {client_name} is ready", link
 
 
 def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
     """
-    Сгенерировать QR-код PNG в памяти.
+    Generate a QR-code PNG in memory.
     """
     if not content or not content.strip():
-        return False, None, "❌ Нечего кодировать в QR"
+        return False, None, "❌ Nothing to encode in QR"
 
     try:
         import qrcode
@@ -1270,7 +1270,7 @@ def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
         return (
             False,
             None,
-            "❌ Библиотека qrcode не установлена. Обновите зависимости проекта",
+            "❌ qrcode library is not installed. Update project dependencies",
         )
 
     try:
@@ -1287,19 +1287,19 @@ def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-        return True, buffer, "✅ QR-код сгенерирован"
+        return True, buffer, "✅ QR code generated"
     except Exception as e:
         logger.error(f"Failed to generate QR image: {e}")
-        return False, None, f"❌ Ошибка генерации QR: {e}"
+        return False, None, f"❌ QR generation error: {e}"
 
 
 def build_client_qr_payload(name_or_uuid: str) -> Tuple[bool, str, Dict]:
     """
-    Подготовить данные клиента для отправки QR-кода через Telegram.
+    Prepare client data for sending a QR code via Telegram.
     """
     client = get_client(name_or_uuid)
     if not client:
-        return False, "❌ Клиент не найден", {}
+        return False, "❌ Client not found", {}
 
     success, message, link = generate_client_link(name_or_uuid)
     if not success:
@@ -1315,12 +1315,12 @@ def build_client_qr_payload(name_or_uuid: str) -> Tuple[bool, str, Dict]:
         "link": link,
         "qr_buffer": qr_buffer,
     }
-    return True, "✅ QR-пакет для клиента подготовлен", payload
+    return True, "✅ QR payload for client is ready", payload
 
 
 def list_clients() -> List[Dict]:
     """
-    Получить список клиентов VLESS.
+    Get the list of VLESS clients.
     """
     config = _load_config()
     _normalize_clients(config)
@@ -1329,10 +1329,10 @@ def list_clients() -> List[Dict]:
 
 def add_client(name: str, client_uuid: Optional[str] = None) -> Tuple[bool, str, Dict]:
     """
-    Добавить клиента VLESS.
+    Add a VLESS client.
     """
     if not name or not name.strip():
-        return False, "❌ Имя клиента не может быть пустым", {}
+        return False, "❌ Client name cannot be empty", {}
 
     name = name.strip()
     config = _load_config()
@@ -1340,7 +1340,7 @@ def add_client(name: str, client_uuid: Optional[str] = None) -> Tuple[bool, str,
 
     for client in config.get("clients", []):
         if client.get("name") == name:
-            return False, f"❌ Клиент с именем {name} уже существует", {}
+            return False, f"❌ Client named {name} already exists", {}
 
     if not client_uuid:
         client_uuid = generate_uuid()
@@ -1353,23 +1353,23 @@ def add_client(name: str, client_uuid: Optional[str] = None) -> Tuple[bool, str,
 
     config["clients"].append(client)
     if _save_config(config):
-        return True, f"✅ Клиент добавлен: {name}", client
-    return False, "❌ Ошибка при сохранении", {}
+        return True, f"✅ Client added: {name}", client
+    return False, "❌ Failed to save", {}
 
 
 def remove_client(name_or_uuid: str) -> Tuple[bool, str]:
     """
-    Удалить клиента по имени или UUID.
+    Remove a client by name or UUID.
     """
     if not name_or_uuid or not name_or_uuid.strip():
-        return False, "❌ Укажите имя или UUID клиента"
+        return False, "❌ Specify a client name or UUID"
 
     name_or_uuid = name_or_uuid.strip()
     config = _load_config()
     _normalize_clients(config)
 
     if name_or_uuid == "default":
-        return False, "❌ Нельзя удалить default клиента"
+        return False, "❌ Cannot delete the default client"
 
     clients = config.get("clients", [])
     new_clients = [
@@ -1379,17 +1379,17 @@ def remove_client(name_or_uuid: str) -> Tuple[bool, str]:
     ]
 
     if len(new_clients) == len(clients):
-        return False, "❌ Клиент не найден"
+        return False, "❌ Client not found"
 
     config["clients"] = new_clients
     if _save_config(config):
-        return True, "✅ Клиент удалён"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ Client removed"
+    return False, "❌ Failed to save"
 
 
 def export_subscription_list() -> List[str]:
     """
-    Сформировать список ссылок для subscription (raw list).
+    Build a list of links for subscription (raw list).
     """
     links = []
     clients = list_clients()
@@ -1407,7 +1407,7 @@ def export_subscription_list() -> List[str]:
 
 def export_subscription_base64() -> str:
     """
-    Сформировать subscription в base64 (как у большинства клиентов).
+    Build a base64 subscription (as most clients expect).
     """
     import base64
 
@@ -1422,7 +1422,7 @@ def export_subscription_base64() -> str:
 
 def export_singbox_config() -> Dict:
     """
-    Сгенерировать минимальную конфигурацию sing-box (client).
+    Generate a minimal sing-box client configuration.
     """
     config = _load_config()
 
@@ -1456,7 +1456,7 @@ def export_singbox_config() -> Dict:
 
 def export_clash_meta_config() -> str:
     """
-    Сгенерировать минимальную конфигурацию Clash Meta (YAML).
+    Generate a minimal Clash Meta configuration (YAML).
     """
     config = _load_config()
     server = config.get("server", "")
@@ -1505,18 +1505,18 @@ def export_clash_meta_config() -> str:
 
 def export_xray_config(is_server: bool = False) -> Dict:
     """
-    Генерация конфигурации для Xray-core
+    Generate an Xray-core configuration.
 
     Args:
-        is_server: True для серверной конфигурации, False для клиентской
+        is_server: True for server configuration, False for client
 
     Returns:
-        Dict с конфигурацией Xray
+        Dict with Xray configuration
     """
     config = _load_config()
 
     if is_server:
-        # Серверная конфигурация
+        # Server configuration
         _normalize_clients(config)
         clients = config.get("clients", [])
         if not clients and config.get("uuid"):
@@ -1549,12 +1549,11 @@ def export_xray_config(is_server: bool = False) -> Dict:
 
         return {
             "log": {"loglevel": "warning"},
-            # NB: НЕ блокировать ::/0 через blackhole. Reality на каждое
-            # соединение дозванивается до dest (serverNames[0]:443) ради
-            # настоящего TLS; если dest резолвится в IPv6, blackhole рубил
-            # этот relay → Xray браковал ВСЕХ клиентов как "invalid connection".
-            # Отсутствие IPv6-выхода корректно решает freedom/UseIPv4 ниже
-            # (+ sniffing destOverride на inbound для литеральных IPv6 от клиента).
+            # NB: do NOT blackhole ::/0. Reality dials dest (serverNames[0]:443)
+            # on every connection for real TLS; if dest resolves to IPv6, blackhole
+            # killed that relay → Xray rejected ALL clients as "invalid connection".
+            # Missing IPv6 egress is handled correctly by freedom/UseIPv4 below
+            # (+ sniffing destOverride on inbound for literal IPv6 from the client).
             "inbounds": [
                 {
                     "port": config.get("port", 443),
@@ -1576,13 +1575,13 @@ def export_xray_config(is_server: bool = False) -> Dict:
                             "shortIds": [config.get("short_id", "")],
                         },
                     },
-                    # Этот сервер без IPv6-выхода: routing ниже блэкхолит весь ::/0.
-                    # Без destOverride клиент (Clash Meta, Karing, HAPP) шлёт литеральный
-                    # IPv6 назначения (например claude.ai) → он матчит ::/0 → blackhole →
-                    # клиент получает EOF на IPv6-сайтах. Со sniffing литеральный IP
-                    # подменяется доменом из SNI, мимо ::/0, и freedom/UseIPv4 выходит
-                    # по IPv4. routeOnly=False — чтобы подмена влияла и на дозвон, не
-                    # только на маршрутизацию.
+                    # This server has no IPv6 egress: routing below blackholes all of ::/0.
+                    # Without destOverride the client (Clash Meta, Karing, HAPP) sends a
+                    # literal destination IPv6 (e.g. claude.ai) → it matches ::/0 →
+                    # blackhole → the client gets EOF on IPv6 sites. With sniffing the
+                    # literal IP is replaced by the SNI domain, misses ::/0, and
+                    # freedom/UseIPv4 exits over IPv4. routeOnly=False so the rewrite
+                    # also affects dialing, not only routing.
                     "sniffing": {
                         "enabled": True,
                         "destOverride": ["http", "tls", "quic"],
@@ -1599,7 +1598,7 @@ def export_xray_config(is_server: bool = False) -> Dict:
             ],
         }
     else:
-        # Клиентская конфигурация
+        # Client configuration
         return {
             "log": {"loglevel": "warning"},
             "inbounds": [
@@ -1643,28 +1642,28 @@ def sync_from_xray_config(
     xray_config_path: str = "/usr/local/etc/xray/config.json",
 ) -> Tuple[bool, str]:
     """
-    Синхронизировать ключи из конфига xray в vless_config.json
+    Sync keys from the xray config into vless_config.json.
 
-    Читает privateKey из xray config и генерирует соответствующий public_key.
-    Это нужно когда xray использует другие ключи чем vless_config.json.
+    Reads privateKey from the xray config and derives the matching public_key.
+    Needed when xray uses different keys than vless_config.json.
 
     Args:
-        xray_config_path: Путь к конфигу xray
+        xray_config_path: Path to the xray config
 
     Returns:
         Tuple[success, message]
     """
-    # Проверяем существует ли файл
+    # Check that the file exists
     if not os.path.exists(xray_config_path):
-        return False, f"❌ Файл не найден: {xray_config_path}"
+        return False, f"❌ File not found: {xray_config_path}"
 
     try:
         with open(xray_config_path, "r", encoding="utf-8") as f:
             xray_config = json.load(f)
     except Exception as e:
-        return False, f"❌ Ошибка чтения xray config: {e}"
+        return False, f"❌ Error reading xray config: {e}"
 
-    # Ищем privateKey в структуре xray конфига
+    # Look for privateKey in the xray config structure
     private_key = None
     short_ids = []
     server_names = []
@@ -1672,13 +1671,13 @@ def sync_from_xray_config(
     port = None
 
     try:
-        # Пытаемся найти в inbounds -> streamSettings -> realitySettings
+        # Try inbounds -> streamSettings -> realitySettings
         inbounds = xray_config.get("inbounds", [])
         for inbound in inbounds:
             if inbound.get("protocol") == "vless":
                 port = inbound.get("port", port)
 
-                # Получаем UUID из clients
+                # Get UUID from clients
                 settings = inbound.get("settings", {})
                 clients = settings.get("clients", [])
                 if clients:
@@ -1692,15 +1691,15 @@ def sync_from_xray_config(
                     server_names = reality.get("serverNames", [])
                     break
     except Exception as e:
-        return False, f"❌ Ошибка парсинга xray config: {e}"
+        return False, f"❌ Error parsing xray config: {e}"
 
     if not private_key:
-        return False, "❌ privateKey не найден в xray config"
+        return False, "❌ privateKey not found in xray config"
 
-    # Генерируем public_key из private_key
+    # Derive public_key from private_key
     public_key = None
 
-    # Метод 1: Используем xray x25519
+    # Method 1: use xray x25519
     try:
         result = subprocess.run(
             ["xray", "x25519", "-i", private_key],
@@ -1711,14 +1710,14 @@ def sync_from_xray_config(
         if result.returncode == 0:
             output = result.stdout.strip()
             for line in output.split("\n"):
-                # Public key отображается как "Public key:" - это Password
+                # Public key is shown as "Public key:" — this is Password
                 if "Public key:" in line:
                     public_key = line.split(":", 1)[1].strip()
                     break
     except Exception as e:
         logger.warning(f"xray x25519 failed: {e}")
 
-    # Метод 2: Fallback - используем Python cryptography (для Docker)
+    # Method 2: fallback — Python cryptography (for Docker)
     if not public_key:
         try:
             import base64
@@ -1754,10 +1753,10 @@ def sync_from_xray_config(
     if not public_key:
         return (
             False,
-            "❌ Не удалось получить public_key. Установите cryptography: pip install cryptography",
+            "❌ Failed to obtain public_key. Install cryptography: pip install cryptography",
         )
 
-    # Обновляем vless_config.json
+    # Update vless_config.json
     config = _load_config()
 
     updated_fields = []
@@ -1787,24 +1786,24 @@ def sync_from_xray_config(
         updated_fields.append("port")
 
     if not updated_fields:
-        return True, "✅ Конфигурация уже синхронизирована"
+        return True, "✅ Configuration is already in sync"
 
     if _save_config(config):
         fields_str = ", ".join(updated_fields)
         logger.info(f"Synced from xray config: {fields_str}")
         return (
             True,
-            f"✅ Синхронизировано из xray config:\n{fields_str}\n\n🔑 Public Key (для клиента):\n`{public_key}`",
+            f"✅ Synced from xray config:\n{fields_str}\n\n🔑 Public Key (for the client):\n`{public_key}`",
         )
 
-    return False, "❌ Ошибка сохранения конфигурации"
+    return False, "❌ Failed to save configuration"
 
 
 def reset_config() -> Tuple[bool, str]:
-    """Сброс конфигурации VLESS к дефолтным значениям"""
+    """Reset VLESS configuration to defaults"""
     if _save_config(dict(DEFAULT_CONFIG)):
-        return True, "✅ Конфигурация VLESS сброшена"
-    return False, "❌ Ошибка при сбросе конфигурации"
+        return True, "✅ VLESS configuration reset"
+    return False, "❌ Failed to reset configuration"
 
 
 # === Xray Management ===
@@ -1812,7 +1811,7 @@ def reset_config() -> Tuple[bool, str]:
 
 def check_xray_installed() -> Tuple[bool, str, Dict]:
     """
-    Проверить, установлен ли Xray на сервере.
+    Check whether Xray is installed on the server.
 
     Returns:
         Tuple[installed, message, info_dict]
@@ -1826,17 +1825,17 @@ def check_xray_installed() -> Tuple[bool, str, Dict]:
         "in_docker": False,
     }
 
-    # Проверяем, работаем ли в Docker
+    # Check if we are running in Docker
     in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
     info["in_docker"] = in_docker
 
     if in_docker:
-        # Из Docker не можем проверить Xray на хосте
-        # Попробуем проверить порт 443 через внешний IP (не localhost)
+        # From Docker we cannot inspect Xray on the host
+        # Try checking port 443 via the public IP (not localhost)
         port_open = False
         server_ip = None
 
-        # Получаем внешний IP сервера
+        # Get the server public IP
         try:
             server_ip = get_server_public_ip()
         except:
@@ -1856,49 +1855,49 @@ def check_xray_installed() -> Tuple[bool, str, Dict]:
 
         info["port_listening"] = port_open
 
-        port_status = "✅ открыт" if port_open else "⚠️ недоступен"
+        port_status = "✅ open" if port_open else "⚠️ unreachable"
         # Escape dots in IP for Markdown V2
         escaped_ip = server_ip.replace(".", "\\.") if server_ip else None
         server_info = f" \\({escaped_ip}\\)" if escaped_ip else ""
 
-        message = f"""📦 *Статус Xray* \\(из Docker\\)
+        message = f"""📦 *Xray status* \\(from Docker\\)
 
-🔌 Порт 443{server_info}: {port_status}
+🔌 Port 443{server_info}: {port_status}
 
-_Бот работает в Docker\\._
+_The bot is running in Docker\\._
 
-*Проверьте через SSH:*
+*Check via SSH:*
 `systemctl status xray`
 `ss \\-tlnp \\| grep 443`"""
 
         return port_open, message, info
 
-    # Проверяем наличие xray (если не в Docker)
+    # Check that xray exists (when not in Docker)
     try:
         result = subprocess.run(
             ["which", "xray"], capture_output=True, text=True, timeout=5
         )
         if result.returncode != 0:
-            return False, "❌ Xray не установлен", info
+            return False, "❌ Xray is not installed", info
 
         info["installed"] = True
     except Exception as e:
-        return False, f"❌ Ошибка проверки: {e}", info
+        return False, f"❌ Check error: {e}", info
 
-    # Получаем версию
+    # Get version
     try:
         result = subprocess.run(
             ["xray", "version"], capture_output=True, text=True, timeout=5
         )
         if result.returncode == 0:
-            # Парсим версию из вывода
+            # Parse version from output
             lines = result.stdout.strip().split("\n")
             if lines:
                 info["version"] = lines[0]
     except Exception:
         pass
 
-    # Проверяем systemd статус
+    # Check systemd status
     try:
         result = subprocess.run(
             ["systemctl", "is-active", "xray"],
@@ -1910,7 +1909,7 @@ _Бот работает в Docker\\._
     except Exception:
         pass
 
-    # Проверяем порт 443
+    # Check port 443
     try:
         result = subprocess.run(
             ["ss", "-tlnp"], capture_output=True, text=True, timeout=5
@@ -1919,82 +1918,82 @@ _Бот работает в Docker\\._
     except Exception:
         pass
 
-    # Проверяем наличие конфига
+    # Check that the config exists
     config_path = "/usr/local/etc/xray/config.json"
     info["config_exists"] = os.path.exists(config_path)
 
-    # Формируем сообщение
+    # Build the message
     status_emoji = "🟢" if info["running"] else "🔴"
     port_emoji = "✅" if info["port_listening"] else "❌"
     config_emoji = "✅" if info["config_exists"] else "❌"
 
-    message = f"""📦 *Статус Xray*
+    message = f"""📦 *Xray status*
 
-{status_emoji} Установлен: ✅
-📌 Версия: `{info["version"] or "неизвестно"}`
-⚡ Запущен: {"✅" if info["running"] else "❌"}
-🔌 Порт 443: {port_emoji}
-📄 Конфиг: {config_emoji}"""
+{status_emoji} Installed: ✅
+📌 Version: `{info["version"] or "unknown"}`
+⚡ Running: {"✅" if info["running"] else "❌"}
+🔌 Port 443: {port_emoji}
+📄 Config: {config_emoji}"""
 
     return True, message, info
 
 
 def get_xray_config() -> Tuple[bool, str, dict]:
     """
-    Получить текущую конфигурацию Xray с сервера.
+    Get the current Xray configuration from the server.
 
     Returns:
         Tuple[success, message, config_dict]
     """
     config_path = "/usr/local/etc/xray/config.json"
 
-    # Проверяем, работаем ли в Docker
+    # Check if we are running in Docker
     in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
 
     if in_docker:
-        # Из Docker показываем инструкции для SSH
-        message = """📄 *Конфигурация Xray*
+        # From Docker show SSH instructions
+        message = """📄 *Xray configuration*
 
-_Бот работает в Docker и не имеет доступа к файлам хоста\\._
+_The bot is running in Docker and has no access to host files\\._
 
-**Проверьте конфигурацию через SSH:**
+**Check the configuration via SSH:**
 ```
 cat /usr/local/etc/xray/config\\.json
 ```
 
-**Или откройте для редактирования:**
+**Or open it for editing:**
 ```
 nano /usr/local/etc/xray/config\\.json
 ```
 
-**После изменений перезапустите:**
+**After changes restart:**
 ```
 xray \\-test \\-config /usr/local/etc/xray/config\\.json
 systemctl restart xray
 ```"""
         return True, message, {"in_docker": True}
 
-    # Если не в Docker - пробуем прочитать файл
+    # Not in Docker — try reading the file
     if not os.path.exists(config_path):
-        return False, "❌ Конфигурация не найдена: " + config_path, {}
+        return False, "❌ Configuration not found: " + config_path, {}
 
     try:
         with open(config_path, "r") as f:
             config = json.load(f)
 
-        # Форматируем основные параметры
+        # Format main parameters
         inbounds = config.get("inbounds", [])
 
-        info_lines = ["📄 *Текущая конфигурация Xray*\n"]
+        info_lines = ["📄 *Current Xray configuration*\n"]
 
         for i, inbound in enumerate(inbounds):
             port = inbound.get("port", "N/A")
             protocol = inbound.get("protocol", "N/A")
             tag = inbound.get("tag", f"inbound-{i}")
 
-            info_lines.append(f"**{tag}:** {protocol} на порту {port}")
+            info_lines.append(f"**{tag}:** {protocol} on port {port}")
 
-            # Reality настройки
+            # Reality settings
             stream = inbound.get("streamSettings", {})
             reality = stream.get("realitySettings", {})
             if reality:
@@ -2011,48 +2010,48 @@ systemctl restart xray
         return True, message, config
 
     except Exception as e:
-        return False, f"❌ Ошибка чтения конфигурации: {e}", {}
+        return False, f"❌ Error reading configuration: {e}", {}
 
 
 def install_xray() -> Tuple[bool, str]:
     """
-    Установить Xray на сервер.
+    Install Xray on the server.
 
     Returns:
         Tuple[success, message]
     """
     try:
-        # Проверяем, не установлен ли уже
+        # Check whether it is already installed
         result = subprocess.run(["which", "xray"], capture_output=True, timeout=5)
         if result.returncode == 0:
-            return True, "✅ Xray уже установлен"
+            return True, "✅ Xray is already installed"
 
-        # Проверяем, работаем ли в Docker (curl может быть недоступен)
+        # Check if we are in Docker (curl may be unavailable)
         in_docker = os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER")
 
         if in_docker:
             return (
                 False,
-                """❌ Установка из Docker контейнера невозможна
+                """❌ Cannot install from a Docker container
 
-**Установите Xray вручную через SSH:**
+**Install Xray manually via SSH:**
 
 ```bash
-ssh root@<IP_СЕРВЕРА>
+ssh root@<SERVER_IP>
 
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 
 xray version
 ```
 
-После установки используйте:
-/xray\\_apply — применить конфигурацию
-/xray\\_start — запустить""",
+After install use:
+/xray\\_apply — apply configuration
+/xray\\_start — start""",
             )
 
         logger.info("Installing Xray...")
 
-        # Скачиваем и запускаем установщик
+        # Download and run the installer
         install_cmd = 'bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install'
 
         result = subprocess.run(
@@ -2060,45 +2059,45 @@ xray version
             shell=True,
             capture_output=True,
             text=True,
-            timeout=300,  # 5 минут на установку
+            timeout=300,  # 5 minutes for install
         )
 
         if result.returncode != 0:
             logger.error(f"Xray install failed: {result.stderr}")
-            error_msg = result.stderr[:300] if result.stderr else "Неизвестная ошибка"
+            error_msg = result.stderr[:300] if result.stderr else "Unknown error"
             return (
                 False,
-                f"""❌ Ошибка установки Xray
+                f"""❌ Xray install error
 
-**Установите вручную через SSH:**
+**Install manually via SSH:**
 ```bash
-ssh root@<IP_СЕРВЕРА>
+ssh root@<SERVER_IP>
 bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
 ```
 
-Ошибка: {error_msg}""",
+Error: {error_msg}""",
             )
 
         logger.info("Xray installed successfully")
         return (
             True,
-            "✅ Xray успешно установлен!\n\nТеперь выполните:\n/xray_apply — применить конфигурацию\n/xray_start — запустить",
+            "✅ Xray installed successfully!\n\nNow run:\n/xray_apply — apply configuration\n/xray_start — start",
         )
 
     except subprocess.TimeoutExpired:
-        return False, "❌ Таймаут установки (5 минут)"
+        return False, "❌ Install timed out (5 minutes)"
     except Exception as e:
         logger.error(f"Error installing Xray: {e}")
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def _xray_service_group() -> Optional[str]:
-    """Эффективная группа сервиса Xray (для прав на config.json).
+    """Effective Xray service group (for config.json permissions).
 
-    Официальный systemd-юнит запускает Xray под `User=nobody` БЕЗ явного `Group=`,
-    поэтому берём primary-группу пользователя (на Debian/Ubuntu это `nogroup`).
-    Возвращает None, если определить не удалось — тогда caller оставляет конфиг
-    world-readable (0644), чтобы НЕ лишить Xray доступа к нему.
+    The official systemd unit runs Xray as `User=nobody` WITHOUT an explicit
+    `Group=`, so we take the user's primary group (on Debian/Ubuntu that is
+    `nogroup`). Returns None if it cannot be determined — then the caller
+    leaves the config world-readable (0644) so Xray is not locked out.
     """
     try:
         g = _host_run(
@@ -2125,11 +2124,11 @@ def _xray_service_group() -> Optional[str]:
 
 
 def _restrict_xray_config(path: str) -> None:
-    """Сузить world-read приватного Reality-ключа в config.json до группы сервиса.
+    """Narrow world-read of the private Reality key in config.json to the service group.
 
-    Fail-safe: тигнем до 0640 ТОЛЬКО если уверенно определили группу и `chgrp`
-    прошёл. Иначе оставляем 0644 — лучше чуть шире права, чем сломать чтение
-    конфига сервисом (Xray бежит под nobody без явного Group=).
+    Fail-safe: tighten to 0640 ONLY if the group was identified and `chgrp`
+    succeeded. Otherwise keep 0644 — slightly broader permissions beat breaking
+    service reads (Xray runs as nobody without an explicit Group=).
     """
     grp = _xray_service_group()
     if not grp:
@@ -2142,16 +2141,16 @@ def _restrict_xray_config(path: str) -> None:
             )
         else:
             logger.warning(
-                f"VLESS: chgrp {grp} {path} не прошёл ({(r.stderr or '').strip()}); "
-                f"оставляю 0644"
+                f"VLESS: chgrp {grp} {path} failed ({(r.stderr or '').strip()}); "
+                f"leaving 0644"
             )
     except Exception as e:
-        logger.warning(f"VLESS: не удалось сузить права на {path}: {e}")
+        logger.warning(f"VLESS: failed to tighten permissions on {path}: {e}")
 
 
 def apply_xray_config() -> Tuple[bool, str]:
     """
-    Применить текущую VLESS конфигурацию к Xray серверу.
+    Apply the current VLESS configuration to the Xray server.
 
     Returns:
         Tuple[success, message]
@@ -2159,22 +2158,22 @@ def apply_xray_config() -> Tuple[bool, str]:
     config_path = "/usr/local/etc/xray/config.json"
 
     try:
-        # Генерируем серверную конфигурацию
+        # Generate server configuration
         xray_config = export_xray_config(is_server=True)
 
-        # Проверяем что есть необходимые данные
+        # Ensure required fields exist
         vless_config = _load_config()
         if not vless_config.get("uuid") or not vless_config.get("private_key"):
-            return False, "❌ Сначала сгенерируйте ключи: /vless_gen_keys"
+            return False, "❌ Generate keys first: /vless_gen_keys"
 
         config_json = json.dumps(xray_config, indent=2, ensure_ascii=False)
-        # Пишем 0644 (гарантированно читаемо сервисом), затем fail-safe сужаем до
-        # 0640+chgrp, если удаётся определить группу сервиса (приватный Reality-key
-        # не должен быть world-readable). При неудаче остаётся 0644.
+        # Write 0644 (guaranteed readable by the service), then fail-safe tighten to
+        # 0640+chgrp if the service group can be determined (the private Reality key
+        # must not be world-readable). On failure it stays 0644.
         write_result = _host_write_text(config_path, config_json, mode="0644")
         if write_result.returncode != 0:
             error = write_result.stderr.strip() or write_result.stdout.strip()
-            return False, f"❌ Не удалось записать host config Xray:\n`{error}`"
+            return False, f"❌ Failed to write host Xray config:\n`{error}`"
 
         _restrict_xray_config(config_path)
 
@@ -2185,56 +2184,56 @@ def apply_xray_config() -> Tuple[bool, str]:
             timeout=10,
         )
         if result.returncode != 0:
-            return False, f"❌ Ошибка в конфигурации:\n```\n{result.stderr[:500]}\n```"
+            return False, f"❌ Configuration error:\n```\n{result.stderr[:500]}\n```"
 
-        return True, f"✅ Конфигурация Xray записана и проверена\n\n📄 `{config_path}`"
+        return True, f"✅ Xray configuration written and verified\n\n📄 `{config_path}`"
 
     except OSError as e:
-        # Директория недоступна (volume не подключён)
+        # Directory unavailable (volume not mounted)
         logger.error(f"Cannot write xray config: {e}")
         return False, (
-            "❌ Не удалось записать конфиг Xray\n\n"
-            "Возможно, volume `/usr/local/etc/xray` не подключён.\n"
-            "Примени конфиг вручную: `/vless_export` → Xray Server Config"
+            "❌ Failed to write Xray config\n\n"
+            "The `/usr/local/etc/xray` volume may not be mounted.\n"
+            "Apply the config manually: `/vless_export` → Xray Server Config"
         )
     except Exception as e:
         logger.error(f"Error applying Xray config: {e}")
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def start_xray() -> Tuple[bool, str]:
-    """Запустить Xray сервис"""
-    # Проверяем Docker
+    """Start the Xray service"""
+    # Check Docker
     if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
         return (
             False,
-            "❌ Из Docker нет доступа к systemctl\n\nНа сервере: `systemctl start xray`",
+            "❌ No systemctl access from Docker\n\nOn the server: `systemctl start xray`",
         )
 
     try:
-        # Включаем автозапуск
+        # Enable autostart
         subprocess.run(["systemctl", "enable", "xray"], capture_output=True, timeout=10)
 
-        # Запускаем
+        # Start
         result = subprocess.run(
             ["systemctl", "start", "xray"], capture_output=True, text=True, timeout=10
         )
 
         if result.returncode != 0:
-            return False, f"❌ Ошибка запуска:\n```\n{result.stderr}\n```"
+            return False, f"❌ Start error:\n```\n{result.stderr}\n```"
 
-        return True, "✅ Xray запущен!"
+        return True, "✅ Xray started!"
 
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def stop_xray() -> Tuple[bool, str]:
-    """Остановить Xray сервис"""
+    """Stop the Xray service"""
     if os.path.exists("/.dockerenv") or os.environ.get("DOCKER_CONTAINER"):
         return (
             False,
-            "❌ Из Docker нет доступа к systemctl\n\nНа сервере: `systemctl stop xray`",
+            "❌ No systemctl access from Docker\n\nOn the server: `systemctl stop xray`",
         )
 
     try:
@@ -2243,25 +2242,25 @@ def stop_xray() -> Tuple[bool, str]:
         )
 
         if result.returncode != 0:
-            return False, f"❌ Ошибка остановки:\n```\n{result.stderr}\n```"
+            return False, f"❌ Stop error:\n```\n{result.stderr}\n```"
 
-        return True, "🔴 Xray остановлен"
+        return True, "🔴 Xray stopped"
 
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def restart_xray() -> Tuple[bool, str]:
-    """Перезапустить Xray сервис"""
+    """Restart the Xray service"""
     try:
         result = _host_run(
             ["systemctl", "restart", "xray"], capture_output=True, text=True, timeout=15
         )
 
         if result.returncode != 0:
-            return False, f"❌ Ошибка перезапуска:\n```\n{result.stderr}\n```"
+            return False, f"❌ Restart error:\n```\n{result.stderr}\n```"
 
-        # Проверяем статус
+        # Check status
         import time
 
         time.sleep(1)
@@ -2274,19 +2273,19 @@ def restart_xray() -> Tuple[bool, str]:
         )
 
         if result.stdout.strip() == "active":
-            return True, "✅ Xray перезапущен и работает!"
+            return True, "✅ Xray restarted and is running!"
         else:
             return (
                 False,
-                "⚠️ Xray перезапущен, но не активен. Проверьте логи: /xray_logs",
+                "⚠️ Xray restarted but is not active. Check logs: /xray_logs",
             )
 
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def get_xray_logs(lines: int = 30) -> Tuple[bool, str]:
-    """Получить последние логи Xray"""
+    """Get the latest Xray logs"""
     try:
         result = subprocess.run(
             ["journalctl", "-u", "xray", "-n", str(lines), "--no-pager"],
@@ -2297,13 +2296,13 @@ def get_xray_logs(lines: int = 30) -> Tuple[bool, str]:
 
         logs = result.stdout.strip()
         if not logs:
-            return True, "📋 Логи пусты"
+            return True, "📋 Logs are empty"
 
-        # Обрезаем если слишком длинные
+        # Truncate if too long
         if len(logs) > 3500:
             logs = logs[-3500:]
 
-        return True, f"📋 *Логи Xray \\(последние {lines}\\):*\n```\n{logs}\n```"
+        return True, f"📋 *Xray logs \\(last {lines}\\):*\n```\n{logs}\n```"
 
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"

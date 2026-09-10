@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для управления Headscale (self-hosted Tailscale control plane).
+Module for managing Headscale (self-hosted Tailscale control plane).
 
-Взаимодействует с Docker-контейнером Headscale через docker exec
-для создания пользователей, генерации Pre-Auth ключей и мониторинга нод.
+Talks to the Headscale Docker container via docker exec
+to create users, generate Pre-Auth keys, and monitor nodes.
 
-Структура конфигурации (headscale_config.json):
+Configuration structure (headscale_config.json):
 {
     "enabled": false,
     "container_name": "headscale",
@@ -14,8 +14,8 @@
     "key_expiration": "24h"
 }
 
-default_user — числовой ID (CLI ``-u`` uint) или username; имя резолвится
-через ``users list`` (Headscale больше не принимает строковое имя в -u).
+default_user — numeric ID (CLI ``-u`` uint) or username; the name is resolved
+via ``users list`` (Headscale no longer accepts a string name in -u).
 """
 
 import json
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # Thread safety
 _hs_lock = threading.Lock()
 
-# Путь к файлу конфигурации Headscale
+# Path to the Headscale configuration file
 _HS_CONFIG_PATH = os.getenv(
     "HEADSCALE_CONFIG_PATH",
     os.path.join(os.getcwd(), "headscale_config.json"),
@@ -49,17 +49,17 @@ DEFAULT_CONFIG = {
 }
 
 
-# === Argument parsing (общий для Telegram-бота и SSH CLI) ===
+# === Argument parsing (shared by the Telegram bot and SSH CLI) ===
 
 _DURATION_RE = re.compile(r"\d+[smhd]")
 
 
 def parse_user_expiration(args: List[str]) -> Tuple[Optional[str], Optional[str]]:
-    """Разобрать аргументы /headscale_gen в (user, expiration).
+    """Parse /headscale_gen arguments into (user, expiration).
 
-    Позиционно-независимо: токен вида ``720h``/``30m``/``7d`` — это срок жизни
-    ключа, любой другой — имя пользователя. Используется и в Telegram-обработчике
-    (handlers.headscale_gen), и в SSH CLI (admin_cli), чтобы логика не разъезжалась.
+    Position-independent: a token like ``720h``/``30m``/``7d`` is the key
+    lifetime, anything else is a username. Used in both the Telegram handler
+    (handlers.headscale_gen) and the SSH CLI (admin_cli) so the logic stays aligned.
     """
     user: Optional[str] = None
     expiration: Optional[str] = None
@@ -74,7 +74,7 @@ def parse_user_expiration(args: List[str]) -> Tuple[Optional[str], Optional[str]
 # === Internal helpers ===
 
 def _load_config() -> Dict:
-    """Загрузить конфигурацию Headscale из файла."""
+    """Load Headscale configuration from file."""
     with _hs_lock:
         if not os.path.exists(_HS_CONFIG_PATH):
             return dict(DEFAULT_CONFIG)
@@ -90,7 +90,7 @@ def _load_config() -> Dict:
 
 
 def _save_config(config: Dict) -> bool:
-    """Сохранить конфигурацию Headscale в файл."""
+    """Save Headscale configuration to file."""
     with _hs_lock:
         try:
             config["updated_at"] = datetime.now().isoformat()
@@ -113,9 +113,9 @@ def _save_config(config: Dict) -> bool:
 def _docker_exec(config: Dict, *args: str, timeout: int = 15) -> Tuple[bool, str]:
     """Run a headscale command inside the Docker container.
 
-    Docker CLI живёт на хосте, а бот работает в контейнере без docker.
-    Поэтому идём через host_run (nsenter в namespace хоста, требует
-    ``pid: host``) — тот же приём, что и get_host_tailscale_client_summary.
+    Docker CLI lives on the host, while the bot runs in a container without docker.
+    So we go through host_run (nsenter into the host namespace, requires
+    ``pid: host``) — the same trick as get_host_tailscale_client_summary.
     """
     from host_utils import host_run
 
@@ -132,9 +132,9 @@ def _docker_exec(config: Dict, *args: str, timeout: int = 15) -> Tuple[bool, str
             return True, result.stdout.strip()
         return False, result.stderr.strip() or f"Exit code {result.returncode}"
     except FileNotFoundError:
-        return False, "docker/nsenter не найден в PATH"
+        return False, "docker/nsenter not found in PATH"
     except subprocess.TimeoutExpired:
-        return False, f"Таймаут ({timeout}с) при выполнении команды"
+        return False, f"Timeout ({timeout}s) while running the command"
     except Exception as e:
         return False, str(e)
 
@@ -142,95 +142,95 @@ def _docker_exec(config: Dict, *args: str, timeout: int = 15) -> Tuple[bool, str
 # === Public API ===
 
 def is_headscale_enabled() -> bool:
-    """Проверить, включён ли Headscale."""
+    """Check whether Headscale is enabled."""
     return _load_config().get("enabled", False)
 
 
 def get_config() -> Dict:
-    """Получить текущую конфигурацию Headscale."""
+    """Get the current Headscale configuration."""
     return _load_config()
 
 
 def enable_headscale() -> Tuple[bool, str]:
-    """Включить Headscale."""
+    """Enable Headscale."""
     config = _load_config()
     config["enabled"] = True
     if _save_config(config):
-        return True, "✅ Headscale включён"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ Headscale enabled"
+    return False, "❌ Failed to save"
 
 
 def disable_headscale() -> Tuple[bool, str]:
-    """Выключить Headscale."""
+    """Disable Headscale."""
     config = _load_config()
     config["enabled"] = False
     if _save_config(config):
-        return True, "✅ Headscale выключен"
-    return False, "❌ Ошибка при сохранении"
+        return True, "✅ Headscale disabled"
+    return False, "❌ Failed to save"
 
 
 def set_server_url(url: str) -> Tuple[bool, str]:
-    """Установить URL координатора Headscale."""
+    """Set the Headscale coordinator URL."""
     url = url.strip().rstrip("/")
     if not url:
-        return False, "❌ URL не может быть пустым"
+        return False, "❌ URL cannot be empty"
 
     config = _load_config()
     config["server_url"] = url
     if _save_config(config):
-        return True, f"✅ URL установлен: {url}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ URL set: {url}"
+    return False, "❌ Failed to save"
 
 
 def set_container_name(name: str) -> Tuple[bool, str]:
-    """Установить имя Docker-контейнера Headscale."""
+    """Set the Headscale Docker container name."""
     name = name.strip()
     if not name:
-        return False, "❌ Имя контейнера не может быть пустым"
+        return False, "❌ Container name cannot be empty"
 
     config = _load_config()
     config["container_name"] = name
     if _save_config(config):
-        return True, f"✅ Контейнер: {name}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Container: {name}"
+    return False, "❌ Failed to save"
 
 
 def create_user(username: str) -> Tuple[bool, str]:
-    """Создать пользователя в Headscale."""
+    """Create a user in Headscale."""
     username = username.strip()
     if not username:
-        return False, "❌ Имя пользователя не может быть пустым"
+        return False, "❌ Username cannot be empty"
 
     config = _load_config()
     ok, output = _docker_exec(config, "users", "create", username)
     if ok:
-        return True, f"✅ Пользователь создан: {username}"
-    # «already exists» — не ошибка
+        return True, f"✅ User created: {username}"
+    # "already exists" is not an error
     if "already exists" in output.lower():
-        return True, f"ℹ️ Пользователь уже существует: {username}"
-    return False, f"❌ Ошибка: {output}"
+        return True, f"ℹ️ User already exists: {username}"
+    return False, f"❌ Error: {output}"
 
 
 def _resolve_user_id(config: Dict, user: Optional[str]) -> Tuple[bool, str, str]:
-    """Привести user к числовому ID для CLI Headscale.
+    """Resolve user to a numeric ID for the Headscale CLI.
 
-    Современный Headscale (`preauthkeys create -u`) принимает только uint ID,
-    не username. Имя (например ``your-user``) резолвим через ``users list -o json``.
-    Уже числовая строка («1») возвращается как есть.
+    Modern Headscale (`preauthkeys create -u`) accepts only a uint ID,
+    not a username. A name (for example ``your-user``) is resolved via ``users list -o json``.
+    An already-numeric string ("1") is returned as-is.
     """
     raw = (user or config.get("default_user") or "").strip()
     if not raw:
-        return False, "❌ Не задан user (default_user в headscale_config.json)", ""
+        return False, "❌ user is not set (default_user in headscale_config.json)", ""
     if raw.isdigit():
         return True, raw, raw
 
     ok, output = _docker_exec(config, "users", "list", "-o", "json")
     if not ok:
-        return False, f"❌ Не удалось получить users list: {output}", ""
+        return False, f"❌ Failed to get users list: {output}", ""
     try:
         users = json.loads(output)
     except json.JSONDecodeError:
-        return False, f"❌ Невалидный JSON users list:\n{output[:200]}", ""
+        return False, f"❌ Invalid JSON users list:\n{output[:200]}", ""
     if not isinstance(users, list):
         users = []
 
@@ -256,8 +256,8 @@ def _resolve_user_id(config: Dict, user: Optional[str]) -> Tuple[bool, str, str]
     ) or "—"
     return (
         False,
-        f"❌ Пользователь «{raw}» не найден. Нужен ID из `users list` "
-        f"(у нас часто: 1 = your-user). Известные: {known}",
+        f"❌ User \"{raw}\" not found. Need an ID from `users list` "
+        f"(often here: 1 = your-user). Known: {known}",
         "",
     )
 
@@ -268,7 +268,7 @@ def create_preauth_key(
     expiration: Optional[str] = None,
 ) -> Tuple[bool, str, str]:
     """
-    Создать Pre-Auth ключ для подключения клиента.
+    Create a Pre-Auth key for connecting a client.
 
     Returns:
         (success, message, key)
@@ -286,37 +286,37 @@ def create_preauth_key(
 
     ok, output = _docker_exec(config, *args)
     if not ok:
-        return False, f"❌ Ошибка: {output}", ""
+        return False, f"❌ Error: {output}", ""
 
-    # Headscale выводит ключ в последней строке или в таблице
+    # Headscale prints the key on the last line or in a table
     key = _parse_preauth_key(output)
     if key:
         return (
             True,
-            f"✅ Pre-Auth ключ создан (user: {uid_label}, expiration: {expiration})",
+            f"✅ Pre-Auth key created (user: {uid_label}, expiration: {expiration})",
             key,
         )
-    return True, f"✅ Ключ создан, но не удалось распарсить вывод:\n{output}", output
+    return True, f"✅ Key created, but the output could not be parsed:\n{output}", output
 
 
 def _parse_preauth_key(output: str) -> str:
-    """Извлечь Pre-Auth ключ из вывода headscale."""
-    # Headscale >= 0.23 выводит ключ на отдельной строке
+    """Extract a Pre-Auth key from headscale output."""
+    # Headscale >= 0.23 prints the key on its own line
     lines = output.strip().split("\n")
     for line in reversed(lines):
         line = line.strip()
-        # Ключи обычно длинные hex/base64 строки
+        # Keys are usually long hex/base64 strings
         if len(line) > 20 and " " not in line:
             return line
-    # Fallback: вернуть весь вывод
+    # Fallback: return the entire output
     return output.strip()
 
 
 def list_preauth_keys(user: Optional[str] = None) -> Tuple[bool, str, List[Dict]]:
-    """Список Pre-Auth ключей пользователя (для отзыва/аудита).
+    """List the user's Pre-Auth keys (for revoke/audit).
 
     Returns:
-        (success, message, keys) — keys как список словарей из headscale JSON.
+        (success, message, keys) — keys as a list of dicts from headscale JSON.
     """
     config = _load_config()
     ok_uid, uid_or_err, uid_label = _resolve_user_id(config, user)
@@ -326,26 +326,26 @@ def list_preauth_keys(user: Optional[str] = None) -> Tuple[bool, str, List[Dict]
         config, "preauthkeys", "list", "--user", uid_or_err, "-o", "json"
     )
     if not ok:
-        return False, f"❌ Ошибка: {output}", []
+        return False, f"❌ Error: {output}", []
     try:
         keys = json.loads(output)
         if not isinstance(keys, list):
             keys = []
-        return True, f"✅ Ключей у {uid_label}: {len(keys)}", keys
+        return True, f"✅ Keys for {uid_label}: {len(keys)}", keys
     except json.JSONDecodeError:
-        return False, f"❌ Невалидный JSON:\n{output[:200]}", []
+        return False, f"❌ Invalid JSON:\n{output[:200]}", []
 
 
 def revoke_preauth_key(key: str, user: Optional[str] = None) -> Tuple[bool, str]:
-    """Отозвать (просрочить) Pre-Auth ключ.
+    """Revoke (expire) a Pre-Auth key.
 
-    Узлы, уже подключённые по этому ключу, остаются в сети — отозвать сам
-    узел можно через ``nodes delete`` / Headplane. Отзыв ключа лишь не даёт
-    зарегистрировать по нему новые устройства.
+    Nodes already connected with this key stay in the network — to revoke the
+    node itself use ``nodes delete`` / Headplane. Revoking the key only prevents
+    registering new devices with it.
     """
     key = key.strip()
     if not key:
-        return False, "❌ Ключ не может быть пустым"
+        return False, "❌ Key cannot be empty"
 
     config = _load_config()
     ok_uid, uid_or_err, uid_label = _resolve_user_id(config, user)
@@ -355,45 +355,45 @@ def revoke_preauth_key(key: str, user: Optional[str] = None) -> Tuple[bool, str]
         config, "preauthkeys", "expire", "--user", uid_or_err, key
     )
     if ok:
-        return True, f"✅ Pre-Auth ключ отозван (user: {uid_label})"
-    return False, f"❌ Ошибка: {output}"
+        return True, f"✅ Pre-Auth key revoked (user: {uid_label})"
+    return False, f"❌ Error: {output}"
 
 
 def list_nodes() -> Tuple[bool, str, List[Dict]]:
-    """Получить список подключённых нод."""
+    """Get the list of connected nodes."""
     config = _load_config()
     ok, output = _docker_exec(config, "nodes", "list", "-o", "json")
     if not ok:
-        return False, f"❌ Ошибка: {output}", []
+        return False, f"❌ Error: {output}", []
 
     try:
         nodes = json.loads(output)
         if not isinstance(nodes, list):
             nodes = []
-        return True, f"✅ Найдено нод: {len(nodes)}", nodes
+        return True, f"✅ Nodes found: {len(nodes)}", nodes
     except json.JSONDecodeError:
-        return False, f"❌ Невалидный JSON:\n{output[:200]}", []
+        return False, f"❌ Invalid JSON:\n{output[:200]}", []
 
 
 def list_users() -> Tuple[bool, str, List[str]]:
-    """Получить список пользователей Headscale."""
+    """Get the list of Headscale users."""
     config = _load_config()
     ok, output = _docker_exec(config, "users", "list", "-o", "json")
     if not ok:
-        return False, f"❌ Ошибка: {output}", []
+        return False, f"❌ Error: {output}", []
 
     try:
         users = json.loads(output)
         if not isinstance(users, list):
             users = []
         names = [u.get("name", "?") for u in users if isinstance(u, dict)]
-        return True, f"✅ Пользователей: {len(names)}", names
+        return True, f"✅ Users: {len(names)}", names
     except json.JSONDecodeError:
-        return False, f"❌ Невалидный JSON:\n{output[:200]}", []
+        return False, f"❌ Invalid JSON:\n{output[:200]}", []
 
 
 def _is_container_running(container_name: str) -> bool:
-    """Проверить, запущен ли Docker-контейнер (docker на хосте, см. host_run)."""
+    """Check whether the Docker container is running (docker on the host, see host_run)."""
     try:
         from host_utils import host_run
 
@@ -408,27 +408,27 @@ def _is_container_running(container_name: str) -> bool:
 
 def get_headplane_status() -> Dict:
     """
-    Статус Headplane (Web UI) рядом с Headscale.
+    Headplane (Web UI) status next to Headscale.
 
-    Headplane — отдельный контейнер (см. compose.headplane.yaml).
-    Запущен/нет определяется по наличию контейнера с именем ``headplane``.
-    Доступ — только через SSH-туннель: ``ssh -L 3000:127.0.0.1:3000``.
+    Headplane is a separate container (see compose.headplane.yaml).
+    Running or not is determined by a container named ``headplane``.
+    Access is only via SSH tunnel: ``ssh -L 3000:127.0.0.1:3000``.
 
-    Конфиг хранится в ``headplane/config.yaml`` (gitignored), параметры
-    в headscale_config.json не дублируются — single source of truth.
+    Config lives in ``headplane/config.yaml`` (gitignored); parameters
+    are not duplicated in headscale_config.json — single source of truth.
     """
     container = "headplane"
     return {
         "container_name": container,
         "container_running": _is_container_running(container),
-        # Headplane всегда слушает loopback по compose.headplane.yaml.
+        # Headplane always listens on loopback per compose.headplane.yaml.
         "tunnel_hint": "ssh -L 3000:127.0.0.1:3000 root@<VPS_IP>",
         "browser_url": "http://127.0.0.1:3000/admin",
     }
 
 
 def get_status() -> Dict:
-    """Получить статус Headscale (контейнер, ноды, URL) + статус Headplane."""
+    """Get Headscale status (container, nodes, URL) plus Headplane status."""
     config = _load_config()
     status = {
         "enabled": config.get("enabled", False),
@@ -456,15 +456,15 @@ def get_status() -> Dict:
 
 def get_host_tailscale_client_summary() -> Tuple[bool, str]:
     """
-    IPv4/IPv6 адреса локального клиента Tailscale на **хосте** (не контейнер headscale).
+    IPv4/IPv6 addresses of the local Tailscale client on the **host** (not the headscale container).
 
-    Используется для /headscale: на VPS часто ставят tailscale и подключают к Headscale.
-    Внутри Docker с ``pid: host`` команды выполняются в неймспейсе хоста (см. host_utils.host_run).
+    Used for /headscale: a VPS often has tailscale installed and joined to Headscale.
+    Inside Docker with ``pid: host`` commands run in the host namespace (see host_utils.host_run).
     """
     try:
         from host_utils import host_run
     except ImportError:
-        return False, "❌ Модуль host_utils недоступен."
+        return False, "❌ host_utils module is unavailable."
 
     candidates = ("tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale")
     last_detail = ""
@@ -481,8 +481,8 @@ def get_host_tailscale_client_summary() -> Tuple[bool, str]:
                 if not (r.stdout and r.stdout.strip()):
                     return (
                         False,
-                        "❌ Tailscale на хосте отвечает, но tailscale ip -4 не вернул адрес.\n\n"
-                        "Проверьте на сервере: tailscale status и при необходимости tailscale up.",
+                        "❌ Tailscale on the host answers, but tailscale ip -4 returned no address.\n\n"
+                        "Check on the server: tailscale status and, if needed, tailscale up.",
                     )
                 v4_lines = [ln.strip() for ln in r.stdout.splitlines() if ln.strip()]
                 v6_lines: List[str] = []
@@ -500,7 +500,7 @@ def get_host_tailscale_client_summary() -> Tuple[bool, str]:
                     ]
 
                 lines_msg = [
-                    "🌐 Клиент Tailscale на этом сервере (хост):",
+                    "🌐 Tailscale client on this server (host):",
                     "",
                     "IPv4:",
                     "\n".join(v4_lines),
@@ -510,8 +510,8 @@ def get_host_tailscale_client_summary() -> Tuple[bool, str]:
                 lines_msg.extend(
                     [
                         "",
-                        "Если адресов нет — на сервере выполните tailscale up с вашим Headscale "
-                        "(см. HEADSCALE_GUIDE.md).",
+                        "If there are no addresses — run tailscale up on the server with your Headscale "
+                        "(see HEADSCALE_GUIDE.md).",
                     ]
                 )
                 return True, "\n".join(lines_msg)
@@ -519,57 +519,57 @@ def get_host_tailscale_client_summary() -> Tuple[bool, str]:
             err = (r.stderr or r.stdout or "").strip()
             if err:
                 last_detail = err
-            # «executable not found» — пробуем следующий путь
+            # "executable not found" — try the next path
             if r.returncode != 0 and (
                 "not found" in err.lower() or "No such file" in err
             ):
                 continue
-            # Бинарь есть, но tailscale не поднят / не в сети
+            # Binary exists, but tailscale is not up / not in the network
             if r.returncode != 0:
-                hint = err or f"код выхода {r.returncode}"
+                hint = err or f"exit code {r.returncode}"
                 return (
                     False,
-                    "❌ Команда tailscale на хосте есть, но адрес не получен.\n\n"
-                    f"Детали: {hint}\n\n"
-                    "Обычно нужно: tailscale up --login-server <URL> --authkey <ключ> "
-                    "(см. HEADSCALE_GUIDE.md).",
+                    "❌ The tailscale command exists on the host, but no address was obtained.\n\n"
+                    f"Details: {hint}\n\n"
+                    "Usually you need: tailscale up --login-server <URL> --authkey <key> "
+                    "(see HEADSCALE_GUIDE.md).",
                 )
 
-        # Ни один путь не сработал с полезным stdout
+        # No path produced useful stdout
         if last_detail and ("not found" not in last_detail.lower()):
             return (
                 False,
-                "❌ На хосте не найден исполняемый файл Tailscale или клиент не в сети.\n\n"
-                f"Последняя ошибка: {last_detail}",
+                "❌ Tailscale executable not found on the host, or the client is not in the network.\n\n"
+                f"Last error: {last_detail}",
             )
         return (
             False,
-            "❌ Клиент Tailscale на этом сервере не установлен "
-            "(в PATH нет tailscale) или недоступен из контейнера бота.\n\n"
-            "Установите Tailscale на VPS и подключите к Headscale — см. HEADSCALE_GUIDE.md.",
+            "❌ Tailscale client is not installed on this server "
+            "(tailscale is not in PATH) or is unreachable from the bot container.\n\n"
+            "Install Tailscale on the VPS and join Headscale — see HEADSCALE_GUIDE.md.",
         )
     except Exception as e:
         logger.error("get_host_tailscale_client_summary: %s", e)
-        return False, f"❌ Ошибка при вызове tailscale: {e}"
+        return False, f"❌ Error calling tailscale: {e}"
 
 
-# === Exit node (выход в интернет через VPS-координатор) ===
+# === Exit node (internet exit via the VPS coordinator) ===
 #
-# Технология: узел-хост (сам клиент своего tailnet'а) объявляет себя exit node
-# (маршрут 0.0.0.0/0 + ::/0), Headscale этот маршрут аппрувит, клиент (телефон)
-# выбирает его в приложении Tailscale. Бот доводит серверную часть до состояния
-# «доступно», но финальный выбор exit node делается на самом устройстве —
-# протолкнуть его сервером невозможно (это локальная настройка клиента).
+# How it works: the host node (the tailnet's own client) advertises itself as
+# an exit node (route 0.0.0.0/0 + ::/0), Headscale approves that route, the
+# client (phone) picks it in the Tailscale app. The bot brings the server side
+# to "available", but the final exit-node choice is made on the device —
+# the server cannot push it (it is a local client setting).
 
 _EXIT_ROUTES = ("0.0.0.0/0", "::/0")
 _TAILSCALE_BINS = ("tailscale", "/usr/bin/tailscale", "/usr/sbin/tailscale")
 
 
 def _host_run_first(bins, args, timeout: int = 15):
-    """Запустить первый доступный бинарь из ``bins`` на хосте через host_run.
+    """Run the first available binary from ``bins`` on the host via host_run.
 
-    Возвращает (CompletedProcess | None, bin_path | None). None — если ни один
-    путь не найден (FileNotFoundError / not found).
+    Returns (CompletedProcess | None, bin_path | None). None if no
+    path was found (FileNotFoundError / not found).
     """
     from host_utils import host_run
 
@@ -595,7 +595,7 @@ def _host_run_first(bins, args, timeout: int = 15):
 
 
 def _host_sysctl_get(key: str) -> Optional[str]:
-    """Прочитать sysctl на хосте (например net.ipv4.ip_forward)."""
+    """Read a sysctl on the host (for example net.ipv4.ip_forward)."""
     r, _ = _host_run_first(("sysctl", "/sbin/sysctl", "/usr/sbin/sysctl"), ["-n", key], timeout=5)
     if r is not None and r.returncode == 0:
         return (r.stdout or "").strip()
@@ -603,16 +603,16 @@ def _host_sysctl_get(key: str) -> Optional[str]:
 
 
 def _host_sysctl_set(key: str, value: str) -> bool:
-    """Выставить sysctl на хосте (runtime, не persistent)."""
+    """Set a sysctl on the host (runtime, not persistent)."""
     r, _ = _host_run_first(("sysctl", "/sbin/sysctl", "/usr/sbin/sysctl"), ["-w", f"{key}={value}"], timeout=5)
     return r is not None and r.returncode == 0
 
 
 def _node_route_sets(node: Dict) -> Tuple[set, set]:
-    """(available, approved) маршруты узла из nodes-list JSON.
+    """(available, approved) node routes from the nodes-list JSON.
 
-    Headscale меняет имена полей между версиями — собираем по всем известным
-    ключам, чтобы не привязываться к конкретной версии.
+    Headscale changes field names between versions — collect from all known
+    keys so we are not tied to a specific version.
     """
     def pick(*keys) -> set:
         out: set = set()
@@ -628,12 +628,12 @@ def _node_route_sets(node: Dict) -> Tuple[set, set]:
 
 
 def _is_exit_routes(routes: set) -> bool:
-    """В наборе есть оба exit-маршрута (или хотя бы IPv4 0.0.0.0/0)."""
+    """The set contains both exit routes (or at least IPv4 0.0.0.0/0)."""
     return "0.0.0.0/0" in routes
 
 
 def _find_exit_candidate(nodes: List[Dict]) -> Optional[Dict]:
-    """Узел, который объявил маршрут exit node (0.0.0.0/0 в available)."""
+    """Node that advertised an exit-node route (0.0.0.0/0 in available)."""
     for node in nodes:
         if not isinstance(node, dict):
             continue
@@ -644,7 +644,7 @@ def _find_exit_candidate(nodes: List[Dict]) -> Optional[Dict]:
 
 
 def _node_id(node: Dict) -> str:
-    """ID узла для approve-routes (строкой)."""
+    """Node ID for approve-routes (as a string)."""
     return str(node.get("id") or node.get("ID") or node.get("nodeId") or "").strip()
 
 
@@ -656,41 +656,41 @@ def _node_label(node: Dict) -> str:
 
 
 def _approve_exit_routes(config: Dict, node_id: str) -> Tuple[bool, str]:
-    """Аппрувнуть exit-маршруты узла в Headscale.
+    """Approve the node's exit routes in Headscale.
 
-    Сначала пробуем синтаксис 0.26+ (``nodes approve-routes``); при неудаче
-    возвращаем понятную ошибку с подсказкой про Headplane (старые версии
-    используют ``routes enable``, которого может не быть).
+    Try 0.26+ syntax first (``nodes approve-routes``); on failure
+    return a clear error with a Headplane hint (older versions
+    use ``routes enable``, which may be missing).
     """
     routes_csv = ",".join(_EXIT_ROUTES)
     ok, output = _docker_exec(
         config, "nodes", "approve-routes", "-i", node_id, "-r", routes_csv, timeout=20
     )
     if ok:
-        return True, output or "маршруты аппрувнуты"
-    # Возможно старая версия headscale (нет approve-routes).
+        return True, output or "routes approved"
+    # Possibly an old Headscale version (no approve-routes).
     return False, output
 
 
 def get_exit_node_status() -> Dict:
-    """Состояние exit node: forwarding на хосте + advertise/approve в Headscale."""
+    """Exit-node state: host forwarding + advertise/approve in Headscale."""
     config = _load_config()
     status: Dict = {
         "container_running": _is_container_running(config.get("container_name", "headscale")),
         "ip_forward_v4": _host_sysctl_get("net.ipv4.ip_forward"),
         "ip_forward_v6": _host_sysctl_get("net.ipv6.conf.all.forwarding"),
-        "advertising": False,   # узел объявил себя exit node
-        "approved": False,      # Headscale разрешил exit-маршрут
+        "advertising": False,   # the node advertised itself as an exit node
+        "approved": False,      # Headscale approved the exit route
         "node_label": "",
         "error": "",
     }
     if not status["container_running"]:
-        status["error"] = "контейнер headscale не запущен"
+        status["error"] = "headscale container is not running"
         return status
 
     ok, _msg, nodes = list_nodes()
     if not ok:
-        status["error"] = "не удалось получить список нод"
+        status["error"] = "failed to get the node list"
         return status
 
     cand = _find_exit_candidate(nodes)
@@ -703,114 +703,114 @@ def get_exit_node_status() -> Dict:
 
 
 def enable_exit_node() -> Tuple[bool, str]:
-    """Сделать VPS-координатор exit node'ом: advertise на хосте + approve в HS.
+    """Make the VPS coordinator an exit node: advertise on the host + approve in HS.
 
-    Возвращает (ok, человекочитаемый отчёт по шагам).
+    Returns (ok, a human-readable step-by-step report).
     """
     config = _load_config()
     steps: List[str] = []
 
-    # 1. Хост объявляет себя exit node (неразрушающий set, без полного up).
+    # 1. Host advertises itself as an exit node (non-destructive set, no full up).
     r, bin_path = _host_run_first(_TAILSCALE_BINS, ["set", "--advertise-exit-node"], timeout=20)
     if r is None and bin_path is None:
-        return False, "❌ tailscale на хосте не найден. Установите клиент и подключите к Headscale (HEADSCALE_GUIDE.md §Exit node)."
+        return False, "❌ tailscale not found on the host. Install the client and join Headscale (HEADSCALE_GUIDE.md §Exit node)."
     if r is not None and r.returncode != 0:
         detail = (r.stderr or r.stdout or "").strip()
-        return False, f"❌ tailscale set --advertise-exit-node не выполнен: {detail}"
-    steps.append("✅ хост объявил себя exit node (advertise)")
+        return False, f"❌ tailscale set --advertise-exit-node failed: {detail}"
+    steps.append("✅ host advertised itself as an exit node")
 
-    # 2. IP forwarding на хосте (runtime). Persistent — через HEADSCALE_GUIDE.md.
+    # 2. IP forwarding on the host (runtime). Persistent — see HEADSCALE_GUIDE.md.
     for key, label in (
         ("net.ipv4.ip_forward", "IPv4"),
         ("net.ipv6.conf.all.forwarding", "IPv6"),
     ):
         cur = _host_sysctl_get(key)
         if cur == "1":
-            steps.append(f"✅ forwarding {label} уже включён")
+            steps.append(f"✅ forwarding {label} already enabled")
         elif _host_sysctl_set(key, "1"):
-            steps.append(f"✅ forwarding {label} включён (runtime; persistent — см. гайд)")
+            steps.append(f"✅ forwarding {label} enabled (runtime; persistent — see the guide)")
         else:
-            steps.append(f"⚠️ forwarding {label} не удалось включить — проверьте на хосте вручную")
+            steps.append(f"⚠️ forwarding {label} could not be enabled — check on the host manually")
 
-    # 3. Approve exit-маршрута в Headscale (нужно дать headscale увидеть advertise).
+    # 3. Approve the exit route in Headscale (Headscale needs to see the advertise).
     ok, _msg, nodes = list_nodes()
     cand = _find_exit_candidate(nodes) if ok else None
     if cand is None:
         steps.append(
-            "⚠️ Headscale ещё не видит exit-маршрут от узла. Через 5–10 сек "
-            "повторите /exit_node_on или аппрувните 0.0.0.0/0 и ::/0 в Headplane."
+            "⚠️ Headscale does not yet see the node's exit route. In 5–10 sec "
+            "retry /exit_node_on or approve 0.0.0.0/0 and ::/0 in Headplane."
         )
         return True, "\n".join(steps)
 
     node_id = _node_id(cand)
     if not node_id:
-        steps.append("⚠️ не удалось определить ID узла — аппрувните маршрут в Headplane.")
+        steps.append("⚠️ could not determine the node ID — approve the route in Headplane.")
         return True, "\n".join(steps)
 
     appr_ok, appr_out = _approve_exit_routes(config, node_id)
     if appr_ok:
-        steps.append(f"✅ Headscale аппрувнул exit-маршрут для {_node_label(cand)}")
+        steps.append(f"✅ Headscale approved the exit route for {_node_label(cand)}")
         steps.append("")
-        steps.append("🎉 Exit node готов. Дальше — выбрать его на устройстве (см. /exit_node).")
+        steps.append("🎉 Exit node is ready. Next — pick it on the device (see /exit_node).")
     else:
         steps.append(
-            f"⚠️ авто-approve не прошёл ({appr_out}). Включите маршруты "
-            f"0.0.0.0/0 и ::/0 для узла {_node_label(cand)} в Headplane."
+            f"⚠️ auto-approve failed ({appr_out}). Enable routes "
+            f"0.0.0.0/0 and ::/0 for node {_node_label(cand)} in Headplane."
         )
     return True, "\n".join(steps)
 
 
 def disable_exit_node() -> Tuple[bool, str]:
-    """Перестать быть exit node'ом (на хосте отключаем advertise).
+    """Stop being an exit node (disable advertise on the host).
 
-    Маршрут в Headscale остаётся аппрувнутым, но без advertise клиенты не
-    смогут его использовать. Это обратимо: повторный /exit_node_on вернёт всё.
+    The route stays approved in Headscale, but without advertise clients cannot
+    use it. This is reversible: another /exit_node_on brings everything back.
     """
     r, bin_path = _host_run_first(_TAILSCALE_BINS, ["set", "--advertise-exit-node=false"], timeout=20)
     if r is None and bin_path is None:
-        return False, "❌ tailscale на хосте не найден."
+        return False, "❌ tailscale not found on the host."
     if r is not None and r.returncode != 0:
         detail = (r.stderr or r.stdout or "").strip()
-        return False, f"❌ Не удалось отключить advertise: {detail}"
-    return True, "✅ Exit node выключен: хост больше не объявляет 0.0.0.0/0.\nКлиенты, выбравшие его, потеряют выход через VPS."
+        return False, f"❌ Failed to disable advertise: {detail}"
+    return True, "✅ Exit node disabled: the host no longer advertises 0.0.0.0/0.\nClients that picked it will lose internet exit via the VPS."
 
 
 def exit_node_client_instructions(node_label: str = "") -> str:
-    """Пошаговый гайд для пользователя: как выбрать exit node на устройстве."""
-    target = node_label or "узел вашего VPS-координатора"
+    """Step-by-step guide for the user: how to pick the exit node on a device."""
+    target = node_label or "your VPS coordinator node"
     return (
-        "🌐 Выход в интернет через VPS — как включить на устройстве\n\n"
+        "🌐 Internet exit via the VPS — how to enable it on a device\n\n"
         f"Exit node: {target}\n\n"
         "📱 iPhone / iPad:\n"
-        "  1. Откройте приложение Tailscale\n"
-        "  2. Меню (≡) → Exit Node\n"
-        f"  3. Выберите {target}\n"
-        "  4. (опц.) Allow LAN access — если нужен доступ к локальной сети\n\n"
-        "🤖 Android: Tailscale → ⋮ → Use exit node → выберите узел\n\n"
-        "💻 macOS / Windows: меню Tailscale в трее → Exit Node → выберите узел\n\n"
-        "🐧 Linux: sudo tailscale set --exit-node=<имя-или-IP> --exit-node-allow-lan-access\n\n"
-        "Проверка: откройте https://ifconfig.me — должен показать IP вашего VPS.\n"
-        "Выбор запоминается: задаёте один раз, дальше Tailscale держит выход сам."
+        "  1. Open the Tailscale app\n"
+        "  2. Menu (≡) → Exit Node\n"
+        f"  3. Select {target}\n"
+        "  4. (opt.) Allow LAN access — if you need access to the local network\n\n"
+        "🤖 Android: Tailscale → ⋮ → Use exit node → select the node\n\n"
+        "💻 macOS / Windows: Tailscale tray menu → Exit Node → select the node\n\n"
+        "🐧 Linux: sudo tailscale set --exit-node=<name-or-IP> --exit-node-allow-lan-access\n\n"
+        "Check: open https://ifconfig.me — it should show your VPS IP.\n"
+        "The choice is remembered: set it once, then Tailscale keeps the exit itself."
     )
 
 
 def export_client_instructions(preauth_key: str) -> str:
-    """Сгенерировать инструкции для подключения клиента к Headscale."""
+    """Generate instructions for connecting a client to Headscale."""
     config = _load_config()
     server_url = config.get("server_url", "https://headscale.example.com")
 
-    return f"""== Подключение к Headscale ==
+    return f"""== Connecting to Headscale ==
 
-URL координатора: {server_url}
-Pre-Auth ключ: {preauth_key}
+Coordinator URL: {server_url}
+Pre-Auth key: {preauth_key}
 
 --- Linux / macOS ---
 tailscale up --login-server {server_url} --authkey {preauth_key}
 
 --- Windows ---
-1. Shift + клик на иконку Tailscale в трее
+1. Shift-click the Tailscale tray icon
 2. Preferences → Log in to custom control panel
 3. URL: {server_url}
-4. Или через PowerShell:
+4. Or via PowerShell:
    tailscale up --login-server {server_url} --authkey {preauth_key}
 """

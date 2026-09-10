@@ -51,7 +51,7 @@ def _env_list(name: str, default: list[str]) -> list[str]:
 
 
 def _resolve_vps_display_host() -> str:
-    """Адрес VPS для сайдбара: те же переменные, что в боте / SETUP_ENV, иначе короткий HTTP-запрос."""
+    """VPS address for the sidebar: same vars as the bot / SETUP_ENV, else a short HTTP lookup."""
     for key in (
         "DOCKHAND_SSH_HOST",
         "TELEGRAMHELPER_SSH_HOST",
@@ -68,10 +68,10 @@ def _resolve_vps_display_host() -> str:
         with urllib.request.urlopen("https://api.ipify.org", timeout=3) as resp:
             ip = (resp.read() or b"").decode("utf-8", errors="replace").strip()
             if ip:
-                return f"{ip} (авто)"
+                return f"{ip} (auto)"
     except Exception:
         pass
-    return "не задан в .env (см. DOCKHAND_SSH_HOST / TELEGRAMHELPER_PUBLIC_HOST)"
+    return "not set in .env (see DOCKHAND_SSH_HOST / TELEGRAMHELPER_PUBLIC_HOST)"
 
 
 def _env_int(name: str, default: int, minimum: int = 1) -> int:
@@ -105,13 +105,13 @@ st.set_page_config(
 )
 
 # ── Compact UI styles ───────────────────────────────────────────────────────
-# Уменьшаем дефолтные крупные элементы Streamlit (subheader, st.metric,
-# alert-блоки) чтобы левая колонка визуально не "перевешивала" компактные
-# логи справа. Это только косметика — структура и компоненты не меняются.
+# Shrink Streamlit's default large widgets (subheader, st.metric,
+# alert blocks) so the left column does not visually outweigh the
+# compact logs on the right. Cosmetic only — layout and components stay.
 st.markdown(
     """
     <style>
-    /* st.subheader -> h3: ближе к размеру строки лога (~12.5px) */
+    /* st.subheader -> h3: closer to a log-line size (~12.5px) */
     section.main h3 {
         font-size: 0.88rem !important;
         font-weight: 600 !important;
@@ -127,7 +127,7 @@ st.markdown(
         margin-bottom: 0.25rem !important;
         line-height: 1.3 !important;
     }
-    /* st.title (h1) — заметно, но не «баннером» */
+    /* st.title (h1) — noticeable, not a banner */
     section.main h1 {
         font-size: 1.18rem !important;
         font-weight: 600 !important;
@@ -135,7 +135,7 @@ st.markdown(
         margin-bottom: 0.15rem !important;
         line-height: 1.25 !important;
     }
-    /* Первая строка под заголовком (Monitoring … | API) */
+    /* First line under the title (Monitoring … | API) */
     section.main h1 + div [data-testid="stMarkdownContainer"] p {
         font-size: 0.8rem !important;
         line-height: 1.35 !important;
@@ -143,7 +143,7 @@ st.markdown(
         margin-top: 0 !important;
         margin-bottom: 0.35rem !important;
     }
-    /* st.metric — крупные числа CPU/Memory режем до читаемого размера */
+    /* st.metric — shrink large CPU/Memory numbers to a readable size */
     [data-testid="stMetric"] {
         background: rgba(255, 255, 255, 0.03);
         border: 1px solid rgba(255, 255, 255, 0.06);
@@ -163,7 +163,7 @@ st.markdown(
         text-transform: uppercase;
         letter-spacing: 0.04em;
     }
-    /* st.success / st.info / st.error / st.warning — компактнее */
+    /* st.success / st.info / st.error / st.warning — more compact */
     [data-testid="stAlert"] {
         padding: 8px 10px !important;
     }
@@ -172,18 +172,18 @@ st.markdown(
         font-size: 0.85rem !important;
         line-height: 1.35 !important;
     }
-    /* st.caption — чуть меньше, ближе к подписи */
+    /* st.caption — slightly smaller, closer to a label */
     [data-testid="stCaptionContainer"],
     [data-testid="stCaptionContainer"] p {
         font-size: 0.78rem !important;
         opacity: 0.75;
     }
-    /* st.divider — компактнее по вертикали */
+    /* st.divider — tighter vertically */
     [data-testid="stHorizontalBlock"] + hr,
     section.main hr {
         margin: 0.5rem 0 !important;
     }
-    /* Вкладки логов (All / Errors / …) — меньше кнопки */
+    /* Log tabs (All / Errors / …) — smaller buttons */
     section.main [data-testid="stTabs"] button {
         font-size: 0.78rem !important;
         padding: 0.35rem 0.55rem !important;
@@ -208,15 +208,15 @@ def _check_password() -> bool:
         return True
 
     st.title("🩺 Dockhand")
-    st.caption("Защищённая зона. Введите пароль для входа.")
-    pw = st.text_input("Пароль", type="password", key="dockhand_pw_input")
+    st.caption("Protected area. Enter the password to continue.")
+    pw = st.text_input("Password", type="password", key="dockhand_pw_input")
     if pw:
         # constant-time comparison; both operands must be bytes
         if hmac.compare_digest(pw.encode("utf-8"), AUTH_PASSWORD.encode("utf-8")):
             st.session_state["dockhand_auth_ok"] = True
             st.rerun()
         else:
-            st.error("Неверный пароль")
+            st.error("Wrong password")
     return False
 
 
@@ -335,7 +335,7 @@ def run_admin_command(command: str, timeout: int = 30) -> Tuple[bool, str]:
 
 def get_container_logs(container, lines: int) -> str:
     try:
-        # errors='replace' — повреждённый байт в логах не должен валить страницу
+        # errors='replace' — a bad byte in logs must not crash the page
         return container.logs(tail=lines).decode("utf-8", errors="replace")
     except Exception as exc:
         return f"Error reading logs: {exc}"
@@ -384,8 +384,8 @@ def classify_line(line: str) -> str:
         return "user_actions"
     if "error" in lower or "exception" in lower or "traceback" in lower:
         return "errors"
-    # HTTP 4xx/5xx — только в реальном HTTP-контексте (uvicorn/httpx),
-    # чтобы не ловить миллисекунды из timestamp типа `,584`.
+    # HTTP 4xx/5xx — only in a real HTTP context (uvicorn/httpx),
+    # so we do not match milliseconds from timestamps like `,584`.
     http_match = HTTP_STATUS_RE.search(line)
     if http_match:
         try:
@@ -458,8 +458,8 @@ def _line_color(line: str) -> str:
 def render_colored_logs(lines: list[str]) -> str:
     """Render log lines as a monospace, per-row HTML block.
 
-    Каждая запись — отдельный блочный <div>, поэтому Streamlit markdown
-    не схлопывает пробелы между строками, и логи читаются построчно.
+    Each row is its own block <div>, so Streamlit markdown does not
+    collapse spaces between lines and logs stay readable line by line.
     """
     container_style = (
         "font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;"
@@ -504,7 +504,7 @@ def get_container_stats(container) -> Optional[dict]:
     except Exception:
         return None
 
-    # CPU % — формула из docker CLI (стандартная)
+    # CPU % — docker CLI formula (standard)
     cpu_stats = stats.get("cpu_stats", {})
     pre_cpu = stats.get("precpu_stats", {})
     cpu_total = cpu_stats.get("cpu_usage", {}).get("total_usage", 0)
@@ -524,7 +524,7 @@ def get_container_stats(container) -> Optional[dict]:
     mem = stats.get("memory_stats", {})
     mem_usage = mem.get("usage", 0)
     mem_limit = mem.get("limit", 0)
-    # cgroup v2 убирает "cache" из usage → пытаемся вычесть, если есть
+    # cgroup v2 drops "cache" from usage → subtract if present
     cache = mem.get("stats", {}).get("inactive_file") or mem.get("stats", {}).get(
         "cache", 0
     )
@@ -545,12 +545,12 @@ def get_container_stats(container) -> Optional[dict]:
 
 # ── Auto-refresh ────────────────────────────────────────────────────────────
 
-# Реализация через streamlit-autorefresh: компонент сам запускает rerun
-# по таймеру внутри клиента, без гонок и без st.session_state-таймеров.
+# Implemented via streamlit-autorefresh: the component triggers rerun
+# on a client-side timer, without races or st.session_state timers.
 st_autorefresh(interval=REFRESH_RATE * 1000, key="dockhand_autorefresh")
 
 
-# ── Sidebar — выбор контейнера ──────────────────────────────────────────────
+# ── Sidebar — container picker ──────────────────────────────────────────────
 
 if "dockhand_session_opened_at" not in st.session_state:
     st.session_state["dockhand_session_opened_at"] = datetime.now(timezone.utc)
@@ -559,25 +559,25 @@ st.sidebar.title("Dockhand")
 st.sidebar.caption(f"UI {DOCKHAND_UI_VERSION}")
 
 vps_host = _resolve_vps_display_host()
-st.sidebar.markdown(f"**Адрес VPS:** `{vps_host}`")
+st.sidebar.markdown(f"**VPS address:** `{vps_host}`")
 
 opened = st.session_state["dockhand_session_opened_at"]
 st.sidebar.caption(
-    f"Время открытия сессии: {opened.strftime('%Y-%m-%d %H:%M:%S')} UTC"
+    f"Session opened: {opened.strftime('%Y-%m-%d %H:%M:%S')} UTC"
 )
 
 if len(TARGET_CONTAINERS) > 1:
     selected = st.sidebar.selectbox(
-        "Контейнер", TARGET_CONTAINERS, index=0, key="dockhand_target"
+        "Container", TARGET_CONTAINERS, index=0, key="dockhand_target"
     )
 else:
     selected = TARGET_CONTAINERS[0]
-    st.sidebar.markdown(f"**Контейнер:** `{selected}`")
+    st.sidebar.markdown(f"**Container:** `{selected}`")
 
 if READ_ONLY:
-    st.sidebar.info("Режим только-чтение (DOCKHAND_READONLY=1)")
+    st.sidebar.info("Read-only mode (DOCKHAND_READONLY=1)")
 
-if AUTH_PASSWORD and st.sidebar.button("Выйти"):
+if AUTH_PASSWORD and st.sidebar.button("Log out"):
     st.session_state.pop("dockhand_auth_ok", None)
     st.rerun()
 
@@ -670,30 +670,30 @@ with col2:
     current_time = datetime.now().strftime("%H:%M:%S")
     st.subheader(f"Live Logs (Updated: {current_time})")
 
-    with st.expander("Как понимать логи", expanded=False):
+    with st.expander("How to read the logs", expanded=False):
         st.markdown(
             """
-- `GET /health ... 200` — healthcheck, сервис жив.
-- `.../getUpdates ... 200` — бот проверил новые сообщения.
-- `handlers - INFO - User ...` — действие пользователя в боте.
-- `.../sendMessage ... 200` — бот успешно отправил ответ.
-- Коды: `2xx` — ок, `4xx` — проблема запроса/прав, `5xx` — сбой сервиса/сети.
+- `GET /health ... 200` — healthcheck, the service is up.
+- `.../getUpdates ... 200` — the bot polled for new messages.
+- `handlers - INFO - User ...` — a user action in the bot.
+- `.../sendMessage ... 200` — the bot sent a reply successfully.
+- Codes: `2xx` — ok, `4xx` — request/permissions problem, `5xx` — service/network failure.
 """
         )
 
     log_lines = st.slider("Log lines", 10, 1000, 30, key="dockhand_log_lines")
     log_filter = st.text_input(
-        "Фильтр (подстрока)", value="", key="dockhand_log_filter"
+        "Filter (substring)", value="", key="dockhand_log_filter"
     )
     selected_levels = st.multiselect(
-        "Уровни логов",
+        "Log levels",
         options=LEVELS,
         default=[],
-        help="Пусто = показывать все уровни.",
+        help="Empty = show all levels.",
         key="dockhand_log_levels",
     )
     hide_health = st.checkbox(
-        "Скрывать healthcheck",
+        "Hide healthcheck",
         value=HIDE_HEALTH_DEFAULT,
         key="dockhand_hide_health",
     )
@@ -706,8 +706,8 @@ with col2:
             ("User actions", "user_actions"),
             ("Health", "health"),
         ]
-        # Streamlit не позволяет программно выбрать активную вкладку,
-        # поэтому нужную вкладку делаем первой.
+        # Streamlit cannot programmatically select the active tab,
+        # so put the desired tab first.
         tab_items.sort(key=lambda item: 0 if item[1] == LOG_DEFAULT_TAB else 1)
         tab_titles = [title for title, _ in tab_items]
         tabs = st.tabs(tab_titles)
@@ -721,11 +721,11 @@ with col2:
                     hide_health=hide_health if mode != "health" else False,
                     mode=mode,
                 )
-                st.caption(f"Найдено строк: {len(lines)}")
+                st.caption(f"Lines found: {len(lines)}")
                 st.markdown(render_colored_logs(lines), unsafe_allow_html=True)
 
         st.download_button(
-            "Скачать логи (raw)",
+            "Download logs (raw)",
             data=sanitize_sensitive_text(raw_logs),
             file_name=f"{selected}-logs.txt",
             mime="text/plain",

@@ -3,200 +3,200 @@ syntax = "proto3";
 package devicecontrol;
 
 // ---------------------------------------------------------------------
-//                            БЛОКИ СИСТЕМЫ
+//                            SYSTEM BLOCKS
 // ---------------------------------------------------------------------
 
 enum BlockType {
   BLOCKTYPE_UNKNOWN = 0;
-  SHSKM = 1;       // ШСКМ (0x0)
-  BU = 2;          // БУ (0x1)
-  BZ = 3;          // БЗ (0x2)
-  BF = 4;          // БФ (0x3)
-  ARM = 5;         // АРМ (0x4)
-  PC = 6;          // ПЭВМ (0x5)
+  SHSKM = 1;       // SHSKM (0x0)
+  BU = 2;          // Control unit (0x1)
+  BZ = 3;          // Delay unit (0x2)
+  BF = 4;          // Filter unit (0x3)
+  ARM = 5;         // Workstation (0x4)
+  PC = 6;          // PC (0x5)
 }
 
 // ---------------------------------------------------------------------
-//                            ТИПЫ УСТРОЙСТВ
+//                            DEVICE TYPES
 // ---------------------------------------------------------------------
 
 enum DeviceType {
   DEVICETYPE_UNKNOWN = 0;
-  // Общие типы устройств
-  DEVICETYPE_CONTROLLER = 1;      // Плата контроллера/ПЛИС
-  DEVICETYPE_LED = 2;             // Светодиод
-  DEVICETYPE_RF_SWITCH = 3;       // ВЧ переключатель
-  DEVICETYPE_ATTENUATOR = 4;      // Аттенюатор
-  DEVICETYPE_TEMPERATURE = 5;     // Датчик температуры
-  DEVICETYPE_VOLTAGE = 6;         // Индикатор напряжения
-  DEVICETYPE_FAN = 7;             // Вентилятор
-  DEVICETYPE_MEMORY = 8;          // Память (ОЗУ, ПЗУ)
-  DEVICETYPE_FPGA = 9;            // ПЛИС как отдельный тип устройства
+  // Common device types
+  DEVICETYPE_CONTROLLER = 1;      // Controller/FPGA board
+  DEVICETYPE_LED = 2;             // LED
+  DEVICETYPE_RF_SWITCH = 3;       // RF switch
+  DEVICETYPE_ATTENUATOR = 4;      // Attenuator
+  DEVICETYPE_TEMPERATURE = 5;     // Temperature sensor
+  DEVICETYPE_VOLTAGE = 6;         // Voltage indicator
+  DEVICETYPE_FAN = 7;             // Fan
+  DEVICETYPE_MEMORY = 8;          // Memory (RAM, ROM)
+  DEVICETYPE_FPGA = 9;            // FPGA as a distinct device type
   
-  // Специфичные типы устройств для БУ
-  DEVICETYPE_AMPLIFIER = 20;      // Усилитель ВЧ
-  DEVICETYPE_SD_GENERATOR = 21;   // Генератор СД
-  DEVICETYPE_SD_DETECTOR = 22;    // Детектор СД
+  // Control-unit-specific device types
+  DEVICETYPE_AMPLIFIER = 20;      // RF amplifier
+  DEVICETYPE_SD_GENERATOR = 21;   // SD generator
+  DEVICETYPE_SD_DETECTOR = 22;    // SD detector
   
-  // Специфичные типы устройств для БЗ
-  DEVICETYPE_DELAY_LINE = 30;     // ЛЗП (линия задержки переменная)
-  DEVICETYPE_OPTICAL_MODULE = 31; // ПОМ/ПрОМ (передающий/приемный оптический модуль)
-  DEVICETYPE_MVOK = 32;           // МВОК (модуль волоконно-оптического кабеля)
-  DEVICETYPE_AFC_CORRECTOR = 33; // Корректор АЧХ
+  // Delay-unit-specific device types
+  DEVICETYPE_DELAY_LINE = 30;     // Variable delay line (VDL)
+  DEVICETYPE_OPTICAL_MODULE = 31; // TX/RX optical module
+  DEVICETYPE_MVOK = 32;           // Fiber-optic cable module (FOCM)
+  DEVICETYPE_AFC_CORRECTOR = 33; // Frequency-response corrector
   
-  // Специфичные типы устройств для БФ
-  DEVICETYPE_FLUCTUATION_MODEL = 40; // Модель флюктуаций
+  // Filter-unit-specific device types
+  DEVICETYPE_FLUCTUATION_MODEL = 40; // Fluctuation model
 }
 
 // ---------------------------------------------------------------------
-//                          КОДЫ КОМАНД
+//                          COMMAND CODES
 // ---------------------------------------------------------------------
 
 enum CommandCode {
   COMMAND_UNKNOWN = 0;
-  READ = 1;          // Чтение (0 в gRPC protocol.md)
-  WRITE = 2;         // Запись (1 в gRPC protocol.md)
-  INIT = 3;          // Инициализация (2 в gRPC protocol.md)
-  PARAM = 4;         // Параметры (3 в gRPC protocol.md)
+  READ = 1;          // Read (0 in gRPC protocol.md)
+  WRITE = 2;         // Write (1 in gRPC protocol.md)
+  INIT = 3;          // Initialize (2 in gRPC protocol.md)
+  PARAM = 4;         // Parameters (3 in gRPC protocol.md)
 }
 
 // ---------------------------------------------------------------------
-//                      ВОЗМОЖНЫЕ ПОДТИПЫ УСТРОЙСТВ
+//                      POSSIBLE DEVICE SUBTYPES
 // ---------------------------------------------------------------------
 
 enum AttenuatorType {
   ATTENUATOR_UNKNOWN = 0;
-  ATTENUATOR_OUTPUT = 1;       // Аттенюатор Выходной
-  ATTENUATOR_INPUT = 2;        // Аттенюатор Входной
-  ATTENUATOR_MSV = 3;          // Аттенюатор МСВ
-  ATTENUATOR_POM = 4;          // Аттенюатор Помехи
-  ATTENUATOR_SD = 5;           // Аттенюатор СД
-  ATTENUATOR_CORRECTIVE = 6;   // Аттенюатор Корректирующий
+  ATTENUATOR_OUTPUT = 1;       // Output attenuator
+  ATTENUATOR_INPUT = 2;        // Input attenuator
+  ATTENUATOR_MSV = 3;          // MSV attenuator
+  ATTENUATOR_POM = 4;          // Interference attenuator
+  ATTENUATOR_SD = 5;           // SD attenuator
+  ATTENUATOR_CORRECTIVE = 6;   // Corrective attenuator
 }
 
 enum MemoryType {
   MEMORY_UNKNOWN = 0;
-  MEMORY_RAM_CONTROLLER = 1;   // ОЗУ контроллера
-  MEMORY_ROM_CONTROLLER = 2;   // ПЗУ контроллера
-  MEMORY_RAM_EXTERNAL = 3;     // ОЗУ внешнее
-  MEMORY_ROM_EXTERNAL = 4;     // ПЗУ внешнее
-  MEMORY_RAM_FPGA = 5;         // ОЗУ ПЛИС
-  MEMORY_ROM_FPGA = 6;         // ПЗУ ПЛИС
+  MEMORY_RAM_CONTROLLER = 1;   // Controller RAM
+  MEMORY_ROM_CONTROLLER = 2;   // Controller ROM
+  MEMORY_RAM_EXTERNAL = 3;     // External RAM
+  MEMORY_ROM_EXTERNAL = 4;     // External ROM
+  MEMORY_RAM_FPGA = 5;         // FPGA RAM
+  MEMORY_ROM_FPGA = 6;         // FPGA ROM
 }
 
 enum RFSwitchType {
   RFSWITCH_UNKNOWN = 0;
-  RFSWITCH_S1 = 1;   // ВЧ Переключ. S1 (Тракт(S5) – Выход/ Дет. СД(S9))
-  RFSWITCH_S2 = 2;   // ВЧ Переключ. S2 (Вх/Вых - МСВ/совм.(S3). СД(S9))
-  RFSWITCH_S3 = 3;   // ВЧ Переключ. S3 (Вход/ совм. (S2) – ВЧ тракт (S6))
-  RFSWITCH_S4 = 4;   // ВЧ Переключ. S4 (Внутр ГС – Вых. помехи Вкл/Откл)
-  RFSWITCH_S5 = 5;   // ВЧ Переключ. S5 (Вых. атт. – Дет. СД(S10)/Выход (S1))
-  RFSWITCH_S6 = 6;   // ВЧ Переключ. S6 (Вход(S3)/ГС(A1 МКВЧ) – Вх. атт.)
-  RFSWITCH_S7 = 7;   // ВЧ Переключ. S7 (Внутр ГС/Внешн ГС – (S8))
-  RFSWITCH_S8 = 8;   // ВЧ Переключ. S8 (ГС(S7) – А1 МКВЧ /Выход внешн. СД)
-  RFSWITCH_S9 = 9;   // ВЧ Переключ. S9 (Эталон(А1 МКВЧ)/ S1 – Дет СД (S10))
-  RFSWITCH_S10 = 10; // ВЧ Переключ. S10 (S9/ Вых. атт. (S5) – Дет СД)
-  RFSWITCH_S12 = 12; // ВЧ Переключ. S12 (С выхода БЗ на вход БФП)
-  RFSWITCH_S13 = 13; // ВЧ Переключ. S13 (С выхода БФП на вых. аттенюатор)
-  RFSWITCH_A1_MKVCH = 11; // А1 МКВЧ
+  RFSWITCH_S1 = 1;   // RF switch S1 (path(S5) – output / SD det.(S9))
+  RFSWITCH_S2 = 2;   // RF switch S2 (in/out - MSV/combined(S3). SD(S9))
+  RFSWITCH_S3 = 3;   // RF switch S3 (input / combined (S2) – RF path (S6))
+  RFSWITCH_S4 = 4;   // RF switch S4 (internal SG – interference out on/off)
+  RFSWITCH_S5 = 5;   // RF switch S5 (att. out – SD det.(S10)/output (S1))
+  RFSWITCH_S6 = 6;   // RF switch S6 (input(S3)/SG(A1 microwave) – att. in)
+  RFSWITCH_S7 = 7;   // RF switch S7 (internal SG/external SG – (S8))
+  RFSWITCH_S8 = 8;   // RF switch S8 (SG(S7) – A1 microwave / external SD out)
+  RFSWITCH_S9 = 9;   // RF switch S9 (reference(A1 microwave)/ S1 – SD det. (S10))
+  RFSWITCH_S10 = 10; // RF switch S10 (S9/ att. out (S5) – SD det.)
+  RFSWITCH_S12 = 12; // RF switch S12 (from delay-unit output to filter-unit input)
+  RFSWITCH_S13 = 13; // RF switch S13 (from filter-unit output to output attenuator)
+  RFSWITCH_A1_MKVCH = 11; // A1 microwave RF
 }
 
 enum TemperatureSensorType {
   TEMPSENSOR_UNKNOWN = 0;
-  TEMPSENSOR_1 = 1;  // Датчик температуры 1
-  TEMPSENSOR_2 = 2;  // Датчик температуры 2
-  TEMPSENSOR_3 = 3;  // Датчик температуры 3
-  TEMPSENSOR_4 = 4;  // Датчик температуры 4
+  TEMPSENSOR_1 = 1;  // Temperature sensor 1
+  TEMPSENSOR_2 = 2;  // Temperature sensor 2
+  TEMPSENSOR_3 = 3;  // Temperature sensor 3
+  TEMPSENSOR_4 = 4;  // Temperature sensor 4
 }
 
 enum VoltageIndicatorType {
   VOLTINDICATOR_UNKNOWN = 0;
-  VOLTINDICATOR_1 = 1;  // Индикатор напряжения 1
-  VOLTINDICATOR_2 = 2;  // Индикатор напряжения 2
-  VOLTINDICATOR_3 = 3;  // Индикатор напряжения 3
-  VOLTINDICATOR_4 = 4;  // Индикатор напряжения 4
-  VOLTINDICATOR_5 = 5;  // Индикатор напряжения 5
-  VOLTINDICATOR_6 = 6;  // Индикатор напряжения 6
-  VOLTINDICATOR_7 = 7;  // Индикатор напряжения 7
-  VOLTINDICATOR_8 = 8;  // Индикатор напряжения 8
+  VOLTINDICATOR_1 = 1;  // Voltage indicator 1
+  VOLTINDICATOR_2 = 2;  // Voltage indicator 2
+  VOLTINDICATOR_3 = 3;  // Voltage indicator 3
+  VOLTINDICATOR_4 = 4;  // Voltage indicator 4
+  VOLTINDICATOR_5 = 5;  // Voltage indicator 5
+  VOLTINDICATOR_6 = 6;  // Voltage indicator 6
+  VOLTINDICATOR_7 = 7;  // Voltage indicator 7
+  VOLTINDICATOR_8 = 8;  // Voltage indicator 8
 }
 
 enum AmplifierType {
   AMPLIFIER_UNKNOWN = 0;
-  AMPLIFIER_VF1 = 1;  // Усилитель ВЧ1 (Входной МШУ)
-  AMPLIFIER_VF2 = 2;  // Усилитель ВЧ2 (Усилитель внешней самодиагностики)
+  AMPLIFIER_VF1 = 1;  // RF amplifier 1 (input LNA)
+  AMPLIFIER_VF2 = 2;  // RF amplifier 2 (external self-test amplifier)
 }
 
 enum OpticalModuleType {
   OPTMODULE_UNKNOWN = 0;
-  OPTMODULE_POM1 = 1;   // ПОМ 1 (передающий)
-  OPTMODULE_PROM1 = 2;  // ПрОМ 1 (приемный)
-  OPTMODULE_POM2 = 3;   // ПОМ 2 (передающий)
-  OPTMODULE_PROM2 = 4;  // ПрОМ 2 (приемный)
+  OPTMODULE_POM1 = 1;   // TX optical module 1
+  OPTMODULE_PROM1 = 2;  // RX optical module 1
+  OPTMODULE_POM2 = 3;   // TX optical module 2
+  OPTMODULE_PROM2 = 4;  // RX optical module 2
 }
 
 enum MVOKType {
   MVOK_UNKNOWN = 0;
-  MVOK_1 = 1;  // МВОК 1 (4096, 2048, 1024, 512)
-  MVOK_2 = 2;  // МВОК 2 (256, 128, 64, 32)
-  MVOK_3 = 3;  // МВОК 3 (16, 8, 4, 2)
+  MVOK_1 = 1;  // FOCM 1 (4096, 2048, 1024, 512)
+  MVOK_2 = 2;  // FOCM 2 (256, 128, 64, 32)
+  MVOK_3 = 3;  // FOCM 3 (16, 8, 4, 2)
 }
 
 // ---------------------------------------------------------------------
-//                          ОБОБЩЁННАЯ СТРУКТУРА
+//                          GENERIC STRUCTURE
 // ---------------------------------------------------------------------
 
-// +++ НОВЫЕ СООБЩЕНИЯ ДЛЯ СОСТОЯНИЙ УСТРОЙСТВ +++
+// +++ NEW DEVICE STATE MESSAGES +++
 message LedState {
   bool is_on = 1;
 }
 
 message AttenuatorState {
   float current_attenuation_db = 1;
-  // AttenuatorType attenuator_type = 2; // Опционально, если нужно хранить тип в состоянии
+  // AttenuatorType attenuator_type = 2; // Optional, if the type needs to be stored in state
 }
 
 message TemperatureSensorState {
   float temperature_celsius = 1;
-  uint64 last_updated_timestamp = 2; // Опционально
+  uint64 last_updated_timestamp = 2; // Optional
 }
 
 message RFSwitchState {
   bool is_on = 1;
-  // RFSwitchType switch_type = 2; // Опционально, если device_id не уникален для типа
+  // RFSwitchType switch_type = 2; // Optional, if device_id is not unique per type
 }
 
 message VoltIndicatorValue {
   float voltage = 1;
-  uint64 last_updated_timestamp = 2; // Опционально
-  int32 raw_adc_value = 3; // Сырое значение АЦП
+  uint64 last_updated_timestamp = 2; // Optional
+  int32 raw_adc_value = 3; // Raw ADC value
 }
 
 message OptModuleState {
   bool is_active = 1;
-  // OpticalModuleType module_type = 2; // Опционально
-  // float power_level_dbm = 3;      // Опционально
-  // float temperature_celsius = 4;  // Опционально
+  // OpticalModuleType module_type = 2; // Optional
+  // float power_level_dbm = 3;      // Optional
+  // float temperature_celsius = 4;  // Optional
 }
 
 message MVOKState {
-  uint32 current_delay_value = 1; // Пример, единицы измерения нужно определить
-  // MVOKType mvok_type = 2;          // Опционально
+  uint32 current_delay_value = 1; // Example; units need to be defined
+  // MVOKType mvok_type = 2;          // Optional
 }
 
 message SDDetectorValue {
-  bytes detector_data = 1; // Для данных типа [0x34, 0x56, 0x78, 0x9A]
+  bytes detector_data = 1; // For data such as [0x34, 0x56, 0x78, 0x9A]
   bool initialized = 2;
 }
 
-// +++ КОНЕЦ НОВЫХ СООБЩЕНИЙ ДЛЯ СОСТОЯНИЙ +++
+// +++ END OF NEW STATE MESSAGES +++
 
 message DeviceNode {
-  string id = 1;         // Идентификатор устройства, например "rf_switch_1_bu"
-  BlockType block = 2;   // Блок, к которому принадлежит устройство
-  DeviceType type = 3;   // Тип устройства
-  // bytes data = 4;        // Текущее состояние устройства в виде байт - ЗАМЕНЕНО НА oneof
-  map<string, string> parameters = 5; // Дополнительные параметры устройства
+  string id = 1;         // Device identifier, e.g. "rf_switch_1_bu"
+  BlockType block = 2;   // Block this device belongs to
+  DeviceType type = 3;   // Device type
+  // bytes data = 4;        // Current device state as bytes — REPLACED BY oneof
+  map<string, string> parameters = 5; // Extra device parameters
 
   oneof device_specific_state {
     LedState led_state = 6;
@@ -207,8 +207,8 @@ message DeviceNode {
     OptModuleState opt_module_state = 11;
     MVOKState mvok_state = 12;
     SDDetectorValue sd_detector_value = 13;
-    // ... другие специфичные состояния ...
-    bytes generic_state_data = 100; // Для нетипизированных или старых данных
+    // ... other device-specific states ...
+    bytes generic_state_data = 100; // For untyped or legacy data
   }
 }
 
@@ -217,121 +217,121 @@ message DeviceList {
 }
 
 // ---------------------------------------------------------------------
-//                           ОПЕРАЦИИ/КОМАНДЫ
+//                           OPERATIONS/COMMANDS
 // ---------------------------------------------------------------------
 
-// +++ НОВЫЕ СООБЩЕНИЯ ДЛЯ ПАРАМЕТРОВ КОМАНД +++
+// +++ NEW COMMAND PARAMETER MESSAGES +++
 message SetLedStatePayload {
-  bool state = 1; // true для ON, false для OFF
+  bool state = 1; // true for ON, false for OFF
 }
 
 message SetAttenuatorPayload {
-  // AttenuatorType attenuator_type = 1; // Если device_id не уникален
-  float attenuation_value_db = 2;   // Значение аттенюации в дБ
+  // AttenuatorType attenuator_type = 1; // If device_id is not unique
+  float attenuation_value_db = 2;   // Attenuation value in dB
 }
 
-// Пока пустое, так как device_id обычно идентифицирует сенсор.
-// Может понадобиться, если есть другие параметры для команды чтения.
+// Empty for now, since device_id usually identifies the sensor.
+// May be needed if the read command has extra parameters.
 message ReadTemperaturePayload {
-  // TemperatureSensorType sensor_type = 1; // Если device_id не уникален
+  // TemperatureSensorType sensor_type = 1; // If device_id is not unique
 }
-// +++ КОНЕЦ НОВЫХ СООБЩЕНИЙ ДЛЯ ПАРАМЕТРОВ КОМАНД +++
+// +++ END OF NEW COMMAND PARAMETER MESSAGES +++
 
 message CommandRequest {
    BlockType block_type = 1;
-   string device_id = 2;         // Строковый идентификатор устройства (например, "bu_led_status", "bz_attenuator_corr")
-   CommandCode command_code = 3; // Код команды (READ, WRITE, INIT, PARAM)
-   // bytes payload = 4;            // Полезная нагрузка (параметры) для команды. ЗАМЕНЕНО НА oneof
+   string device_id = 2;         // String device identifier (e.g. "bu_led_status", "bz_attenuator_corr")
+   CommandCode command_code = 3; // Command code (READ, WRITE, INIT, PARAM)
+   // bytes payload = 4;            // Command payload (parameters). REPLACED BY oneof
 
   oneof command_specific_payload {
     SetLedStatePayload set_led_state = 5;
     SetAttenuatorPayload set_attenuator = 6;
-    // ReadTemperaturePayload get_temperature = 7; // Для команд чтения, если нужны параметры. Пока не добавляем, т.к. тело пустое.
-    // ... другие специфичные payload для команд ...
-    bytes generic_payload = 100; // Для обратной совместимости или очень специфичных случаев
+    // ReadTemperaturePayload get_temperature = 7; // For read commands that need parameters. Omitted for now because the body is empty.
+    // ... other command-specific payloads ...
+    bytes generic_payload = 100; // For backward compatibility or very specific cases
   }
 }
 
 message CommandResponse {
   enum Status {
     UNKNOWN = 0;
-    SUCCESS = 1;        // Успешное выполнение
-    ERROR = 2;          // Ошибка
-    TIMEOUT = 3;        // Таймаут
-    NOT_SUPPORTED = 4;  // Не поддерживается
+    SUCCESS = 1;        // Success
+    ERROR = 2;          // Error
+    TIMEOUT = 3;        // Timeout
+    NOT_SUPPORTED = 4;  // Not supported
   }
   
-  Status status = 1;           // Статус выполнения команды
-  string message = 2;          // Текстовое сообщение (успех/ошибка)
-  bytes read_data = 3;         // Данные, полученные в ответ на команду чтения
-  DeviceNode device_state = 4; // Текущее состояние устройства после выполнения команды
+  Status status = 1;           // Command execution status
+  string message = 2;          // Text message (success/error)
+  bytes read_data = 3;         // Data returned by a read command
+  DeviceNode device_state = 4; // Device state after the command
 }
 
 // ---------------------------------------------------------------------
-//                           СЕРВИСНЫЕ ЗАПРОСЫ
+//                           SERVICE REQUESTS
 // ---------------------------------------------------------------------
 
 message GetDeviceRequest {
-  BlockType block_type = 1;   // Тип блока
-  DeviceType device_type = 2; // Тип устройства (опционально)
-  string device_id = 3;       // Идентификатор устройства (опционально)
+  BlockType block_type = 1;   // Block type
+  DeviceType device_type = 2; // Device type (optional)
+  string device_id = 3;       // Device identifier (optional)
 }
 
 message GetDeviceResponse {
-  repeated DeviceNode devices = 1; // Список устройств, соответствующих запросу
+  repeated DeviceNode devices = 1; // Devices matching the request
 }
 
 message GetBlockStatusRequest {
-  BlockType block_type = 1; // Тип блока
+  BlockType block_type = 1; // Block type
 }
 
 message GetBlockStatusResponse {
-  BlockType block_type = 1;                  // Тип блока
-  bool connected = 2;                        // Подключен ли блок
-  string status_message = 3;                 // Текстовый статус
-  map<string, string> parameters = 4;        // Дополнительные параметры блока
-  repeated DeviceNode critical_devices = 5;  // Устройства с критическим состоянием
+  BlockType block_type = 1;                  // Block type
+  bool connected = 2;                        // Whether the block is connected
+  string status_message = 3;                 // Text status
+  map<string, string> parameters = 4;        // Extra block parameters
+  repeated DeviceNode critical_devices = 5;  // Devices in a critical state
 }
 
 // ---------------------------------------------------------------------
-//                        СОБЫТИЯ (SERVER → PROXY)
+//                        EVENTS (SERVER → PROXY)
 // ---------------------------------------------------------------------
 
 enum EventType {
   EVENT_UNKNOWN = 0;
-  LIMIT_REACHED = 1;   // Параметр достиг предельного значения, процесс остановлен
-  MANUAL_STOP = 2;     // Штатная остановка оператором (команда СТОП)
-  ERROR_STOP = 3;      // Аварийная остановка (перегрев, обрыв связи и т.д.)
-  EXTERNAL_INTERRUPT = 4; // Внешнее прерывание GPIO/interlock, процесс остановлен
+  LIMIT_REACHED = 1;   // Parameter hit a limit; process stopped
+  MANUAL_STOP = 2;     // Operator stop (STOP command)
+  ERROR_STOP = 3;      // Emergency stop (overheat, link loss, etc.)
+  EXTERNAL_INTERRUPT = 4; // External GPIO/interlock interrupt; process stopped
 }
 
 message EventSubscribeRequest {
-  BlockType block_type = 1;  // На какой блок подписаться (BLOCKTYPE_UNKNOWN = все)
+  BlockType block_type = 1;  // Which block to subscribe to (BLOCKTYPE_UNKNOWN = all)
 }
 
 message DeviceEvent {
-  BlockType block_type = 1;       // Источник: BU, BZ
-  string device_id = 2;           // Идентификатор устройства (напр. "bu_attenuation", "bz_delay")
-  EventType event_type = 3;       // Тип события
-  uint64 timestamp_unix_ms = 4;   // Unix-время остановки в мс (фиксируется НА СЕРВЕРЕ)
-  bytes payload = 5;              // Доп. данные (значение параметра, код ошибки)
-  uint32 device_byte = 6;         // Оригинальный байт устройства из UDP протокола (0x11, 0x13...)
+  BlockType block_type = 1;       // Source: BU, BZ
+  string device_id = 2;           // Device identifier (e.g. "bu_attenuation", "bz_delay")
+  EventType event_type = 3;       // Event type
+  uint64 timestamp_unix_ms = 4;   // Unix stop time in ms (captured ON THE SERVER)
+  bytes payload = 5;              // Extra data (parameter value, error code)
+  uint32 device_byte = 6;         // Original device byte from the UDP protocol (0x11, 0x13...)
 }
 
 // ---------------------------------------------------------------------
-//                           СЕРВИС УПРАВЛЕНИЯ
+//                           CONTROL SERVICE
 // ---------------------------------------------------------------------
 
 service DeviceControlService {
-  // Отправка команды устройству
+  // Send a command to a device
   rpc SendCommand(CommandRequest) returns (CommandResponse);
 
-  // Получение списка устройств блока
+  // Get the block's device list
   rpc GetDevices(GetDeviceRequest) returns (GetDeviceResponse);
 
-  // Получение статуса блока
+  // Get block status
   rpc GetBlockStatus(GetBlockStatusRequest) returns (GetBlockStatusResponse);
 
-  // Подписка на события остановки процессов (server-side streaming)
+  // Subscribe to process-stop events (server-side streaming)
   rpc SubscribeEvents(EventSubscribeRequest) returns (stream DeviceEvent);
 }

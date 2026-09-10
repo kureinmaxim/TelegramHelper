@@ -130,17 +130,17 @@ class AdminCLI:
 /disable_bot - Disable Telegram bot
 /enable_bot - Enable Telegram bot
 
-🌐 Exit node (выход в интернет через VPS):
-/exit_node - Статус exit node + гайд по устройствам
-/exit_node_on - Включить exit node (advertise + approve)
-/exit_node_off - Выключить exit node
+🌐 Exit node (internet via VPS):
+/exit_node - Exit node status + per-device guide
+/exit_node_on - Enable exit node (advertise + approve)
+/exit_node_off - Disable exit node
 
 🕸️ Headscale (mesh):
-/headscale - Tailscale IP этого хоста
-/headscale_status - Статус Headscale + Headplane (ноды, URL)
-/headscale_list_nodes - Список подключённых нод mesh
-/headscale_gen [user] [срок] - Pre-Auth ключ (срок напр. 720h)
-/headscale_revoke <key> [user] - Отозвать ключ (без аргумента — список)
+/headscale - Tailscale IP of this host
+/headscale_status - Headscale + Headplane status (nodes, URL)
+/headscale_list_nodes - Connected mesh nodes
+/headscale_gen [user] [ttl] - Pre-Auth key (ttl e.g. 720h)
+/headscale_revoke <key> [user] - Revoke a key (no args — list)
 
 🛡️ VLESS-Reality:
 /vless_status - VLESS status
@@ -148,10 +148,10 @@ class AdminCLI:
 /vless_on - Enable VLESS
 /vless_off - Disable VLESS
 
-👤 Профили:
-/list_users - Все пользователи бота (админы/особые/обычные) с Telegram ID
-/links [telegram_user_id] - Все ссылки профилей; без ID — профили админа (SSH = админ)
-/qr [telegram_user_id] [вариант] - QR-код ссылки прямо в терминале; без варианта — список доступных
+👤 Profiles:
+/list_users - All bot users (admins/special/regular) with Telegram ID
+/links [telegram_user_id] - All profile links; no ID — admin profiles (SSH = admin)
+/qr [telegram_user_id] [variant] - QR of a link in the terminal; no variant — available list
 
 🗄️ Backups:
 /backup_status - Rclone backup status
@@ -281,7 +281,7 @@ Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
             "🕸️ Headscale",
             "",
             f"State: {'🟢 enabled' if st.get('enabled') else '🔴 disabled'}",
-            f"URL: {st.get('server_url') or 'не задан'}",
+            f"URL: {st.get('server_url') or 'not set'}",
             f"Container ({st.get('container_name', 'headscale')}): "
             f"{'🟢 running' if st.get('container_running') else '🔴 stopped'}",
             f"Nodes: {st.get('node_count', 0)} · Users: {st.get('user_count', 0)}",
@@ -302,9 +302,9 @@ Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
         if not ok:
             return message
         if not nodes:
-            return "📭 Нод нет (никто не подключён к mesh)."
+            return "📭 No nodes (nobody is connected to the mesh)."
 
-        lines = [f"📋 Ноды Headscale ({len(nodes)}):", ""]
+        lines = [f"📋 Headscale nodes ({len(nodes)}):", ""]
         for n in nodes:
             if not isinstance(n, dict):
                 continue
@@ -316,7 +316,7 @@ Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
         return "\n".join(lines)
 
     def _cmd_headscale_gen(self, args: List[str]) -> str:
-        """Same as Telegram /headscale_gen [user] [срок] — issue a Pre-Auth key."""
+        """Same as Telegram /headscale_gen [user] [ttl] — issue a Pre-Auth key."""
         import headscale_manager
 
         user, expiration = headscale_manager.parse_user_expiration(args)
@@ -329,7 +329,7 @@ Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
     def _cmd_headscale_revoke(self, args: List[str]) -> str:
         """Same as Telegram /headscale_revoke <key> [user] — expire a Pre-Auth key.
 
-        Без аргумента показывает список активных ключей.
+        With no args, lists active keys.
         """
         import headscale_manager
 
@@ -338,14 +338,14 @@ Configured: {"✅ Yes" if vless_status["configured"] else "❌ No"}
             if not ok:
                 return _msg
             if not keys:
-                return ("Активных Pre-Auth ключей нет.\n"
-                        "Использование: /headscale_revoke <key> [user]")
-            lines = ["🔑 Pre-Auth ключи (укажите ключ для отзыва):", ""]
+                return ("No active Pre-Auth keys.\n"
+                        "Usage: /headscale_revoke <key> [user]")
+            lines = ["🔑 Pre-Auth keys (pass a key to revoke):", ""]
             for k in keys:
                 if not isinstance(k, dict):
                     continue
                 kid = str(k.get("key", k.get("id", "?")))
-                used = "использован" if k.get("used") else "активен"
+                used = "used" if k.get("used") else "active"
                 reusable = "reusable" if k.get("reusable") else "one-time"
                 lines.append(f"  {kid} — {used}, {reusable}")
             return "\n".join(lines)
@@ -468,9 +468,9 @@ Fingerprint: {config.get("fingerprint", "chrome")}
 
 Example: /vless_set_port 8443
 
-⚠️ После смены порта не забудьте:
-1. Перезапустить Xray: systemctl restart xray
-2. Открыть порт в firewall: ufw allow <port>/tcp"""
+⚠️ After changing the port, remember to:
+1. Restart Xray: systemctl restart xray
+2. Open the port in the firewall: ufw allow <port>/tcp"""
         
         try:
             port = int(args[0])
@@ -489,74 +489,74 @@ Example: /vless_set_port 8443
         return link
     
     def _cmd_reticulum_status(self, args: List[str]) -> str:
-        """Статус HA-стека и Reticulum-моста (для SSH-CLI)."""
+        """HA-stack and Reticulum bridge status (for SSH CLI)."""
         import reticulum_manager
         st = reticulum_manager.get_status()
         if not st["installed"]:
-            return "🛰 HA-стек / Reticulum не установлен на этом сервере."
+            return "🛰 HA-stack / Reticulum is not installed on this server."
 
         def m(b):
             return "🟢" if b else "🔴"
 
         svc = st["services"]
         lines = [
-            "🛰 Reticulum / HA-стек",
+            "🛰 Reticulum / HA-stack",
             f"{m(svc.get('ha-reticulum-bridge'))} ha-reticulum-bridge",
             f"{m(svc.get('ha-stub-grpc'))} ha-stub-grpc",
             f"{m(svc.get('ha-stub-udp'))} ha-stub-udp",
-            f"Мост слушает :50061 — {'да' if st['listening'] else 'нет'}",
-            f"Bridge hash: {st['bridge_hash'] or '(появится в логе старта)'}",
+            f"Bridge listening on :50061 — {'yes' if st['listening'] else 'no'}",
+            f"Bridge hash: {st['bridge_hash'] or '(appears in the startup log)'}",
         ]
         if st.get("i2pd_installed"):
             lines += [
-                f"{m(st.get('i2pd_active'))} i2pd (I2P, путь 2)",
-                f"I2P b32: {st.get('i2p_b32') or '(туннель строится / нет)'}",
+                f"{m(st.get('i2pd_active'))} i2pd (I2P, path 2)",
+                f"I2P b32: {st.get('i2p_b32') or '(tunnel building / none)'}",
             ]
         return "\n".join(lines)
 
     def _cmd_reticulum_restart(self, args: List[str]) -> str:
-        """Перезапустить HA-стек (bridge + stub gRPC/UDP)."""
+        """Restart the HA-stack (bridge + stub gRPC/UDP)."""
         import reticulum_manager
         ok, msg = reticulum_manager.restart()
         return ("✅ " if ok else "❌ ") + msg
 
     def _cmd_reticulum_hash(self, args: List[str]) -> str:
-        """Bridge destination hash (для подключения клиентов)."""
+        """Bridge destination hash (for client connections)."""
         import reticulum_manager
         h = reticulum_manager.get_bridge_hash()
-        return f"🛰 Bridge hash: {h}" if h else "Bridge hash не найден (мост не запущен или нет в логе старта)."
+        return f"🛰 Bridge hash: {h}" if h else "Bridge hash not found (bridge not running or missing from the startup log)."
 
     def _cmd_reticulum_i2p(self, args: List[str]) -> str:
-        """Статус I2P-пути (i2pd + b32 серверного туннеля ha-bridge)."""
+        """I2P path status (i2pd + b32 of the ha-bridge server tunnel)."""
         import reticulum_manager
         i = reticulum_manager.get_i2p_status()
         if not i["installed"]:
-            return "🛰 i2pd не установлен — I2P-путь (этап 3) не настроен."
+            return "🛰 i2pd is not installed — I2P path (stage 3) is not configured."
         m2 = "🟢" if i["active"] else "🔴"
         return "\n".join([
-            "🛰 Reticulum I2P (путь 2)",
+            "🛰 Reticulum I2P (path 2)",
             f"{m2} i2pd",
-            f"b32 моста: {i['b32'] or '(серверный туннель ha-bridge строится / нет)'}",
-            "Клиент: i2pd client-туннель → этот b32, RNS по TCP на 127.0.0.1:50061.",
+            f"Bridge b32: {i['b32'] or '(ha-bridge server tunnel building / none)'}",
+            "Client: i2pd client tunnel → this b32, RNS over TCP on 127.0.0.1:50061.",
         ])
 
     def _cmd_reticulum_health(self, args: List[str]) -> str:
-        """Здоровье i2pd (network status, tunnel success, leasesets)."""
+        """i2pd health (network status, tunnel success, leasesets)."""
         import reticulum_manager
         h = reticulum_manager.get_i2p_health()
         if not h["installed"]:
-            return "🛰 i2pd не установлен — I2P-путь (этап 3) не настроен."
+            return "🛰 i2pd is not installed — I2P path (stage 3) is not configured."
         if not h["active"]:
-            return "🔴 i2pd не запущен. Подними: systemctl start i2pd"
+            return "🔴 i2pd is not running. Start it: systemctl start i2pd"
         return "\n".join([
-            "🩺 i2pd health (I2P, путь 2)",
+            "🩺 i2pd health (I2P, path 2)",
             f"Network status:  {h['network'] or '—'}",
             f"Tunnel success:  {h['success_rate'] or '—'}",
             f"Routers:         {h['routers'] or '—'}  (floodfills {h['floodfills'] or '—'})",
             f"LeaseSets:       {h['leasesets'] or '—'}",
             f"Transit tunnels: {h['transit'] or '—'}",
             f"Uptime:          {h['uptime'] or '—'}",
-            "💡 Свежий узел: низкий success rate и LeaseSets=0 — норма первых минут.",
+            "💡 Fresh node: low success rate and LeaseSets=0 is normal for the first minutes.",
         ])
 
     def _cmd_bot_status(self, args: List[str]) -> str:
@@ -629,18 +629,18 @@ BOT_TOKEN not found in .env file"""
         ready = bool(st.get("advertising") and st.get("approved"))
         lines = []
         if st.get("error"):
-            lines.append(f"🔴 Exit node недоступен: {st['error']}")
+            lines.append(f"🔴 Exit node unavailable: {st['error']}")
         elif ready:
-            lines.append("🟢 Exit node готов — можно выходить в интернет через VPS.")
+            lines.append("🟢 Exit node is ready — you can exit to the internet via the VPS.")
         else:
-            lines.append("🟡 Exit node ещё не поднят. Включить: /exit_node_on")
+            lines.append("🟡 Exit node is not up yet. Enable: /exit_node_on")
 
         adv = "✅" if st.get("advertising") else "❌"
         appr = "✅" if st.get("approved") else "❌"
         lines += [
             "",
-            f"{adv} advertise на хосте",
-            f"{appr} approve маршрута в Headscale",
+            f"{adv} advertise on the host",
+            f"{appr} route approved in Headscale",
             f"forwarding IPv4: {st.get('ip_forward_v4') or '?'}, "
             f"IPv6: {st.get('ip_forward_v6') or '?'}",
         ]
@@ -663,27 +663,27 @@ BOT_TOKEN not found in .env file"""
         return report
 
     def _cmd_links(self, args: List[str]) -> str:
-        """Все ссылки bot-managed профилей пользователя (зеркало /my_profile)."""
+        """All bot-managed profile links for a user (mirror of /my_profile)."""
         note = ""
         if not args:
-            # SSH-доступ = админ: без ID показываем профили админа по умолчанию.
+            # SSH access = admin: with no ID, show the admin's profiles by default.
             admin_ids = self.config.resolved_admin_user_ids()
             if not admin_ids:
-                return ("❌ ADMIN_USER_IDS не настроен — укажите ID явно: "
+                return ("❌ ADMIN_USER_IDS is not set — pass an ID explicitly: "
                         "/links <telegram_user_id>\n"
-                        "Список всех пользователей с их ID: /list_users")
+                        "All users and their IDs: /list_users")
             uid = admin_ids[0]
-            note = f"ℹ️ ID не указан — показываю профили админа ({uid})."
+            note = f"ℹ️ No ID given — showing admin profiles ({uid})."
             if len(admin_ids) > 1:
                 others = ", ".join(str(x) for x in admin_ids[1:])
-                note += f" Другие админы: {others} — /links <ID>."
+                note += f" Other admins: {others} — /links <ID>."
         else:
             try:
                 uid = int(args[0])
             except ValueError:
-                return (f"❌ Invalid telegram_user_id: {args[0]}. Ожидается число "
-                        "(или вызов без аргумента — профили админа). "
-                        "Все ID: /list_users")
+                return (f"❌ Invalid telegram_user_id: {args[0]}. Expected a number "
+                        "(or call with no args — admin profiles). "
+                        "All IDs: /list_users")
 
         import provision_manager
         import hysteria2_manager
@@ -694,8 +694,8 @@ BOT_TOKEN not found in .env file"""
             if p.get("exists") and p.get("uri")
         }
         if not existing:
-            return (f"📭 Для user_id={uid} нет bot-managed профилей.\n"
-                    "Создать: /provision <telegram_user_id> в Telegram-боте.")
+            return (f"📭 No bot-managed profiles for user_id={uid}.\n"
+                    "Create: /provision <telegram_user_id> in the Telegram bot.")
 
         proto_labels = {
             "vless": "🛡 VLESS-Reality",
@@ -706,8 +706,8 @@ BOT_TOKEN not found in .env file"""
             "xhttp": "🌐 XHTTP",
             "mieru": "🛰 Mieru",
         }
-        lines = [f"🔐 Профили user_id={uid}",
-                 "⚠️ Ссылки = доступ к VPN, обращаться как с паролями.", ""]
+        lines = [f"🔐 Profiles user_id={uid}",
+                 "⚠️ Links = VPN access — treat them like passwords.", ""]
         if note:
             lines.insert(1, note)
         for proto, p in existing.items():
@@ -715,28 +715,28 @@ BOT_TOKEN not found in .env file"""
             uri = str(p["uri"])
             lines.append(f"{label} — {p.get('client_name', proto)}")
             if proto == "vless":
-                lines.append("  Современная ссылка (Karing / Clash Meta / sing-box):")
+                lines.append("  Modern URI (Karing / Clash Meta / sing-box):")
                 lines.append(f"  {uri}")
             elif proto == "hysteria2":
-                lines.append("  Основная hy2:// (Karing и совместимые):")
+                lines.append("  Primary hy2:// (Karing and compatible clients):")
                 lines.append(f"  {uri}")
                 alias = hysteria2_manager.to_hysteria2_uri(uri)
                 if alias and alias != uri:
-                    lines.append("  Alias hysteria2:// (Karing и клиенты без hy2://):")
+                    lines.append("  Alias hysteria2:// (Karing and clients without hy2://):")
                     lines.append(f"  {alias}")
             elif proto == "mtproto":
-                lines.append("  Telegram-only: открыть в Telegram, не вставлять "
-                             "в Karing / Clash Meta:")
+                lines.append("  Telegram-only: open in Telegram, do not paste "
+                             "into Karing / Clash Meta:")
                 lines.append(f"  {uri}")
             else:
                 lines.append(f"  {uri}")
             lines.append("")
-        lines.append("QR-коды к этим ссылкам выдаёт бот: /my_profile или "
+        lines.append("QR codes for these links come from the bot: /my_profile or "
                      "/profiles <uid>.")
         return "\n".join(lines)
 
     def _cmd_list_users(self, args: List[str]) -> str:
-        """Пользователи бота с Telegram ID (зеркало /list_users в боте)."""
+        """Bot users with Telegram ID (mirror of /list_users in the bot)."""
         from storage import list_users as storage_list_users
 
         special, users = storage_list_users()
@@ -758,16 +758,16 @@ BOT_TOKEN not found in .env file"""
                 parts.append(f"🕒 {str(prefs['last_seen'])[:10]}")
             return "  " + " — ".join(parts)
 
-        lines = [f"👑 Администраторы ({len(admin_ids)}):"]
+        lines = [f"👑 Administrators ({len(admin_ids)}):"]
         lines += [fmt_user(uid, users.get(uid, {})) for uid in admin_ids] or ["  -"]
 
         special_only = [uid for uid in special if uid not in admin_set]
-        lines.append(f"\n⭐ Особые пользователи ({len(special_only)}):")
+        lines.append(f"\n⭐ Special users ({len(special_only)}):")
         lines += [fmt_user(uid, users.get(uid, {})) for uid in special_only] or ["  -"]
 
         regular = {uid: p for uid, p in users.items()
                    if uid not in special_set and uid not in admin_set}
-        lines.append(f"\n👥 Обычные пользователи ({len(regular)}):")
+        lines.append(f"\n👥 Regular users ({len(regular)}):")
         if regular:
             lines += [fmt_user(uid, prefs) for uid, prefs in
                       sorted(regular.items(),
@@ -776,11 +776,11 @@ BOT_TOKEN not found in .env file"""
         else:
             lines.append("  -")
 
-        lines.append("\nСсылки профилей пользователя: /links <ID из списка выше>")
+        lines.append("\nUser profile links: /links <ID from the list above>")
         return "\n".join(lines)
 
     def _profile_link_variants(self, uid: int) -> List[Tuple[str, str, str]]:
-        """Все варианты ссылок профилей пользователя: (ключ, описание, uri)."""
+        """All profile link variants for a user: (key, description, uri)."""
         import provision_manager
         import hysteria2_manager
 
@@ -791,10 +791,10 @@ BOT_TOKEN not found in .env file"""
             uri = str(p["uri"])
             if proto == "vless":
                 variants.append(
-                    ("vless", "VLESS современная (Karing / Clash Meta / sing-box)", uri))
+                    ("vless", "VLESS modern (Karing / Clash Meta / sing-box)", uri))
             elif proto == "hysteria2":
                 variants.append(
-                    ("hy2", "Hysteria2 hy2:// (Karing и совместимые)", uri))
+                    ("hy2", "Hysteria2 hy2:// (Karing and compatible)", uri))
                 alias = hysteria2_manager.to_hysteria2_uri(uri)
                 if alias and alias != uri:
                     variants.append(
@@ -807,13 +807,13 @@ BOT_TOKEN not found in .env file"""
         return variants
 
     def _default_admin_uid(self) -> Optional[int]:
-        """Первый ID из ADMIN_USER_IDS — пользователь по умолчанию для SSH CLI."""
+        """First ID from ADMIN_USER_IDS — default user for the SSH CLI."""
         admin_ids = self.config.resolved_admin_user_ids()
         return admin_ids[0] if admin_ids else None
 
     def _cmd_qr(self, args: List[str]) -> str:
-        """QR-код ссылки профиля прямо в терминале (юникод-полублоки)."""
-        # /qr [uid] [вариант] | /qr [вариант] — uid по умолчанию админ
+        """QR code of a profile link in the terminal (Unicode half-blocks)."""
+        # /qr [uid] [variant] | /qr [variant] — uid defaults to admin
         rest = list(args)
         uid = None
         if rest and rest[0].isdigit() and len(rest[0]) >= 5:
@@ -824,31 +824,31 @@ BOT_TOKEN not found in .env file"""
         if uid is None:
             uid = self._default_admin_uid()
             if uid is None:
-                return ("❌ ADMIN_USER_IDS не настроен — укажите ID явно: "
-                        "/qr <telegram_user_id> [вариант]")
-            note = f"ℹ️ ID не указан — пользователь по умолчанию: админ ({uid})."
+                return ("❌ ADMIN_USER_IDS is not set — pass an ID explicitly: "
+                        "/qr <telegram_user_id> [variant]")
+            note = f"ℹ️ No ID given — default user: admin ({uid})."
 
         variants = self._profile_link_variants(uid)
         if not variants:
-            return (f"📭 Для user_id={uid} нет bot-managed профилей.\n"
-                    "Создать: /provision <telegram_user_id> в Telegram-боте.")
+            return (f"📭 No bot-managed profiles for user_id={uid}.\n"
+                    "Create: /provision <telegram_user_id> in the Telegram bot.")
 
         if not variant:
-            lines = [f"📷 QR в терминале — выберите вариант (user_id={uid}):"]
+            lines = [f"📷 QR in the terminal — pick a variant (user_id={uid}):"]
             if note:
                 lines.insert(0, note)
             width = max(len(k) for k, _l, _u in variants)
             for key, label, _uri in variants:
                 lines.append(f"  /qr {key:<{width}}  — {label}")
             lines.append("")
-            lines.append("Другой пользователь: /qr <telegram_user_id> <вариант> "
-                         "(ID — из /list_users)")
+            lines.append("Another user: /qr <telegram_user_id> <variant> "
+                         "(ID — from /list_users)")
             return "\n".join(lines)
 
         match = next((v for v in variants if v[0] == variant), None)
         if match is None:
             available = ", ".join(k for k, _l, _u in variants)
-            return f"❌ Вариант '{variant}' не найден. Доступны: {available}"
+            return f"❌ Variant '{variant}' not found. Available: {available}"
 
         _key, label, uri = match
         import io
@@ -865,8 +865,8 @@ BOT_TOKEN not found in .env file"""
             head.append(note)
         head.append(uri)
         return ("\n".join(head) + "\n\n" + qr_text + "\n\n"
-                "Сканируйте камерой VPN-клиента. Если не читается — увеличьте "
-                "окно терминала / уменьшите шрифт; ссылка текстом: /links")
+                "Scan with the VPN client's camera. If it will not read — enlarge "
+                "the terminal window / shrink the font; text link: /links")
 
     def _cmd_disable_bot(self, args: List[str]) -> str:
         """Disable Telegram bot."""
@@ -1026,8 +1026,8 @@ Run manually: docker compose restart"""
 ⏰ Started: {uptime or 'unknown'}
 
 💡 Commands:
-• systemctl restart xray - перезапустить
-• journalctl -u xray -n 50 - логи"""
+• systemctl restart xray - restart
+• journalctl -u xray -n 50 - logs"""
             else:
                 return f"""📦 Xray Status
 

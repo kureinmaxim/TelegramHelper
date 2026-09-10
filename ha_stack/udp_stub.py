@@ -1,11 +1,11 @@
-"""UDP stub device для raw-пути верхнеуровневого `send`.
+"""UDP stub device for the raw path of the high-level `send`.
 
-Reticulum-мост форвардит сюда сырые байты (--udp-target), мы отвечаем
-детерминированным «кадром» Mi-Home устройства. Первый байт payload выбирает
-устройство: 0x01=лампочка, 0x02=датчик T/H, 0x03=датчик вибрации.
-Слушает только 127.0.0.1 (доступ — через SSH-туннель).
+The Reticulum bridge forwards raw bytes here (--udp-target); we reply with a
+deterministic Mi-Home device "frame". The first payload byte selects the
+device: 0x01=bulb, 0x02=T/H sensor, 0x03=vibration sensor.
+Listens on 127.0.0.1 only (access via SSH tunnel).
 
-Запуск:  python udp_stub.py --listen-ip 127.0.0.1 --listen-port 50056
+Run:  python udp_stub.py --listen-ip 127.0.0.1 --listen-port 50056
 """
 import argparse
 import socket

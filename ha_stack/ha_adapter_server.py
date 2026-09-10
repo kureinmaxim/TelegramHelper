@@ -1,22 +1,23 @@
-"""HA adapter gRPC server — реальный Home Assistant вместо заглушки.
+"""HA adapter gRPC server — real Home Assistant instead of a stub.
 
-Реализует тот же DeviceControlService (device_control.proto), что и
-stub_server.py, но транслирует команды в REST API Home Assistant:
+Implements the same DeviceControlService (device_control.proto) as
+stub_server.py, but translates commands to the Home Assistant REST API:
 
   READ                → GET  /api/states/<entity_id>
   WRITE set_led_state → POST /api/services/<domain>/turn_on|turn_off
-  INIT                → GET  /api/  (проверка живости HA)
+  INIT                → GET  /api/  (HA liveness check)
 
-Деплой: рядом со stub_server.py на VPS (/opt/TelegramHelper/ha_stack/),
-HA живёт на NAS и доступен через tailnet — участок VPS→NAS шифрует WireGuard.
+Deploy next to stub_server.py on the VPS (/opt/TelegramHelper/ha_stack/).
+HA runs on the NAS and is reachable over the tailnet — the VPS→NAS hop
+is encrypted by WireGuard.
 
-Конфигурация — переменные окружения (systemd EnvironmentFile, права 600):
-  HA_URL        например http://100.64.0.20:8123  (tailnet-адрес NAS)
-  HA_TOKEN      long-lived access token из профиля HA
-  HA_DEVICE_MAP путь к JSON: {"имя_в_GUI": "switch.entity_id", ...}
-                (опционально; device_id с точкой трактуется как entity_id)
+Configuration via environment variables (systemd EnvironmentFile, mode 600):
+  HA_URL        e.g. http://100.64.0.20:8123  (NAS tailnet address)
+  HA_TOKEN      long-lived access token from the HA profile
+  HA_DEVICE_MAP path to JSON: {"gui_name": "switch.entity_id", ...}
+                (optional; a device_id containing a dot is treated as entity_id)
 
-Запуск:  python ha_adapter_server.py --listen 127.0.0.1:50055
+Run:  python ha_adapter_server.py --listen 127.0.0.1:50055
 """
 import argparse
 import json
@@ -30,22 +31,22 @@ from urllib.request import Request, urlopen
 
 import grpc
 
-# Пакет proto/ — bundle-локально (как у stub_server.py).
+# proto/ package — bundle-local (same as stub_server.py).
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 try:
     from proto import device_control_pb2 as pb
     from proto import device_control_pb2_grpc as pbg
-except ImportError:  # запуск из каталога ha_adapter/ в репо ApiRgRPC
+except ImportError:  # run from the ha_adapter/ directory in the ApiRgRPC repo
     import device_control_pb2 as pb
     import device_control_pb2_grpc as pbg
 
-POLL_INTERVAL_S = 2.0  # период опроса состояний для SubscribeEvents
-LIST_DEVICE_ID = "__list__"  # спец-запрос списка устройств (по пути SendCommand)
-PING_DEVICE_ID = "__ping__"  # health-check: живость HA без привязки к устройству
+POLL_INTERVAL_S = 2.0  # state poll interval for SubscribeEvents
+LIST_DEVICE_ID = "__list__"  # special device-list request (via SendCommand)
+PING_DEVICE_ID = "__ping__"  # health-check: HA liveness without a device
 
 
 # ---------------------------------------------------------------------------
-# REST-клиент Home Assistant (stdlib, без зависимостей)
+# Home Assistant REST client (stdlib, no extra deps)
 # ---------------------------------------------------------------------------
 class HaClient:
     def __init__(self, base_url: str, token: str, timeout: float = 6.0):
@@ -73,7 +74,7 @@ class HaClient:
         return self._request("GET", "/api/states/" + quote(entity_id))
 
     def states_all(self) -> list:
-        """Все состояния одним запросом (для сборки списка без N round-trips)."""
+        """All states in one request (build the list without N round-trips)."""
         return self._request("GET", "/api/states") or []
 
     def call_service(self, domain: str, service: str, entity_id: str,
@@ -84,8 +85,8 @@ class HaClient:
         self._request("POST", f"/api/services/{quote(domain)}/{quote(service)}", payload)
 
     def render_template(self, template: str) -> str:
-        """POST /api/template — HA рендерит Jinja на сервере (есть area_name и т.п.).
-        Возвращает сырой текст (не JSON), поэтому отдельно от _request."""
+        """POST /api/template — HA renders Jinja on the server (area_name, etc.).
+        Returns raw text (not JSON), so this is separate from _request."""
         url = self.base_url + "/api/template"
         data = json.dumps({"template": template}).encode()
         req = Request(url, data=data, method="POST", headers={
@@ -97,7 +98,7 @@ class HaClient:
 
 
 # ---------------------------------------------------------------------------
-# Маппинг device_id (имя в GUI) → entity_id HA
+# Mapping device_id (GUI name) → HA entity_id
 # ---------------------------------------------------------------------------
 def load_device_map() -> dict[str, str]:
     path = os.environ.get("HA_DEVICE_MAP", "")
@@ -110,38 +111,38 @@ def load_device_map() -> dict[str, str]:
 def resolve_entity(device_id: str, dev_map: dict[str, str]) -> str | None:
     if device_id in dev_map:
         return dev_map[device_id]
-    if "." in device_id:  # уже entity_id (switch.xxx / sensor.yyy)
+    if "." in device_id:  # already an entity_id (switch.xxx / sensor.yyy)
         return device_id
     return None
 
 
 # ---------------------------------------------------------------------------
-# Автообнаружение устройств из HA (фаза 3): один запрос /api/template отдаёт
-# все entity нужных доменов с областью (area_name) — вместо ручного маппинга.
+# Autodiscover devices from HA (phase 3): one /api/template request returns
+# all entities of the needed domains with area (area_name) — no manual mapping.
 # ---------------------------------------------------------------------------
 DISCOVER_DOMAINS = ("light", "switch", "input_boolean", "cover", "fan",
                     "climate", "lock", "scene", "script", "automation",
                     "sensor", "binary_sensor")
 WRITABLE_DOMAINS = ("switch", "light", "input_boolean", "cover", "fan", "lock",
                     "scene", "script", "automation", "climate")
-# Домены, за которыми следит SubscribeEvents (live в ApiHA).
+# Domains watched by SubscribeEvents (live in ApiHA).
 WATCH_DOMAINS = WRITABLE_DOMAINS + ("binary_sensor", "sensor")
-# Диагностические сенсоры Zigbee — не показываем (шум): связь, батарея-жкв и т.п.
+# Zigbee diagnostic sensors — hide them (noise): link, battery LCD, etc.
 _SKIP_SENSOR_SUFFIX = ("_linkquality", "_rssi", "_lqi", "_last_seen",
                        "_device_temperature", "_power_outage_count",
                        "_available", "_update_available", "_restart", "_identify")
 
-# Управляемые домены берём целиком; sensor/binary_sensor — только с «полезным»
-# device_class (иначе список тонет в диагностике: linkquality, battery, voltage,
-# power, date/time и т.п. — их у Zigbee-устройств десятки).
+# Take writable domains in full; sensor/binary_sensor — only with a "useful"
+# device_class (otherwise the list drowns in diagnostics: linkquality, battery,
+# voltage, power, date/time, etc. — Zigbee devices have dozens of those).
 _SENSOR_CLASSES = ("temperature", "humidity", "motion", "occupancy", "presence",
                    "door", "window", "opening", "moisture", "smoke", "gas",
                    "carbon_monoxide", "illuminance", "power", "energy")
-MAX_DISCOVER = 150  # предохранитель на размер ответа по RNS-линку
+MAX_DISCOVER = 150  # cap on response size over the RNS link
 
-# JSONL: по одному JSON-объекту на строку (устойчиво к пропускам, без запятых).
-# HA-идиоматично: s.domain и state_attr() (доступ s.attributes.x падает в
-# песочнице HA на entity без атрибута и рушит весь рендер).
+# JSONL: one JSON object per line (tolerant of skipped lines, no commas).
+# HA-idiomatic: s.domain and state_attr() (s.attributes.x fails in the HA
+# sandbox on entities without the attribute and aborts the whole render).
 _DISCOVER_TEMPLATE = (
     "{% for s in states %}"
     "{% set dc = state_attr(s.entity_id, 'device_class') or '' %}"
@@ -163,7 +164,7 @@ _DISCOVER_TEMPLATE = (
 
 
 def discover_entities(ha: "HaClient") -> list[dict]:
-    """Список entity из HA (управляемые + полезные сенсоры, с областью). [] при ошибке."""
+    """Entity list from HA (writable + useful sensors, with area). [] on error."""
     try:
         text = ha.render_template(_DISCOVER_TEMPLATE)
     except HTTPError as exc:
@@ -194,18 +195,18 @@ def discover_entities(ha: "HaClient") -> list[dict]:
         if len(out) >= MAX_DISCOVER:
             break
     if not out:
-        print(f"[autodiscover] /api/template ok, но 0 устройств (ответ {len(text)} символов)",
+        print(f"[autodiscover] /api/template ok, but 0 devices (response {len(text)} chars)",
               file=sys.stderr, flush=True)
     else:
-        print(f"[autodiscover] обнаружено {len(out)} устройств", file=sys.stderr, flush=True)
+        print(f"[autodiscover] discovered {len(out)} devices", file=sys.stderr, flush=True)
     return out
 
 
 # ---------------------------------------------------------------------------
-# Сборка ответов в терминах device_control.proto
+# Build responses in device_control.proto terms
 # ---------------------------------------------------------------------------
 def node_from_state(entity_id: str, st: dict, block) -> "pb.DeviceNode":
-    """Перевести состояние HA-entity в DeviceNode (без изменения прото)."""
+    """Map an HA entity state to DeviceNode (proto unchanged)."""
     attrs = st.get("attributes") or {}
     state = str(st.get("state", "unknown"))
     domain = entity_id.split(".", 1)[0]
@@ -224,7 +225,7 @@ def node_from_state(entity_id: str, st: dict, block) -> "pb.DeviceNode":
         node.type = pb.DeviceType.DEVICETYPE_UNKNOWN
         node.generic_state_data = state.encode()
 
-    # Полезные атрибуты — в parameters (мощность розетки, влажность и т.п.)
+    # Useful attributes — into parameters (plug power, humidity, etc.)
     for key in ("friendly_name", "device_class", "unit_of_measurement",
                 "power", "current_power_w", "load_power", "temperature",
                 "humidity", "battery"):
@@ -251,7 +252,7 @@ def err(status, message: str) -> "pb.CommandResponse":
 
 
 def enrich_from_state(item: dict, st: dict | None) -> dict:
-    """Добавить brightness / climate setpoint и т.п. для UI ApiHA."""
+    """Add brightness / climate setpoint etc. for the ApiHA UI."""
     if not st or not isinstance(st, dict):
         return item
     attrs = st.get("attributes") or {}
@@ -275,7 +276,7 @@ def enrich_from_state(item: dict, st: dict | None) -> dict:
         item["writable"] = True
     elif domain == "lock":
         item["writable"] = True
-    # Модель/бренд для каталога внешнего вида в ApiHA (Z2M / device attrs).
+    # Model/brand for the ApiHA appearance catalog (Z2M / device attrs).
     for src, dst in (("model", "model"), ("manufacturer", "manufacturer"),
                      ("device_id", "device_id"), ("power", "power"),
                      ("current_power_w", "current_power_w"),
@@ -293,7 +294,7 @@ def apply_ha_write(ha: HaClient, entity: str, *, led_on=None, attrs: dict | None
     if domain == "scene":
         ha.call_service("scene", "turn_on", entity)
         return
-    # ApiHA «Запуск» → trigger (не turn_on/off — это enable/disable automation).
+    # ApiHA "Run" → trigger (not turn_on/off — those enable/disable automation).
     if domain == "automation":
         ha.call_service("automation", "trigger", entity)
         return
@@ -337,7 +338,7 @@ def apply_ha_write(ha: HaClient, entity: str, *, led_on=None, attrs: dict | None
 
 
 # ---------------------------------------------------------------------------
-# Сервис
+# Service
 # ---------------------------------------------------------------------------
 class HaAdapterService(pbg.DeviceControlServiceServicer):
     def __init__(self, ha: HaClient, dev_map: dict[str, str]):
@@ -345,17 +346,17 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
         self._map = dev_map
         self._entity_to_gui = {v: k for k, v in dev_map.items()}
 
-    # -- список устройств (маркер __list__ по пути SendCommand) --------------
+    # -- device list (__list__ marker via SendCommand) ----------------------
     def _list_payload(self):
         items = []
         aliased = set(self._map.values())
-        # bulk-состояния одним запросом — состояния алиасов без N round-trips
+        # bulk states in one request — alias states without N round-trips
         try:
             by_id = {s.get("entity_id"): s for s in self._ha.states_all()
                      if isinstance(s, dict)}
         except (HTTPError, URLError, OSError):
             by_id = {}
-        # 1) курируемые алиасы из HA_DEVICE_MAP (kitchen_plug, mi_bulb, …)
+        # 1) curated aliases from HA_DEVICE_MAP (kitchen_plug, mi_bulb, …)
         for gui, entity in sorted(self._map.items()):
             st = by_id.get(entity)
             if st is None:
@@ -369,7 +370,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
                 "area": "", "alias": True, "writable": domain in WRITABLE_DOMAINS,
             }
             items.append(enrich_from_state(item, st))
-        # 2) автообнаружение из HA (кроме entity, уже покрытых алиасом)
+        # 2) autodiscover from HA (except entities already covered by an alias)
         if os.environ.get("HA_AUTODISCOVER", "1") != "0":
             for o in discover_entities(self._ha):
                 e = o.get("e", "")
@@ -394,7 +395,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
             n = len(self._map)
             return pb.CommandResponse(
                 status=pb.CommandResponse.SUCCESS,
-                message=f"real HA: {n} устройств(а)",
+                message=f"real HA: {n} device(s)",
                 read_data=payload,
             )
         if request.device_id == PING_DEVICE_ID:
@@ -409,7 +410,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
             return err(pb.CommandResponse.ERROR,
                        f"unknown device: {request.device_id} (known: {known})")
         try:
-            # WRITE с generic_payload = JSON: light attrs / climate setpoint / …
+            # WRITE with generic_payload = JSON: light attrs / climate setpoint / …
             if request.command_code == pb.CommandCode.WRITE and \
                     request.HasField("generic_payload"):
                 try:
@@ -429,7 +430,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
             if request.command_code == pb.CommandCode.WRITE and \
                     request.HasField("set_led_state"):
                 apply_ha_write(self._ha, entity, led_on=bool(request.set_led_state.state))
-                time.sleep(0.3)  # дать ZHA применить состояние
+                time.sleep(0.3)  # let ZHA apply the state
                 st = self._ha.state(entity)
                 return pb.CommandResponse(
                     status=pb.CommandResponse.SUCCESS,
@@ -481,7 +482,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
             parameters={"devices_mapped": str(len(self._map))},
         )
 
-    # -- SubscribeEvents: опрос HA, событие при изменении (live ApiHA) -------
+    # -- SubscribeEvents: poll HA, emit on change (live ApiHA) --------------
     def SubscribeEvents(self, request, context):
         last: dict[str, str] = {}
         while context.is_active():
@@ -499,7 +500,7 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
                     continue
                 attrs = st.get("attributes") or {}
                 state = str(st.get("state"))
-                # fingerprint: для climate/light ловим смену setpoint/яркости
+                # fingerprint: for climate/light catch setpoint/brightness changes
                 fp = state
                 if domain == "climate":
                     fp += f"|{attrs.get('temperature')}|{attrs.get('current_temperature')}"
@@ -541,19 +542,19 @@ class HaAdapterService(pbg.DeviceControlServiceServicer):
 def main():
     parser = argparse.ArgumentParser(description="HA adapter gRPC server (real Home Assistant)")
     parser.add_argument("--listen", default="127.0.0.1:50055",
-                        help="адрес прослушивания gRPC (по умолчанию только localhost)")
+                        help="gRPC listen address (localhost only by default)")
     args = parser.parse_args()
 
     ha_url = os.environ.get("HA_URL", "")
     ha_token = os.environ.get("HA_TOKEN", "")
     if not ha_url or not ha_token:
-        print("FATAL: HA_URL и HA_TOKEN обязательны (env)", file=sys.stderr)
+        print("FATAL: HA_URL and HA_TOKEN are required (env)", file=sys.stderr)
         sys.exit(2)
 
     ha = HaClient(ha_url, ha_token)
     dev_map = load_device_map()
     if not ha.alive():
-        print(f"WARNING: HA API {ha_url} сейчас недоступен — стартую, буду ретраить",
+        print(f"WARNING: HA API {ha_url} is currently unreachable — starting anyway, will retry",
               flush=True)
 
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=8))

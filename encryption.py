@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
-Модуль шифрования для TelegramSimple API
-Реализует Application-Level Encryption (AES-256-GCM).
-Совместим с форматом compatible AES-256-GCM clients.
+Encryption module for TelegramSimple API.
+Implements Application-Level Encryption (AES-256-GCM).
+Compatible with AES-256-GCM client packet format.
 """
 import os
 import json
@@ -15,56 +15,56 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 logger = logging.getLogger(__name__)
 
 class EncryptionError(Exception):
-    """Базовый класс для ошибок шифрования"""
+    """Base class for encryption errors."""
     pass
 
 class SecureMessenger:
     """
-    Класс для безопасного обмена сообщениями.
-    
-    Особенности:
-    - Алгоритм: AES-256-GCM
-    - Формат пакета: [Nonce(12B)][Ciphertext + Tag]
-    - Совместим с compatible AES-256-GCM clients
+    Secure message exchange.
+
+    Notes:
+    - Algorithm: AES-256-GCM
+    - Packet format: [Nonce(12B)][Ciphertext + Tag]
+    - Compatible with AES-256-GCM clients
     """
     
-    # Размер Nonce для AES-GCM (12 байт - стандарт NIST)
+    # AES-GCM nonce size (12 bytes, NIST standard)
     NONCE_SIZE = 12
 
     def __init__(self, key: str):
         """
-        Инициализация мессенджера.
-        
+        Initialize the messenger.
+
         Args:
-            key: Ключ шифрования (hex строка или обычная строка)
+            key: Encryption key (hex string or plain string)
         """
         if not key:
             raise EncryptionError("Encryption key is required")
         
-        # Преобразуем hex ключ в bytes
+        # Convert hex key to bytes
         try:
             self.key = bytes.fromhex(key)
         except ValueError:
-            # Если не hex, используем как строку и хешируем
+            # Not hex: treat as string and hash
             self.key = hashlib.sha256(key.encode()).digest()
         
-        # Инициализируем AES-GCM с 32-байтным ключом (AES-256)
+        # AES-GCM with a 32-byte key (AES-256)
         self._aesgcm = AESGCM(self.key[:32])
         
         logger.info("SecureMessenger initialized with AES-256-GCM (compatible AES-256-GCM clients compatible format)")
 
     def encrypt(self, data: Union[dict, str, bytes]) -> bytes:
         """
-        Шифрует данные.
-        
+        Encrypt data.
+
         Args:
-            data: Данные (dict, str или bytes)
-            
+            data: Payload (dict, str, or bytes)
+
         Returns:
-            bytes: Зашифрованный пакет в формате nonce + ciphertext
+            bytes: Encrypted packet in nonce + ciphertext format
         """
         try:
-            # 1. Подготовка данных
+            # 1. Prepare plaintext
             if isinstance(data, dict):
                 plaintext = json.dumps(data, ensure_ascii=False).encode('utf-8')
             elif isinstance(data, str):
@@ -72,13 +72,13 @@ class SecureMessenger:
             else:
                 plaintext = data
                 
-            # 2. Генерация Nonce
+            # 2. Generate nonce
             nonce = os.urandom(self.NONCE_SIZE)
             
-            # 3. Шифрование (AESGCM.encrypt возвращает ciphertext + tag)
+            # 3. Encrypt (AESGCM.encrypt returns ciphertext + tag)
             ciphertext = self._aesgcm.encrypt(nonce, plaintext, None)
             
-            # 4. Формирование пакета: nonce + ciphertext
+            # 4. Packet: nonce + ciphertext
             return nonce + ciphertext
             
         except Exception as e:
@@ -87,20 +87,20 @@ class SecureMessenger:
 
     def decrypt(self, data: bytes) -> bytes:
         """
-        Расшифровывает пакет.
-        
+        Decrypt a packet.
+
         Args:
-            data: Зашифрованный пакет
-            
+            data: Encrypted packet
+
         Returns:
-            bytes: Расшифрованные данные
+            bytes: Decrypted payload
         """
         try:
-            # 1. Извлекаем nonce и ciphertext
+            # 1. Split nonce and ciphertext
             nonce = data[:self.NONCE_SIZE]
             ciphertext = data[self.NONCE_SIZE:]
             
-            # 2. Расшифровка
+            # 2. Decrypt
             return self._aesgcm.decrypt(nonce, ciphertext, None)
                 
         except Exception as e:
@@ -109,13 +109,13 @@ class SecureMessenger:
     
     def encrypt_json(self, data: dict) -> str:
         """
-        Шифрует данные и возвращает base64 строку.
-        
+        Encrypt data and return a base64 string.
+
         Args:
-            data: Словарь для шифрования
-            
+            data: Dict to encrypt
+
         Returns:
-            Base64-encoded зашифрованные данные
+            Base64-encoded ciphertext
         """
         import base64
         encrypted = self.encrypt(data)
@@ -123,13 +123,13 @@ class SecureMessenger:
     
     def decrypt_json(self, data: str) -> dict:
         """
-        Расшифровывает base64 строку и возвращает словарь.
-        
+        Decrypt a base64 string and return a dict.
+
         Args:
-            data: Base64-encoded зашифрованные данные
-            
+            data: Base64-encoded ciphertext
+
         Returns:
-            Расшифрованный словарь
+            Decrypted dict
         """
         import base64
         encrypted = base64.b64decode(data)

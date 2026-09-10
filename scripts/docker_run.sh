@@ -1,30 +1,30 @@
 #!/bin/bash
-# Скрипт для сборки и запуска Docker-контейнера с ботом
+# Build and run the Docker container with the bot
 
-# Проверяем наличие .env файла
+# Check that .env exists
 if [ ! -f .env ]; then
-  echo "Файл .env не найден. Создаем из примера..."
+  echo ".env not found. Creating from the example..."
   cp example.env .env
-  echo "Пожалуйста, отредактируйте файл .env и укажите BOT_TOKEN"
+  echo "Please edit .env and set BOT_TOKEN"
   exit 1
 fi
 
-# Проверяем, что BOT_TOKEN установлен в .env
+# Check that BOT_TOKEN is set in .env
 if ! grep -q "BOT_TOKEN=" .env || grep -q "BOT_TOKEN=$" .env || grep -q "BOT_TOKEN=your_token_here" .env; then
-  echo "BOT_TOKEN не установлен в файле .env"
-  echo "Пожалуйста, отредактируйте файл .env и укажите BOT_TOKEN"
+  echo "BOT_TOKEN is not set in .env"
+  echo "Please edit .env and set BOT_TOKEN"
   exit 1
 fi
 
-# Собираем Docker-образ
-echo "Собираем Docker-образ..."
+# Build the Docker image
+echo "Building the Docker image..."
 docker build -t telegram-helper:latest .
 
-# Запускаем контейнер через Docker Compose
-echo "Запускаем контейнер через Docker Compose..."
+# Start the container via Docker Compose
+echo "Starting the container via Docker Compose..."
 docker compose down
 docker compose up -d
 
-# Показываем логи
-echo "Контейнер запущен. Показываем логи (Ctrl+C для выхода):"
+# Show logs
+echo "Container started. Showing logs (Ctrl+C to exit):"
 docker compose logs -f | cat

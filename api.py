@@ -2,14 +2,14 @@
 """
 TelegramHelper AI API
 
-REST API для AI-запросов с поддержкой:
+REST API for AI queries with support for:
 - Anthropic Claude
 - OpenAI GPT
-- Шаблоны промптов
-- Многоуровневая безопасность
+- Prompt templates
+- Multi-layer security
 
-Автор: TelegramHelper contributors
-Дата: 24.11.2025
+Author: TelegramHelper contributors
+Date: 24.11.2025
 """
 
 import os
@@ -34,7 +34,7 @@ from utils import (
     load_prompt_templates, get_prompt_categories, render_prompt
 )
 
-# Импорт модуля безопасности
+# Import security module
 try:
     from security import (
         verify_api_key,
@@ -54,7 +54,7 @@ except ImportError:
     SECURITY_AVAILABLE = False
     logging.warning("Security module not available, using basic authentication only")
 
-# Импорт модуля шифрования
+# Import encryption module
 try:
     from encryption import SecureMessenger, EncryptionError
     ENCRYPTION_AVAILABLE = True
@@ -94,7 +94,7 @@ async def startup_event():
     if SECURITY_AVAILABLE:
         init_security()
         
-        # Инициализируем дефолтные ключи из env
+        # Initialize default keys from env
         try:
             from app_keys import init_default_keys
             init_default_keys()
@@ -105,8 +105,8 @@ async def startup_event():
         
         if ENCRYPTION_AVAILABLE:
             try:
-                # Инициализируем дефолтный SecureMessenger (для совместимости)
-                # Индивидуальные ключи будут создаваться динамически в process_encrypted_request
+                # Default SecureMessenger (compatibility)
+                # Per-app keys are created dynamically in process_encrypted_request
                 key = get_encryption_key()
                 secure_messenger = SecureMessenger(key)
                 logger.info("SecureMessenger initialized (default key)")
@@ -127,9 +127,9 @@ class AIQueryRequest(BaseModel):
     model: Optional[str] = None
     template_category: Optional[str] = None
     input_text: Optional[str] = None
-    # Режим чата с историей
-    chat_mode: Optional[bool] = False  # True = режим чата с историей, False = простой запрос-ответ
-    conversation_id: Optional[str] = None  # ID беседы для режима чата
+    # Chat mode with history
+    chat_mode: Optional[bool] = False  # True = chat with history, False = simple Q&A
+    conversation_id: Optional[str] = None  # Conversation ID for chat mode
 
 
 class AIQueryResponse(BaseModel):
@@ -140,24 +140,24 @@ class AIQueryResponse(BaseModel):
     template_used: Optional[str] = None
     request_id: Optional[str] = None
     processing_time_ms: Optional[int] = None
-    mode: Optional[str] = None  # plain/encrypted - режим передачи
-    conversation_id: Optional[str] = None  # ID беседы (для режима чата)
-    chat_mode: Optional[bool] = False  # Режим работы (chat/simple)
+    mode: Optional[str] = None  # plain/encrypted transfer mode
+    conversation_id: Optional[str] = None  # Conversation ID (chat mode)
+    chat_mode: Optional[bool] = False  # Mode (chat/simple)
 
 
 class UniversalRequest(BaseModel):
-    """Универсальная модель запроса - поддерживает оба режима"""
-    # Поля для обычного запроса
+    """Universal request model — supports both modes."""
+    # Plain-request fields
     prompt: Optional[str] = None
     provider: Optional[str] = "anthropic"
     max_tokens: Optional[int] = 1000
     model: Optional[str] = None
     template_category: Optional[str] = None
     input_text: Optional[str] = None
-    # Режим чата с историей
-    chat_mode: Optional[bool] = False  # True = режим чата с историей, False = простой запрос-ответ
-    conversation_id: Optional[str] = None  # ID беседы для режима чата
-    # Поле для зашифрованного запроса (Base64)
+    # Chat mode with history
+    chat_mode: Optional[bool] = False  # True = chat with history, False = simple Q&A
+    conversation_id: Optional[str] = None  # Conversation ID for chat mode
+    # Encrypted request field (Base64)
     data: Optional[str] = None
 
 
@@ -190,10 +190,10 @@ class CancelRequest(BaseModel):
 active_requests: Dict[str, Dict[str, Any]] = {}
 
 
-# === FALLBACK SECURITY (если модуль безопасности недоступен) ===
+# === FALLBACK SECURITY (if the security module is unavailable) ===
 
 def basic_verify_api_key(x_api_key: str = Header(None)):
-    """Базовая проверка API ключа (fallback)"""
+    """Basic API key check (fallback)."""
     expected_key = os.getenv("API_SECRET_KEY")
     if not expected_key:
         logger.warning("API_SECRET_KEY not set!")
@@ -219,31 +219,31 @@ async def full_security_check(
     x_signature: str = Header(None)
 ) -> Dict[str, Any]:
     """
-    Полная проверка безопасности запроса
-    
+    Full request security check.
+
     Returns:
-        Словарь с информацией о запросе
+        Dict with request info
     """
     start_time = time.time()
     request_id = f"req_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     
     if SECURITY_AVAILABLE:
-        # 1. Проверка API ключа (с поддержкой индивидуальных ключей по app_id)
+        # 1. API key (with per-app_id keys)
         verify_api_key(x_api_key, x_app_id)
         
-        # 2. Проверка APP_ID
+        # 2. APP_ID
         app_config = verify_app_id(x_app_id)
         
-        # 3. Проверка timestamp
+        # 3. Timestamp
         verify_timestamp(x_timestamp)
         
-        # 4. Проверка nonce
+        # 4. Nonce
         verify_nonce(x_nonce)
         
         # 5. Rate limiting
         check_rate_limit(x_app_id or "unknown", app_config)
         
-        # Логирование
+        # Audit log
         log_request(request, x_app_id or "unknown", request.url.path)
         
         return {
@@ -254,7 +254,7 @@ async def full_security_check(
             "client_ip": get_client_ip(request)
         }
     else:
-        # Fallback на базовую проверку
+        # Fallback to basic check
         basic_verify_api_key(x_api_key)
         return {
             "request_id": request_id,
@@ -271,21 +271,21 @@ async def encrypted_security_check(
     x_nonce: str = Header(None)
 ) -> Dict[str, Any]:
     """
-    Облегчённая проверка безопасности для зашифрованных запросов.
-    
-    API-ключ и app_id НЕ требуются в заголовках - они будут
-    извлечены и проверены из расшифрованного payload.
-    
-    Это защищает API-ключ от перехвата в сетевом трафике.
-    
+    Lightweight security check for encrypted requests.
+
+    API key and app_id are NOT required in headers — they are
+    extracted and verified from the decrypted payload.
+
+    This keeps the API key out of network traffic.
+
     Returns:
-        Словарь с базовой информацией о запросе (без app_id)
+        Dict with basic request info (no app_id)
     """
     start_time = time.time()
     request_id = f"req_{int(start_time)}_{uuid.uuid4().hex[:8]}"
     
     if SECURITY_AVAILABLE:
-        # Проверяем только timestamp и nonce (защита от replay attacks)
+        # Timestamp and nonce only (replay protection)
         verify_timestamp(x_timestamp)
         verify_nonce(x_nonce)
         
@@ -305,7 +305,7 @@ async def encrypted_security_check(
 
 @app.get("/", response_model=HealthResponse)
 async def root():
-    """Проверка состояния API"""
+    """API status check."""
     return HealthResponse(
         status="running",
         version="3.19.5",
@@ -320,7 +320,7 @@ async def root():
 
 @app.get("/health")
 async def health_check():
-    """Endpoint для проверки здоровья сервиса"""
+    """Service health endpoint."""
     return {
         "status": "healthy",
         "timestamp": int(time.time()),
@@ -342,8 +342,8 @@ async def health_check():
 @app.get("/prompt_templates", response_model=PromptTemplatesResponse)
 async def get_templates():
     """
-    Получить список доступных шаблонов промптов.
-    Публичный endpoint - не требует авторизации.
+    List available prompt templates.
+    Public endpoint — no auth required.
     """
     templates = load_prompt_templates()
     template_list = [
@@ -360,8 +360,8 @@ async def get_templates():
 @app.get("/prompt_categories")
 async def get_categories():
     """
-    Получить список категорий шаблонов.
-    Публичный endpoint - не требует авторизации.
+    List template categories.
+    Public endpoint — no auth required.
     """
     categories = get_prompt_categories()
     return {"categories": categories, "count": len(categories)}
@@ -376,8 +376,8 @@ async def cancel_request(
     Cancel an active AI request.
     
     Headers:
-    - X-API-KEY: обязательный API ключ
-    - X-APP-ID: идентификатор приложения
+    - X-API-KEY: required API key
+    - X-APP-ID: application identifier
     """
     request_id = cancel_req.request_id
     app_id = security_info.get("app_id", "unknown")
@@ -411,24 +411,24 @@ async def echo_test(
     x_app_id: str = Header(None, alias="X-APP-ID")
 ):
     """
-    Echo endpoint для тестирования связи.
-    Возвращает отправленное сообщение без обращения к AI провайдеру.
-    Поддерживает как обычный, так и зашифрованный режим.
+    Echo endpoint for connectivity tests.
+    Returns the sent message without calling an AI provider.
+    Supports both plain and encrypted modes.
     
     Headers:
-    - X-API-KEY: обязательный API ключ
-    - X-APP-ID: идентификатор приложения
+    - X-API-KEY: required API key
+    - X-APP-ID: application identifier
     """
     request_id = security_info["request_id"]
     start_time = security_info["start_time"]
     app_id = security_info.get("app_id", "unknown")
     
-    # Автоопределение режима
+    # Auto-detect mode
     if request_body.data:
-        # Зашифрованный режим
+        # Encrypted mode
         return await process_echo_encrypted(request_body.data, security_info, x_app_id)
     else:
-        # Обычный режим
+        # Plain mode
         message = request_body.prompt or "Echo 123456789"
         processing_time = int((time.time() - start_time) * 1000)
         
@@ -452,11 +452,11 @@ async def process_echo_encrypted(
     header_app_id: str = None
 ) -> Dict:
     """
-    Обработка зашифрованного echo запроса.
-    
-    SECURITY: API-ключ и app_id извлекаются из расшифрованного payload,
-    а не из HTTP заголовков, для защиты от перехвата.
-    X-APP-ID заголовок используется только для выбора ключа шифрования.
+    Handle an encrypted echo request.
+
+    SECURITY: API key and app_id are taken from the decrypted payload,
+    not HTTP headers, to protect them from interception.
+    The X-APP-ID header is used only to pick the encryption key.
     """
     if not ENCRYPTION_AVAILABLE:
         raise HTTPException(
@@ -468,12 +468,12 @@ async def process_echo_encrypted(
         request_id = security_info.get("request_id", "unknown")
         start_time = security_info.get("start_time", time.time())
         
-        # Создаем SecureMessenger с ключом для конкретного app_id (или дефолтным)
+        # SecureMessenger with the per-app_id key (or default)
         from encryption import SecureMessenger
         from security import get_encryption_key, verify_api_key_from_payload, verify_app_id, check_rate_limit
         
         try:
-            # Используем X-APP-ID заголовок для выбора ключа шифрования
+            # X-APP-ID header selects the encryption key
             enc_key = get_encryption_key(header_app_id)
             messenger = SecureMessenger(enc_key)
             logger.info(f"[{request_id}] Using encryption key for app_id: {header_app_id or 'default'}")
@@ -524,13 +524,13 @@ async def process_echo_encrypted(
             if not api_key or api_key != expected_key:
                 raise HTTPException(status_code=403, detail="Invalid API key")
         
-        # Получаем сообщение
+        # Get the message
         message = query_data.get("prompt", "Echo 123456789")
         processing_time = int((time.time() - start_time) * 1000)
         
         logger.info(f"[{request_id}] Encrypted echo test from {app_id or 'unknown'} | Time: {processing_time}ms | Message: {message}")
         
-        # Формируем ответ
+        # Build the response
         response_dict = {
             "response": f"Echo: {message}",
             "provider": "echo-server",
@@ -565,30 +565,30 @@ async def ai_query(
     x_app_id: str = Header(None, alias="X-APP-ID")
 ):
     """
-    Универсальный AI-запрос с автоопределением режима.
-    
-    Автоматически определяет режим передачи:
-    - Если есть поле "data" (Base64) → зашифрованный режим
-    - Если есть поле "prompt" → обычный режим
-    
-    Поддерживает:
-    - Прямой промпт (prompt)
-    - Шаблон (template_category + input_text)
-    - Выбор провайдера (anthropic/openai)
-    - Зашифрованные данные (data в Base64)
-    
+    Universal AI query with auto-detected transfer mode.
+
+    Detects transfer mode automatically:
+    - If "data" (Base64) is present → encrypted mode
+    - If "prompt" is present → plain mode
+
+    Supports:
+    - Direct prompt (prompt)
+    - Template (template_category + input_text)
+    - Provider choice (anthropic/openai)
+    - Encrypted payload (data as Base64)
+
     Headers:
-    - X-API-KEY: обязательный API ключ
-    - X-APP-ID: идентификатор приложения (рекомендуется)
-    - X-Timestamp: Unix timestamp запроса
-    - X-Nonce: уникальный ID запроса
+    - X-API-KEY: required API key
+    - X-APP-ID: application identifier (recommended)
+    - X-Timestamp: request Unix timestamp
+    - X-Nonce: unique request ID
     """
-    # Автоопределение режима
+    # Auto-detect mode
     if request_body.data:
-        # Зашифрованный режим (Base64)
+        # Encrypted mode (Base64)
         return await process_encrypted_request(request_body.data, security_info, x_app_id)
     else:
-        # Обычный режим
+        # Plain mode
         query_request = AIQueryRequest(
             prompt=request_body.prompt or "",
             provider=request_body.provider,
@@ -610,13 +610,13 @@ async def process_encrypted_request(
     header_app_id: str = None
 ) -> Union[Dict, AIQueryResponse]:
     """
-    Обработка зашифрованного запроса (Base64 + AES-256-GCM).
-    
-    SECURITY: API-ключ и app_id извлекаются из расшифрованного payload,
-    а не из HTTP заголовков, для защиты от перехвата в сетевом трафике.
-    X-APP-ID заголовок используется только для выбора ключа шифрования.
-    
-    Использует индивидуальный ключ шифрования для app_id, если настроен.
+    Handle an encrypted request (Base64 + AES-256-GCM).
+
+    SECURITY: API key and app_id are taken from the decrypted payload,
+    not HTTP headers, to protect them from interception.
+    The X-APP-ID header is used only to pick the encryption key.
+
+    Uses a per-app_id encryption key when configured.
     """
     if not ENCRYPTION_AVAILABLE:
         raise HTTPException(
@@ -627,12 +627,12 @@ async def process_encrypted_request(
     request_id = security_info.get("request_id", "unknown")
     
     try:
-        # Используем X-APP-ID заголовок для выбора ключа шифрования
+        # X-APP-ID header selects the encryption key
         from encryption import SecureMessenger
         from security import get_encryption_key, verify_api_key_from_payload, verify_app_id, check_rate_limit
         
         try:
-            # Используем ключ для конкретного app_id (или дефолтный)
+            # Per-app_id key (or default)
             enc_key = get_encryption_key(header_app_id)
             messenger = SecureMessenger(enc_key)
             logger.info(f"[{request_id}] Using encryption key for app_id: {header_app_id or 'default'}")
@@ -694,7 +694,7 @@ async def process_encrypted_request(
         response = await process_ai_request(query_request, security_info)
         response.mode = "encrypted"
         
-        # 7. Encrypt response (используем тот же messenger)
+        # 7. Encrypt response (same messenger)
         response_dict = response.dict()
         encrypted_response_bytes = messenger.encrypt(response_dict)
         
@@ -715,12 +715,12 @@ async def process_ai_request(
     security_info: Dict
 ) -> AIQueryResponse:
     """
-    Внутренняя функция обработки AI запроса.
-    Используется как обычным, так и зашифрованным endpoint'ом.
-    
-    Поддерживает два режима:
-    - simple (chat_mode=False): простой запрос-ответ без истории
-    - chat (chat_mode=True): режим чата с сохранением истории беседы
+    Internal AI request handler.
+    Used by both the plain and encrypted endpoints.
+
+    Two modes:
+    - simple (chat_mode=False): single Q&A, no history
+    - chat (chat_mode=True): chat mode with persisted history
     """
     request_id = security_info["request_id"]
     start_time = security_info["start_time"]
@@ -735,7 +735,7 @@ async def process_ai_request(
     }
     logger.info(f"[{request_id}] Registered as active request")
     
-    # Режим чата
+    # Chat mode
     chat_mode = request_body.chat_mode or False
     conversation_id = request_body.conversation_id
     logger.info(
@@ -745,11 +745,11 @@ async def process_ai_request(
         f"Conversation: {conversation_id or 'new'}"
     )
     
-    # Определяем финальный промпт
+    # Resolve the final prompt
     final_prompt = request_body.prompt
     template_used = None
     
-    # Если указан шаблон, используем его
+    # Use a template when provided
     if request_body.template_category and request_body.input_text:
         rendered = render_prompt(request_body.template_category, request_body.input_text)
         if rendered:
@@ -765,7 +765,7 @@ async def process_ai_request(
             detail="Prompt is required (either direct or via template)"
         )
     
-    # Работа с историей беседы (режим чата)
+    # Conversation history (chat mode)
     conversation_history = None
     if chat_mode:
         try:
@@ -775,12 +775,12 @@ async def process_ai_request(
                 generate_conversation_id
             )
             
-            # Генерируем или используем существующий conversation_id
+            # Generate or reuse conversation_id
             if not conversation_id:
                 conversation_id = generate_conversation_id(app_id)
                 logger.info(f"[{request_id}] Generated new conversation_id: {conversation_id}")
             
-            # Загружаем историю беседы
+            # Load conversation history
             conversation_history = get_conversation_history(conversation_id)
             logger.info(f"[{request_id}] Loaded {len(conversation_history)} messages from history")
             
@@ -791,10 +791,10 @@ async def process_ai_request(
             logger.error(f"[{request_id}] Error loading conversation history: {e}")
             chat_mode = False
     
-    # Определяем провайдера
+    # Resolve provider
     provider = request_body.provider.lower() if request_body.provider else "anthropic"
     
-    # Проверка доступности провайдера с fallback
+    # Provider availability with fallback
     if provider == "anthropic" and not ANTHROPIC_AVAILABLE:
         if OPENAI_AVAILABLE:
             logger.warning(f"[{request_id}] Anthropic not available, falling back to OpenAI")
@@ -817,7 +817,7 @@ async def process_ai_request(
             del active_requests[request_id]
         raise HTTPException(status_code=499, detail="Request cancelled by client")
     
-    # Выполняем запрос к AI
+    # Call the AI provider
     try:
         response_text = None
         model_used = None
@@ -844,19 +844,19 @@ async def process_ai_request(
         if not response_text:
             raise HTTPException(status_code=500, detail="AI provider returned empty response")
         
-        # Сохраняем в историю беседы (режим чата)
+        # Save to conversation history (chat mode)
         if chat_mode and conversation_id:
             try:
                 from conversation_history import add_message_to_history
-                # Сохраняем запрос пользователя
+                # Save user prompt
                 add_message_to_history(conversation_id, "user", final_prompt)
-                # Сохраняем ответ ассистента
+                # Save assistant reply
                 add_message_to_history(conversation_id, "assistant", response_text)
                 logger.info(f"[{request_id}] Saved messages to conversation history")
             except Exception as e:
                 logger.error(f"[{request_id}] Error saving to conversation history: {e}")
         
-        # Вычисляем время обработки
+        # Processing time
         processing_time = int((time.time() - start_time) * 1000)
         
         logger.info(f"[{request_id}] Success | Provider: {provider} | Model: {model_used} | Time: {processing_time}ms")
@@ -953,9 +953,9 @@ async def ai_query_secure(
     """
     Secure endpoint for AI queries with protected API key.
     
-    SECURITY: API-ключ и app_id передаются ВНУТРИ зашифрованного payload,
-    а не в HTTP заголовках. Это защищает credentials от перехвата.
-    X-APP-ID заголовок используется только для выбора ключа шифрования.
+    SECURITY: API key and app_id are sent INSIDE the encrypted payload,
+    not in HTTP headers. This protects credentials from interception.
+    The X-APP-ID header is used only to pick the encryption key.
     
     Expects:
     - Encrypted payload with: api_key, app_id, prompt, provider, etc.
@@ -979,9 +979,9 @@ async def echo_secure(
     """
     Secure echo endpoint with protected API key.
     
-    SECURITY: API-ключ и app_id передаются ВНУТРИ зашифрованного payload,
-    а не в HTTP заголовках. Это защищает credentials от перехвата.
-    X-APP-ID заголовок используется только для выбора ключа шифрования.
+    SECURITY: API key and app_id are sent INSIDE the encrypted payload,
+    not in HTTP headers. This protects credentials from interception.
+    The X-APP-ID header is used only to pick the encryption key.
     
     Expects:
     - Encrypted payload with: api_key, app_id, prompt
@@ -999,13 +999,13 @@ async def clear_conversation(
     security_info: Dict = Depends(full_security_check)
 ):
     """
-    Очистить историю беседы
-    
+    Clear conversation history.
+
     Args:
-        conversation_id: ID беседы для очистки
-        
+        conversation_id: Conversation ID to clear
+
     Returns:
-        Статус операции
+        Operation status
     """
     try:
         from conversation_history import clear_conversation_history
@@ -1033,7 +1033,7 @@ async def clear_conversation(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# === ADMIN ENDPOINTS (требуют расширенных прав) ===
+# === ADMIN ENDPOINTS (require elevated rights) ===
 
 @app.get("/admin/stats")
 async def get_stats(
@@ -1041,10 +1041,10 @@ async def get_stats(
     security_info: Dict = Depends(full_security_check)
 ):
     """
-    Получить статистику использования API.
-    Требует авторизации.
+    Get API usage statistics.
+    Requires authorization.
     """
-    # В production здесь будет статистика из Redis/PostgreSQL
+    # In production this would come from Redis/PostgreSQL
     return {
         "status": "ok",
         "message": "Statistics endpoint (placeholder)",
@@ -1224,7 +1224,7 @@ async def execute_admin_command_secure(
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
-    """Обработчик HTTP ошибок с логированием"""
+    """HTTP error handler with logging."""
     client_ip = request.client.host if request.client else "unknown"
     logger.warning(
         f"HTTP {exc.status_code} | IP: {client_ip} | "

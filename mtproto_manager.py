@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-Модуль для управления MTProto proxy конфигурацией.
+Module for managing MTProto proxy configuration.
 
-MTProto Proxy — официальный прокси-протокол Telegram.
-Использует C-реализацию https://github.com/TelegramMessenger/MTProxy
-Поддерживает fake-TLS режим для обхода DPI.
+MTProto Proxy is Telegram's official proxy protocol.
+Uses the C implementation https://github.com/TelegramMessenger/MTProxy
+Supports fake-TLS mode for DPI bypass.
 
-Структура конфигурации:
+Configuration structure:
 {
     "enabled": false,
     "server": "IP VPS",
@@ -40,17 +40,17 @@ logger = logging.getLogger(__name__)
 # Thread safety
 _mt_lock = threading.Lock()
 
-# Путь к файлу конфигурации MTProto
+# Path to the MTProto configuration file
 _MT_CONFIG_PATH = os.getenv("MTPROTO_CONFIG_PATH",
                              os.path.join(os.getcwd(), "mtproto_config.json"))
 
-# Рекомендуемые порты для MTProto proxy
-# - 993: IMAPS — выглядит как шифрованная почта
-# - 465: SMTPS — ещё один почтовый порт
-# - 8443: Альтернативный HTTPS
+# Recommended ports for MTProto proxy
+# - 993: IMAPS — looks like encrypted mail
+# - 465: SMTPS — another mail port
+# - 8443: Alternative HTTPS
 RECOMMENDED_PORTS = [993, 465, 8443]
 
-# Домены для fake-TLS маскировки
+# Domains for fake-TLS camouflage
 AVAILABLE_FAKE_TLS_DOMAINS = [
     "google.com",
     "www.google.com",
@@ -66,17 +66,17 @@ AVAILABLE_SECRET_MODES = (SECRET_MODE_DD_INLINE, SECRET_MODE_EE_SPLIT)
 DEFAULT_SECRET_MODE = SECRET_MODE_EE_SPLIT
 DEFAULT_FAKE_TLS_DOMAIN = "google.com"
 
-# Системные пути
+# System paths
 MTPROXY_BINARY_PATH = "/usr/local/bin/mtproto-proxy"
 MTPROXY_CONFIG_DIR = "/etc/mtproto-proxy"
 PROXY_SECRET_PATH = "/etc/mtproto-proxy/proxy-secret"
 PROXY_MULTI_CONF_PATH = "/etc/mtproto-proxy/proxy-multi.conf"
 SYSTEMD_SERVICE_NAME = "mtproto-proxy"
 SYSTEMD_UNIT_PATH = f"/etc/systemd/system/{SYSTEMD_SERVICE_NAME}.service"
-# Внутренний порт для статистики (только localhost)
+# Internal stats port (localhost only)
 STATS_PORT = 2398
 
-# Дефолтная конфигурация
+# Default configuration
 DEFAULT_CONFIG = {
     "enabled": False,
     "server": "",
@@ -95,7 +95,7 @@ DEFAULT_CONFIG = {
 # === Secret Generation ===
 
 def _normalize_secret_mode(secret_mode: Optional[str]) -> str:
-    """Нормализовать имя режима секрета."""
+    """Normalize the secret-mode name."""
     if not secret_mode:
         return DEFAULT_SECRET_MODE
 
@@ -115,7 +115,7 @@ def _normalize_secret_mode(secret_mode: Optional[str]) -> str:
 
 
 def _is_hex_string(value: str, exact_length: Optional[int] = None) -> bool:
-    """Проверить, что строка является hex."""
+    """Check that the string is hex."""
     if not value:
         return False
     if exact_length is not None and len(value) != exact_length:
@@ -128,19 +128,19 @@ def _is_hex_string(value: str, exact_length: Optional[int] = None) -> bool:
 
 
 def _encode_domain_hex(domain: str) -> str:
-    """Кодировать ASCII домен в hex."""
+    """Encode an ASCII domain as hex."""
     return domain.encode("ascii").hex()
 
 
 def _decode_domain_hex(domain_hex: str) -> str:
-    """Декодировать hex домена в ASCII."""
+    """Decode a domain hex string to ASCII."""
     if not domain_hex:
         return ""
     return bytes.fromhex(domain_hex).decode("ascii")
 
 
 def _secret_mode_label(secret_mode: str) -> str:
-    """Человекочитаемое имя режима."""
+    """Human-readable mode name."""
     mode = _normalize_secret_mode(secret_mode)
     if mode == SECRET_MODE_EE_SPLIT:
         return "ee + -D"
@@ -148,18 +148,18 @@ def _secret_mode_label(secret_mode: str) -> str:
 
 
 def _docker_host_sync_hint() -> str:
-    """Подсказка для Docker-сценария, когда systemd нужно обновлять на хосте."""
+    """Hint for Docker setups where systemd must be updated on the host."""
     if not _is_docker():
         return ""
     return (
-        "\n\nℹ️ Бот запущен в Docker. После изменения MTProto-конфига "
-        "синхронизируйте systemd на Debian-хосте:\n"
+        "\n\nℹ️ The bot is running in Docker. After changing the MTProto config "
+        "sync systemd on the Debian host:\n"
         "cd /opt/TelegramSimple && python3 scripts/mtproto_sync_systemd.py"
     )
 
 
 def _build_client_secret(base_secret: str, domain: str, secret_mode: str) -> str:
-    """Собрать клиентский MTProto secret для выбранного режима."""
+    """Build a client MTProto secret for the selected mode."""
     normalized_mode = _normalize_secret_mode(secret_mode)
     normalized_base = (base_secret or "").strip().lower()
     normalized_domain = (domain or DEFAULT_FAKE_TLS_DOMAIN).strip().lower()
@@ -173,7 +173,7 @@ def _build_client_secret(base_secret: str, domain: str, secret_mode: str) -> str
 
 
 def _normalize_secret_for_mode(secret: str, secret_mode: str, domain: str) -> str:
-    """Привести secret к клиентскому формату нужного режима."""
+    """Normalize secret to the client format of the target mode."""
     if not secret:
         return ""
 
@@ -192,7 +192,7 @@ def _normalize_secret_for_mode(secret: str, secret_mode: str, domain: str) -> st
 
 
 def _infer_secret_mode(config: Dict, file_exists: bool = False) -> str:
-    """Определить режим секрета для legacy-конфигов."""
+    """Infer secret mode for legacy configs."""
     explicit_mode = config.get("secret_mode")
     if explicit_mode:
         return _normalize_secret_mode(explicit_mode)
@@ -217,7 +217,7 @@ def _infer_secret_mode(config: Dict, file_exists: bool = False) -> str:
 
 
 def _normalize_all_client_secrets(config: Dict) -> None:
-    """Нормализовать все клиентские секреты под текущий режим."""
+    """Normalize all client secrets to the current mode."""
     clients = config.get("clients") or []
     normalized_clients = []
     target_mode = _normalize_secret_mode(config.get("secret_mode"))
@@ -241,7 +241,7 @@ def _normalize_all_client_secrets(config: Dict) -> None:
 
 
 def _normalize_config(config: Dict, file_exists: bool = False) -> Dict:
-    """Привести MTProto-конфиг к актуальной dual-mode структуре."""
+    """Bring the MTProto config to the current dual-mode structure."""
     config["secret_mode"] = _infer_secret_mode(config, file_exists=file_exists)
 
     domain_hint = str(config.get("fake_tls_domain") or DEFAULT_FAKE_TLS_DOMAIN).strip().lower()
@@ -268,17 +268,17 @@ def _normalize_config(config: Dict, file_exists: bool = False) -> Dict:
 
 def generate_secret(domain: Optional[str] = None) -> str:
     """
-    Сгенерировать MTProto proxy секрет для текущего режима.
+    Generate an MTProto proxy secret for the current mode.
 
-    Форматы:
+    Formats:
     - dd_inline: dd + 32_hex_random + hex(domain)
     - ee_split:  ee + 32_hex_random + hex(domain)
 
     Args:
-        domain: Домен для fake-TLS. Если None — берётся из конфига.
+        domain: Domain for fake-TLS. If None — taken from config.
 
     Returns:
-        str: hex секрет
+        str: hex secret
     """
     if not domain:
         config = _load_config()
@@ -294,7 +294,7 @@ def generate_secret(domain: Optional[str] = None) -> str:
 
 def _parse_secret(secret: str) -> Dict:
     """
-    Разобрать MTProto proxy секрет.
+    Parse an MTProto proxy secret.
 
     Returns:
         Dict: mode, is_fake_tls, prefix, server_secret, domain, raw
@@ -339,12 +339,12 @@ def _parse_secret(secret: str) -> Dict:
 # === Config Load/Save ===
 
 def _normalize_clients(config: Dict) -> None:
-    """Нормализовать список клиентов MTProto."""
+    """Normalize the MTProto client list."""
     clients = config.get("clients") or []
     if not isinstance(clients, list):
         clients = []
 
-    # Если клиентов нет, но есть secret — создаём дефолтного клиента
+    # If there are no clients but there is a secret — create a default client
     if not clients and config.get("secret"):
         clients = [{
             "name": "default",
@@ -352,7 +352,7 @@ def _normalize_clients(config: Dict) -> None:
             "created_at": datetime.now().isoformat()
         }]
 
-    # Синхронизировать дефолтного клиента с config["secret"]
+    # Sync the default client with config["secret"]
     if config.get("secret"):
         for client in clients:
             if client.get("name") == "default":
@@ -369,7 +369,7 @@ def _normalize_clients(config: Dict) -> None:
 
 
 def _load_config() -> Dict:
-    """Загрузить конфигурацию MTProto из файла."""
+    """Load MTProto configuration from file."""
     with _mt_lock:
         if not os.path.exists(_MT_CONFIG_PATH):
             return _normalize_config(dict(DEFAULT_CONFIG), file_exists=False)
@@ -386,7 +386,7 @@ def _load_config() -> Dict:
 
 
 def _save_config(config: Dict) -> bool:
-    """Сохранить конфигурацию MTProto в файл."""
+    """Save MTProto configuration to file."""
     with _mt_lock:
         try:
             config = _normalize_config(dict(config), file_exists=True)
@@ -411,17 +411,17 @@ def _save_config(config: Dict) -> bool:
 # === Public API ===
 
 def is_enabled() -> bool:
-    """Проверить, включён ли MTProto proxy."""
+    """Check whether MTProto proxy is enabled."""
     config = _load_config()
     return config.get("enabled", False)
 
 
 def enable() -> Tuple[bool, str]:
     """
-    Включить MTProto proxy.
+    Enable MTProto proxy.
 
     Returns:
-        Tuple[bool, str]: (успех, сообщение)
+        Tuple[bool, str]: (success, message)
     """
     config = _load_config()
 
@@ -429,39 +429,39 @@ def enable() -> Tuple[bool, str]:
     missing = [key for key in required if not config.get(key)]
 
     if missing:
-        return False, f"Не настроены обязательные параметры: {', '.join(missing)}"
+        return False, f"Required parameters are not set: {', '.join(missing)}"
 
     config["enabled"] = True
     if _save_config(config):
         logger.info("MTProto proxy enabled")
-        return True, "✅ MTProto proxy включён"
+        return True, "✅ MTProto proxy enabled"
 
-    return False, "❌ Ошибка при сохранении конфигурации"
+    return False, "❌ Failed to save configuration"
 
 
 def disable() -> Tuple[bool, str]:
     """
-    Выключить MTProto proxy.
+    Disable MTProto proxy.
 
     Returns:
-        Tuple[bool, str]: (успех, сообщение)
+        Tuple[bool, str]: (success, message)
     """
     config = _load_config()
     config["enabled"] = False
 
     if _save_config(config):
         logger.info("MTProto proxy disabled")
-        return True, "🔴 MTProto proxy выключен"
+        return True, "🔴 MTProto proxy disabled"
 
-    return False, "❌ Ошибка при сохранении конфигурации"
+    return False, "❌ Failed to save configuration"
 
 
 def get_status() -> Dict:
     """
-    Получить статус MTProto proxy.
+    Get MTProto proxy status.
 
     Returns:
-        Dict с информацией о статусе
+        Dict with status information
     """
     config = _load_config()
 
@@ -491,13 +491,13 @@ def get_status() -> Dict:
 
 def get_config(include_secrets: bool = False) -> Dict:
     """
-    Получить конфигурацию MTProto (опционально с секретами).
+    Get MTProto configuration (optionally with secrets).
 
     Args:
-        include_secrets: включать ли полные секреты
+        include_secrets: whether to include full secrets
 
     Returns:
-        Dict с конфигурацией
+        Dict with configuration
     """
     config = _load_config()
 
@@ -514,7 +514,7 @@ def get_config(include_secrets: bool = False) -> Dict:
 
 
 def set_secret_mode(secret_mode: str) -> Tuple[bool, str]:
-    """Переключить режим клиентских/серверных secret для MTProto."""
+    """Switch client/server secret mode for MTProto."""
     requested_mode = str(secret_mode or "").strip().lower()
     if requested_mode not in {
         SECRET_MODE_DD_INLINE,
@@ -527,8 +527,8 @@ def set_secret_mode(secret_mode: str) -> Tuple[bool, str]:
         "split",
     }:
         return False, (
-            "❌ Неизвестный режим. Используйте:\n"
-            f"`{SECRET_MODE_DD_INLINE}` или `{SECRET_MODE_EE_SPLIT}`"
+            "❌ Unknown mode. Use:\n"
+            f"`{SECRET_MODE_DD_INLINE}` or `{SECRET_MODE_EE_SPLIT}`"
         )
     normalized_mode = _normalize_secret_mode(requested_mode)
 
@@ -539,21 +539,21 @@ def set_secret_mode(secret_mode: str) -> Tuple[bool, str]:
 
     if _save_config(config):
         if old_mode == normalized_mode:
-            return True, f"✅ Режим MTProto уже установлен: `{normalized_mode}`{_docker_host_sync_hint()}"
+            return True, f"✅ MTProto mode already set: `{normalized_mode}`{_docker_host_sync_hint()}"
 
         return True, (
-            f"✅ Режим MTProto переключён: `{old_mode}` → `{normalized_mode}`\n"
-            f"Текущий формат клиентов: `{_secret_mode_label(normalized_mode)}`\n"
-            "Если MTProto уже установлен на хосте, обновите его systemd unit."
+            f"✅ MTProto mode switched: `{old_mode}` → `{normalized_mode}`\n"
+            f"Current client format: `{_secret_mode_label(normalized_mode)}`\n"
+            "If MTProto is already installed on the host, update its systemd unit."
             f"{_docker_host_sync_hint()}"
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 # === Server IP ===
 
 def get_server_public_ip() -> Optional[str]:
-    """Получить публичный IP адрес сервера."""
+    """Get the server public IP address."""
     import urllib.request
 
     ip_services = [
@@ -594,10 +594,10 @@ def get_server_public_ip() -> Optional[str]:
 
 def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
     """
-    Установить адрес сервера MTProto proxy.
+    Set the MTProto proxy server address.
 
     Args:
-        server: IP или домен. Если None — автоопределение.
+        server: IP or domain. If None — auto-detect.
     """
     if not server or not server.strip():
         detected_ip = get_server_public_ip()
@@ -605,7 +605,7 @@ def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
             server = detected_ip
             auto_detected = True
         else:
-            return False, "❌ Не удалось автоматически определить IP сервера\n\nИспользуйте: /mt_set_server <IP>"
+            return False, "❌ Failed to auto-detect server IP\n\nUse: /mt_set_server <IP>"
     else:
         auto_detected = False
 
@@ -614,36 +614,36 @@ def set_server(server: Optional[str] = None) -> Tuple[bool, str]:
 
     if _save_config(config):
         if auto_detected:
-            return True, f"✅ Сервер установлен автоматически: {server}{_docker_host_sync_hint()}"
-        return True, f"✅ Сервер установлен: {server}{_docker_host_sync_hint()}"
-    return False, "❌ Ошибка при сохранении"
+            return True, f"✅ Server set automatically: {server}{_docker_host_sync_hint()}"
+        return True, f"✅ Server set: {server}{_docker_host_sync_hint()}"
+    return False, "❌ Failed to save"
 
 
 def set_port(port: int) -> Tuple[bool, str]:
-    """Установить порт сервера MTProto proxy."""
+    """Set the MTProto proxy server port."""
     if not isinstance(port, int) or port < 1 or port > 65535:
-        return False, "❌ Порт должен быть числом от 1 до 65535"
+        return False, "❌ Port must be a number from 1 to 65535"
 
     config = _load_config()
     config["port"] = port
 
-    recommended = "⭐ рекомендуемый" if port in RECOMMENDED_PORTS else ""
+    recommended = "⭐ recommended" if port in RECOMMENDED_PORTS else ""
     if _save_config(config):
         return True, (
-            f"✅ Порт установлен: {port} {recommended}\n"
-            f"⚠️ Не забудьте открыть TCP порт: `ufw allow {port}/tcp`"
+            f"✅ Port set: {port} {recommended}\n"
+            f"⚠️ Remember to open the TCP port: `ufw allow {port}/tcp`"
             f"{_docker_host_sync_hint()}"
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_secret(secret: Optional[str] = None, domain: Optional[str] = None) -> Tuple[bool, str]:
     """
-    Установить или сгенерировать секрет MTProto proxy.
+    Set or generate an MTProto proxy secret.
 
     Args:
-        secret: Готовый секрет. Если None — генерируется автоматически.
-        domain: Домен для fake-TLS (используется при генерации).
+        secret: Ready-made secret. If None — generated automatically.
+        domain: Domain for fake-TLS (used when generating).
     """
     config = _load_config()
     fallback_domain = domain or config.get("fake_tls_domain", DEFAULT_FAKE_TLS_DOMAIN)
@@ -661,7 +661,7 @@ def set_secret(secret: Optional[str] = None, domain: Optional[str] = None) -> Tu
         fallback_domain,
     )
 
-    # Обновить fake_tls_domain из секрета
+    # Update fake_tls_domain from the secret
     parsed = _parse_secret(config["secret"])
     if parsed["is_fake_tls"] and parsed["domain"]:
         config["fake_tls_domain"] = parsed["domain"]
@@ -672,33 +672,33 @@ def set_secret(secret: Optional[str] = None, domain: Optional[str] = None) -> Tu
 
     if _save_config(config):
         parsed_info = _parse_secret(config["secret"])
-        mode = "fake-TLS" if parsed_info["is_fake_tls"] else "простой"
+        mode = "fake-TLS" if parsed_info["is_fake_tls"] else "plain"
         domain_info = f" ({parsed_info['domain']})" if parsed_info["domain"] else ""
         return True, (
-            f"✅ Секрет установлен ({mode}{domain_info}, {len(config['secret'])} символов)\n"
-            f"Режим: `{config.get('secret_mode', DEFAULT_SECRET_MODE)}`"
+            f"✅ Secret set ({mode}{domain_info}, {len(config['secret'])} characters)\n"
+            f"Mode: `{config.get('secret_mode', DEFAULT_SECRET_MODE)}`"
             f"{_docker_host_sync_hint()}"
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_fake_tls_domain(domain: str) -> Tuple[bool, str]:
     """
-    Установить домен fake-TLS и перегенерировать секрет.
+    Set the fake-TLS domain and regenerate the secret.
 
     Args:
-        domain: ASCII домен для маскировки
+        domain: ASCII domain for camouflage
     """
     if not domain or not domain.strip():
-        return False, "❌ Домен не может быть пустым"
+        return False, "❌ Domain cannot be empty"
 
     domain = domain.strip().lower()
 
-    # Проверка ASCII
+    # ASCII check
     try:
         domain.encode("ascii")
     except UnicodeEncodeError:
-        return False, "❌ Домен должен содержать только ASCII символы"
+        return False, "❌ Domain must contain only ASCII characters"
 
     config = _load_config()
     config["fake_tls_domain"] = domain
@@ -725,54 +725,54 @@ def set_fake_tls_domain(domain: str) -> Tuple[bool, str]:
 
     if _save_config(config):
         return True, (
-            f"✅ Домен fake-TLS: {domain}\n"
-            f"🔄 Секреты приведены к режиму `{config.get('secret_mode', DEFAULT_SECRET_MODE)}`"
+            f"✅ fake-TLS domain: {domain}\n"
+            f"🔄 Secrets normalized to mode `{config.get('secret_mode', DEFAULT_SECRET_MODE)}`"
             f"{_docker_host_sync_hint()}"
         )
-    return False, "❌ Ошибка при сохранении"
+    return False, "❌ Failed to save"
 
 
 def set_tag(tag: str) -> Tuple[bool, str]:
     """
-    Установить статистический тег (hex строка).
-    Тег используется для промоутирования прокси через @MTProxybot.
+    Set the statistics tag (hex string).
+    The tag is used to promote the proxy via @MTProxybot.
     """
     tag = tag.strip()
 
-    # Валидация: должен быть hex строкой или пустым
+    # Validation: must be a hex string or empty
     if tag:
         try:
             bytes.fromhex(tag)
         except ValueError:
-            return False, "❌ Тег должен быть hex строкой (например: dcbe8f1493fa4cd973d)"
+            return False, "❌ Tag must be a hex string (e.g. dcbe8f1493fa4cd973d)"
 
     config = _load_config()
     config["tag"] = tag
 
     if _save_config(config):
         if tag:
-            return True, f"✅ Тег установлен: {tag}{_docker_host_sync_hint()}"
-        return True, f"✅ Тег удалён{_docker_host_sync_hint()}"
-    return False, "❌ Ошибка при сохранении"
+            return True, f"✅ Tag set: {tag}{_docker_host_sync_hint()}"
+        return True, f"✅ Tag removed{_docker_host_sync_hint()}"
+    return False, "❌ Failed to save"
 
 
 def set_workers(workers: int) -> Tuple[bool, str]:
-    """Установить количество воркеров (1-16)."""
+    """Set worker count (1-16)."""
     if not isinstance(workers, int) or workers < 1 or workers > 16:
-        return False, "❌ Количество воркеров должно быть от 1 до 16"
+        return False, "❌ Worker count must be from 1 to 16"
 
     config = _load_config()
     config["workers"] = workers
 
     if _save_config(config):
-        return True, f"✅ Воркеры: {workers}{_docker_host_sync_hint()}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Workers: {workers}{_docker_host_sync_hint()}"
+    return False, "❌ Failed to save"
 
 
 # === Clients ===
 
 def list_clients() -> List[Dict]:
-    """Получить список клиентов MTProto proxy."""
+    """Get the list of MTProto proxy clients."""
     config = _load_config()
     _normalize_clients(config)
     return config.get("clients", [])
@@ -780,12 +780,12 @@ def list_clients() -> List[Dict]:
 
 def add_client(name: str, client_secret: Optional[str] = None) -> Tuple[bool, str, Dict]:
     """
-    Добавить клиента MTProto proxy.
+    Add an MTProto proxy client.
 
-    Каждый клиент получает свой секрет (с тем же fake-TLS доменом).
+    Each client gets its own secret (with the same fake-TLS domain).
     """
     if not name or not name.strip():
-        return False, "❌ Имя клиента не может быть пустым", {}
+        return False, "❌ Client name cannot be empty", {}
 
     name = name.strip()
     config = _load_config()
@@ -793,10 +793,10 @@ def add_client(name: str, client_secret: Optional[str] = None) -> Tuple[bool, st
 
     for client in config.get("clients", []):
         if client.get("name") == name:
-            return False, f"❌ Клиент с именем {name} уже существует", {}
+            return False, f"❌ Client named {name} already exists", {}
 
     if not client_secret:
-        # Генерируем секрет с тем же доменом
+        # Generate a secret with the same domain
         domain = config.get("fake_tls_domain", "google.com")
         client_secret = generate_secret(domain)
     else:
@@ -814,21 +814,21 @@ def add_client(name: str, client_secret: Optional[str] = None) -> Tuple[bool, st
 
     config["clients"].append(client)
     if _save_config(config):
-        return True, f"✅ Клиент добавлен: {name}{_docker_host_sync_hint()}", client
-    return False, "❌ Ошибка при сохранении", {}
+        return True, f"✅ Client added: {name}{_docker_host_sync_hint()}", client
+    return False, "❌ Failed to save", {}
 
 
 def remove_client(name_or_secret: str) -> Tuple[bool, str]:
-    """Удалить клиента по имени или секрету."""
+    """Remove a client by name or secret."""
     if not name_or_secret or not name_or_secret.strip():
-        return False, "❌ Укажите имя клиента"
+        return False, "❌ Specify a client name"
 
     name_or_secret = name_or_secret.strip()
     config = _load_config()
     _normalize_clients(config)
 
     if name_or_secret == "default":
-        return False, "❌ Нельзя удалить default клиента"
+        return False, "❌ Cannot delete the default client"
 
     clients = config.get("clients", [])
     new_clients = [
@@ -837,23 +837,23 @@ def remove_client(name_or_secret: str) -> Tuple[bool, str]:
     ]
 
     if len(new_clients) == len(clients):
-        return False, "❌ Клиент не найден"
+        return False, "❌ Client not found"
 
     config["clients"] = new_clients
     if _save_config(config):
-        return True, f"✅ Клиент удалён{_docker_host_sync_hint()}"
-    return False, "❌ Ошибка при сохранении"
+        return True, f"✅ Client removed{_docker_host_sync_hint()}"
+    return False, "❌ Failed to save"
 
 
 # === Generate All ===
 
 def generate_all() -> Tuple[bool, Dict, str]:
     """
-    Сгенерировать всё: секрет + автоопределить IP.
-    (TLS сертификат для MTProto не нужен.)
+    Generate everything: secret + auto-detect IP.
+    (TLS certificate is not needed for MTProto.)
 
     Returns:
-        Tuple[bool, Dict, str]: (успех, данные, сообщение)
+        Tuple[bool, Dict, str]: (success, data, message)
     """
     results = {}
     messages = []
@@ -882,15 +882,15 @@ def generate_all() -> Tuple[bool, Dict, str]:
 
 def generate_tg_link(client_secret: Optional[str] = None) -> str:
     """
-    Сгенерировать tg://proxy ссылку.
+    Generate a tg://proxy link.
 
     Format: tg://proxy?server=IP&port=PORT&secret=SECRET
 
     Args:
-        client_secret: Секрет клиента. Если None — основной секрет.
+        client_secret: Client secret. If None — the main secret.
 
     Returns:
-        str: tg://proxy?... ссылка
+        str: tg://proxy?... link
     """
     config = _load_config()
     server = config.get("server", "")
@@ -910,15 +910,15 @@ def generate_tg_link(client_secret: Optional[str] = None) -> str:
 
 def generate_https_link(client_secret: Optional[str] = None) -> str:
     """
-    Сгенерировать HTTPS ссылку (t.me/proxy).
+    Generate an HTTPS link (t.me/proxy).
 
     Format: https://t.me/proxy?server=IP&port=PORT&secret=SECRET
 
     Args:
-        client_secret: Секрет клиента. Если None — основной секрет.
+        client_secret: Client secret. If None — the main secret.
 
     Returns:
-        str: https://t.me/proxy?... ссылка
+        str: https://t.me/proxy?... link
     """
     config = _load_config()
     server = config.get("server", "")
@@ -938,7 +938,7 @@ def generate_https_link(client_secret: Optional[str] = None) -> str:
 
 def get_client(name_or_secret: str) -> Optional[Dict]:
     """
-    Найти клиента MTProto по имени или секрету.
+    Find an MTProto client by name or secret.
     """
     if not name_or_secret or not name_or_secret.strip():
         return None
@@ -952,24 +952,24 @@ def get_client(name_or_secret: str) -> Optional[Dict]:
 
 def generate_client_links(name_or_secret: str) -> Tuple[bool, str, Dict]:
     """
-    Сгенерировать tg:// и https:// ссылки для конкретного клиента.
+    Generate tg:// and https:// links for a specific client.
     """
     config = _load_config()
     client = get_client(name_or_secret)
     if not client:
-        return False, "❌ Клиент не найден", {}
+        return False, "❌ Client not found", {}
 
     client_name = client.get("name") or "client"
     client_secret = client.get("secret") or ""
     if not client_secret:
-        return False, f"❌ У клиента {client_name} отсутствует secret", {}
+        return False, f"❌ Client {client_name} has no secret", {}
 
     tg_link = generate_tg_link(client_secret)
     https_link = generate_https_link(client_secret)
     if not tg_link or not https_link:
-        return False, "❌ Не удалось сгенерировать MTProto ссылки. Проверьте сервер, порт и secret", {}
+        return False, "❌ Failed to generate MTProto links. Check server, port, and secret", {}
 
-    return True, f"✅ Ссылки для клиента {client_name} готовы", {
+    return True, f"✅ Links for client {client_name} are ready", {
         "name": client_name,
         "secret": client_secret,
         "secret_mode": config.get("secret_mode", DEFAULT_SECRET_MODE),
@@ -981,15 +981,15 @@ def generate_client_links(name_or_secret: str) -> Tuple[bool, str, Dict]:
 
 def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
     """
-    Сгенерировать QR-код PNG в памяти.
+    Generate a QR-code PNG in memory.
     """
     if not content or not content.strip():
-        return False, None, "❌ Нечего кодировать в QR"
+        return False, None, "❌ Nothing to encode in QR"
 
     try:
         import qrcode
     except ImportError:
-        return False, None, "❌ Библиотека qrcode не установлена. Обновите зависимости проекта"
+        return False, None, "❌ qrcode library is not installed. Update project dependencies"
 
     try:
         qr = qrcode.QRCode(
@@ -1005,16 +1005,16 @@ def generate_qr_png_bytes(content: str) -> Tuple[bool, Optional[BytesIO], str]:
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         buffer.seek(0)
-        return True, buffer, "✅ QR-код сгенерирован"
+        return True, buffer, "✅ QR code generated"
     except Exception as e:
         logger.error(f"Failed to generate MTProto QR image: {e}")
-        return False, None, f"❌ Ошибка генерации QR: {e}"
+        return False, None, f"❌ QR generation error: {e}"
 
 
 def build_client_qr_payload(name_or_secret: str) -> Tuple[bool, str, Dict]:
     """
-    Подготовить данные клиента MTProto для отправки QR-кода через Telegram.
-    Для QR используем HTTPS ссылку, потому что камера телефона обычно открывает её надёжнее.
+    Prepare MTProto client data for sending a QR code via Telegram.
+    Use the HTTPS link for QR because phone cameras usually open it more reliably.
     """
     success, message, links = generate_client_links(name_or_secret)
     if not success:
@@ -1026,13 +1026,13 @@ def build_client_qr_payload(name_or_secret: str) -> Tuple[bool, str, Dict]:
 
     payload = dict(links)
     payload["qr_buffer"] = qr_buffer
-    return True, "✅ QR-пакет для клиента MTProto подготовлен", payload
+    return True, "✅ QR payload for MTProto client is ready", payload
 
 
 # === Export ===
 
 def export_subscription_list() -> List[str]:
-    """Сформировать список tg://proxy URI для всех клиентов."""
+    """Build a list of tg://proxy URIs for all clients."""
     links = []
     clients = list_clients()
     for client in clients:
@@ -1045,7 +1045,7 @@ def export_subscription_list() -> List[str]:
 
 
 def export_subscription_base64() -> str:
-    """Сформировать subscription в base64."""
+    """Build a base64 subscription."""
     import base64
 
     links = export_subscription_list()
@@ -1060,18 +1060,18 @@ def export_subscription_base64() -> str:
 # === Service Management (runs on VPS) ===
 
 def _is_docker() -> bool:
-    """Проверить, запущены ли мы внутри Docker."""
+    """Check whether we are running inside Docker."""
     return os.path.exists("/.dockerenv") or os.path.exists("/run/.containerenv")
 
 
 def _collect_all_secrets() -> List[str]:
-    """Собрать все уникальные серверные секреты для ExecStart."""
+    """Collect all unique server secrets for ExecStart."""
     config = _load_config()
     secret_mode = _normalize_secret_mode(config.get("secret_mode"))
     seen = set()
     result = []
 
-    # Основной секрет
+    # Main secret
     main_secret = config.get("secret", "")
     if main_secret:
         parsed = _parse_secret(main_secret)
@@ -1080,7 +1080,7 @@ def _collect_all_secrets() -> List[str]:
             seen.add(server_secret)
             result.append(server_secret)
 
-    # Клиентские секреты
+    # Client secrets
     for client in config.get("clients", []):
         cs = client.get("secret", "")
         if not cs:
@@ -1096,18 +1096,18 @@ def _collect_all_secrets() -> List[str]:
 
 def _build_systemd_unit() -> str:
     """
-    Построить содержимое systemd unit файла.
+    Build the systemd unit file contents.
 
-    mtproto-proxy использует CLI-флаги вместо конфиг-файла:
-        -u nobody        — запуск от пользователя nobody
-        -p 2398          — внутренний порт статистики
-        -H PORT          — публичный порт для клиентов
-        -S SECRET        — секрет (можно несколько -S)
-        -D DOMAIN        — fake-TLS домен в ee_split режиме
-        --aes-pwd FILE   — путь к proxy-secret от Telegram
-        CONFIG_FILE      — путь к proxy-multi.conf от Telegram
-        -M WORKERS       — количество воркеров
-        --nat-info IP:IP — NAT info (для серверов за NAT)
+    mtproto-proxy uses CLI flags instead of a config file:
+        -u nobody        — run as nobody
+        -p 2398          — internal stats port
+        -H PORT          — public client port
+        -S SECRET        — secret (may repeat -S)
+        -D DOMAIN        — fake-TLS domain in ee_split mode
+        --aes-pwd FILE   — path to proxy-secret from Telegram
+        CONFIG_FILE      — path to proxy-multi.conf from Telegram
+        -M WORKERS       — worker count
+        --nat-info IP:IP — NAT info (for servers behind NAT)
     """
     config = _load_config()
     port = config.get("port", 993)
@@ -1122,7 +1122,7 @@ def _build_systemd_unit() -> str:
 
     secret_flags = " ".join(f"-S {s}" for s in all_secrets)
 
-    # Базовая команда
+    # Base command
     exec_start = (
         f"{MTPROXY_BINARY_PATH} "
         f"-u nobody "
@@ -1140,12 +1140,12 @@ def _build_systemd_unit() -> str:
         f"-M {workers}"
     )
 
-    # Добавить NAT info если есть публичный IP
+    # Add NAT info if there is a public IP
     server_ip = config.get("server", "")
     if server_ip:
         exec_start += f" --nat-info {server_ip}:{server_ip}"
 
-    # Добавить тег если есть
+    # Add tag if present
     if tag:
         exec_start += f" -T {tag}"
 
@@ -1168,14 +1168,14 @@ WantedBy=multi-user.target
 
 def apply_config() -> Tuple[bool, str]:
     """
-    Применить конфигурацию: записать systemd unit и перезапустить сервис.
+    Apply configuration: write the systemd unit and restart the service.
 
-    MTProto proxy не использует конфиг-файл — все параметры в ExecStart.
+    MTProto proxy does not use a config file — all parameters are in ExecStart.
     """
     if _is_docker():
         return False, (
-            "❌ Запущено в Docker — systemctl недоступен.\n"
-            "Выполните на хосте:\n"
+            "❌ Running in Docker — systemctl is unavailable.\n"
+            "Run on the host:\n"
             "`cd /opt/TelegramSimple && python3 scripts/mtproto_sync_systemd.py`"
         )
 
@@ -1203,34 +1203,34 @@ def apply_config() -> Tuple[bool, str]:
         )
         if result.returncode == 0:
             return True, (
-                "✅ Конфиг применён и сервис перезапущен\n"
+                "✅ Config applied and service restarted\n"
                 f"📄 `{SYSTEMD_UNIT_PATH}`\n"
-                f"Режим: `{secret_mode}` ({_secret_mode_label(secret_mode)})"
+                f"Mode: `{secret_mode}` ({_secret_mode_label(secret_mode)})"
             )
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"⚠️ Unit записан, но сервис не перезапустился:\n`{error}`"
+            return False, f"⚠️ Unit written, but the service did not restart:\n`{error}`"
 
     except PermissionError:
-        return False, "❌ Нет прав на запись. Запустите с sudo."
+        return False, "❌ No write permission. Run with sudo."
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def service_control(action: str) -> Tuple[bool, str]:
     """
-    Управление systemd сервисом MTProto proxy.
+    Control the MTProto proxy systemd service.
 
     Args:
         action: start, stop, restart, status
     """
     if action not in ("start", "stop", "restart", "status"):
-        return False, f"❌ Неизвестное действие: {action}"
+        return False, f"❌ Unknown action: {action}"
 
     if _is_docker():
         return False, (
-            "❌ Запущено в Docker — systemctl недоступен.\n"
-            f"Выполните на хосте: `systemctl {action} {SYSTEMD_SERVICE_NAME}`"
+            "❌ Running in Docker — systemctl is unavailable.\n"
+            f"Run on the host: `systemctl {action} {SYSTEMD_SERVICE_NAME}`"
         )
 
     try:
@@ -1243,54 +1243,54 @@ def service_control(action: str) -> Tuple[bool, str]:
             output = result.stdout.strip() or result.stderr.strip()
             is_active = "active (running)" in output
             status_emoji = "🟢" if is_active else "🔴"
-            return True, f"{status_emoji} MTProto proxy сервис:\n```\n{output[:500]}\n```"
+            return True, f"{status_emoji} MTProto proxy service:\n```\n{output[:500]}\n```"
 
         if result.returncode == 0:
-            action_labels = {"start": "запущен", "stop": "остановлен", "restart": "перезапущен"}
+            action_labels = {"start": "started", "stop": "stopped", "restart": "restarted"}
             return True, f"✅ MTProto proxy {action_labels.get(action, action)}"
         else:
             error = result.stderr.strip() or result.stdout.strip()
-            return False, f"❌ Ошибка: {error[:300]}"
+            return False, f"❌ Error: {error[:300]}"
 
     except FileNotFoundError:
-        return False, "❌ systemctl не найден. MTProto proxy установлен?"
+        return False, "❌ systemctl not found. Is MTProto proxy installed?"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def get_logs(lines: int = 30) -> Tuple[bool, str]:
-    """Получить логи MTProto proxy сервиса."""
+    """Get MTProto proxy service logs."""
     if _is_docker():
-        return False, "❌ Запущено в Docker — journalctl недоступен."
+        return False, "❌ Running in Docker — journalctl is unavailable."
 
     try:
         result = subprocess.run(
             ["journalctl", "-u", SYSTEMD_SERVICE_NAME, "-n", str(lines), "--no-pager"],
             capture_output=True, text=True, timeout=15,
         )
-        output = result.stdout.strip() or result.stderr.strip() or "(пусто)"
+        output = result.stdout.strip() or result.stderr.strip() or "(empty)"
         if len(output) > 3500:
             output = output[-3500:]
         return True, output
 
     except FileNotFoundError:
-        return False, "❌ journalctl не найден"
+        return False, "❌ journalctl not found"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
 
 def fetch_proxy_config() -> Tuple[bool, str]:
     """
-    Обновить proxy-secret и proxy-multi.conf с серверов Telegram.
-    Эти файлы нужны для работы MTProto proxy и должны обновляться ежедневно.
+    Refresh proxy-secret and proxy-multi.conf from Telegram servers.
+    These files are required for MTProto proxy and should be updated daily.
     """
     if _is_docker():
-        return False, "❌ Запущено в Docker. Выполните на хосте."
+        return False, "❌ Running in Docker. Run this on the host."
 
     try:
         os.makedirs(MTPROXY_CONFIG_DIR, exist_ok=True)
     except Exception as e:
-        return False, f"❌ Не удалось создать {MTPROXY_CONFIG_DIR}: {e}"
+        return False, f"❌ Failed to create {MTPROXY_CONFIG_DIR}: {e}"
 
     messages = []
     success = True
@@ -1303,12 +1303,12 @@ def fetch_proxy_config() -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode == 0:
-            messages.append(f"✅ proxy-secret обновлён: `{PROXY_SECRET_PATH}`")
+            messages.append(f"✅ proxy-secret updated: `{PROXY_SECRET_PATH}`")
         else:
-            messages.append(f"❌ Ошибка загрузки proxy-secret: {result.stderr.strip()}")
+            messages.append(f"❌ Failed to download proxy-secret: {result.stderr.strip()}")
             success = False
     except Exception as e:
-        messages.append(f"❌ Ошибка: {e}")
+        messages.append(f"❌ Error: {e}")
         success = False
 
     # Fetch proxy-multi.conf
@@ -1319,12 +1319,12 @@ def fetch_proxy_config() -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=30,
         )
         if result.returncode == 0:
-            messages.append(f"✅ proxy-multi.conf обновлён: `{PROXY_MULTI_CONF_PATH}`")
+            messages.append(f"✅ proxy-multi.conf updated: `{PROXY_MULTI_CONF_PATH}`")
         else:
-            messages.append(f"❌ Ошибка загрузки proxy-multi.conf: {result.stderr.strip()}")
+            messages.append(f"❌ Failed to download proxy-multi.conf: {result.stderr.strip()}")
             success = False
     except Exception as e:
-        messages.append(f"❌ Ошибка: {e}")
+        messages.append(f"❌ Error: {e}")
         success = False
 
     return success, "\n".join(messages)
@@ -1332,17 +1332,17 @@ def fetch_proxy_config() -> Tuple[bool, str]:
 
 def install_mtproto() -> Tuple[bool, str]:
     """
-    Установить MTProto proxy на сервер (сборка из исходников).
+    Install MTProto proxy on the server (build from source).
 
-    1. Установка зависимостей сборки
-    2. Клонирование и компиляция MTProxy
-    3. Загрузка proxy-secret и proxy-multi.conf
-    4. Создание systemd сервиса
+    1. Install build dependencies
+    2. Clone and compile MTProxy
+    3. Download proxy-secret and proxy-multi.conf
+    4. Create the systemd service
     """
     if _is_docker():
         return False, (
-            "❌ Запущено в Docker — установка невозможна.\n"
-            "Выполните на хосте:\n"
+            "❌ Running in Docker — install is not possible.\n"
+            "Run on the host:\n"
             f"`bash scripts/install_mtproto.sh --mode {DEFAULT_SECRET_MODE}`"
         )
 
@@ -1351,7 +1351,7 @@ def install_mtproto() -> Tuple[bool, str]:
         check = subprocess.run(["test", "-f", MTPROXY_BINARY_PATH],
                                capture_output=True, text=True)
         if check.returncode == 0:
-            return True, f"✅ MTProto proxy уже установлен: `{MTPROXY_BINARY_PATH}`"
+            return True, f"✅ MTProto proxy is already installed: `{MTPROXY_BINARY_PATH}`"
     except Exception:
         pass
 
@@ -1365,11 +1365,11 @@ def install_mtproto() -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode == 0:
-            messages.append("✅ Зависимости установлены")
+            messages.append("✅ Dependencies installed")
         else:
-            return False, f"❌ Ошибка установки зависимостей:\n`{result.stderr.strip()[:300]}`"
+            return False, f"❌ Failed to install dependencies:\n`{result.stderr.strip()[:300]}`"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"
 
     # 2. Clone and build
     build_dir = "/opt/MTProxy"
@@ -1382,21 +1382,21 @@ def install_mtproto() -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=120,
         )
         if result.returncode != 0:
-            return False, f"❌ Ошибка клонирования:\n`{result.stderr.strip()[:300]}`"
+            return False, f"❌ Clone error:\n`{result.stderr.strip()[:300]}`"
 
-        messages.append("✅ Исходный код загружен")
+        messages.append("✅ Source code downloaded")
 
         result = subprocess.run(
             ["make", "-j4", "-C", build_dir],
             capture_output=True, text=True, timeout=300,
         )
         if result.returncode != 0:
-            return False, f"❌ Ошибка компиляции:\n`{result.stderr.strip()[:300]}`"
+            return False, f"❌ Compile error:\n`{result.stderr.strip()[:300]}`"
 
-        messages.append("✅ Компиляция завершена")
+        messages.append("✅ Compilation finished")
 
     except Exception as e:
-        return False, f"❌ Ошибка сборки: {e}"
+        return False, f"❌ Build error: {e}"
 
     # 3. Install binary
     try:
@@ -1409,9 +1409,9 @@ def install_mtproto() -> Tuple[bool, str]:
             ["chmod", "+x", MTPROXY_BINARY_PATH],
             capture_output=True, text=True, timeout=5,
         )
-        messages.append(f"✅ Бинарник установлен: `{MTPROXY_BINARY_PATH}`")
+        messages.append(f"✅ Binary installed: `{MTPROXY_BINARY_PATH}`")
     except Exception as e:
-        return False, f"❌ Ошибка установки бинарника: {e}"
+        return False, f"❌ Failed to install binary: {e}"
 
     # 4. Fetch Telegram config files
     success_fetch, msg_fetch = fetch_proxy_config()
@@ -1424,7 +1424,7 @@ def install_mtproto() -> Tuple[bool, str]:
             capture_output=True, text=True, timeout=20,
         )
     except Exception:
-        messages.append("⚠️ Не удалось автоматически включить cron")
+        messages.append("⚠️ Failed to enable cron automatically")
 
     try:
         cron_cmd = (
@@ -1436,29 +1436,29 @@ def install_mtproto() -> Tuple[bool, str]:
             f"systemctl restart {SYSTEMD_SERVICE_NAME}') | crontab -"
         )
         subprocess.run(["bash", "-c", cron_cmd], capture_output=True, text=True, timeout=10)
-        messages.append("✅ Cron: ежедневное обновление proxy-secret в 03:00")
+        messages.append("✅ Cron: daily proxy-secret refresh at 03:00")
     except Exception:
-        messages.append("⚠️ Не удалось настроить cron (настройте вручную)")
+        messages.append("⚠️ Failed to configure cron (set it up manually)")
 
     messages.append(
-        "\n📡 Далее:\n"
-        f"1. `/mt_set_mode {DEFAULT_SECRET_MODE}` — при необходимости зафиксировать режим\n"
-        "2. `/mt_gen_all` — сгенерировать секрет и определить IP\n"
-        "3. `/mt_apply` — применить конфиг и запустить\n"
-        "4. `/mt_export` — получить ссылку для клиента"
+        "\n📡 Next:\n"
+        f"1. `/mt_set_mode {DEFAULT_SECRET_MODE}` — lock the mode if needed\n"
+        "2. `/mt_gen_all` — generate a secret and detect IP\n"
+        "3. `/mt_apply` — apply config and start\n"
+        "4. `/mt_export` — get the client link"
     )
 
     return True, "\n".join(messages)
 
 
 def test_connection() -> Tuple[bool, str]:
-    """Тест доступности MTProto proxy (проверяет TCP порт)."""
+    """Test MTProto proxy reachability (checks the TCP port)."""
     config = _load_config()
     server = config.get("server", "")
     port = config.get("port", 993)
 
     if not server:
-        return False, "❌ Сервер не настроен"
+        return False, "❌ Server is not configured"
 
     import socket
 
@@ -1469,8 +1469,8 @@ def test_connection() -> Tuple[bool, str]:
         sock.close()
 
         if result == 0:
-            return True, f"✅ TCP порт {server}:{port} доступен"
+            return True, f"✅ TCP port {server}:{port} is reachable"
         else:
-            return False, f"❌ TCP порт {server}:{port} недоступен (код: {result})"
+            return False, f"❌ TCP port {server}:{port} is unreachable (code: {result})"
     except Exception as e:
-        return False, f"❌ Ошибка: {e}"
+        return False, f"❌ Error: {e}"

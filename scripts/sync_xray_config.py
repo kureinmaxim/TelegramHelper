@@ -21,7 +21,7 @@ except ImportError as e:
 
 
 def _reality_private_key(cfg):
-    """Reality privateKey из xray-конфига ('' если нет). Его пустота = xray не стартует."""
+    """Reality privateKey from the xray config ('' if missing). Empty = xray will not start."""
     try:
         return cfg["inbounds"][0]["streamSettings"]["realitySettings"]["privateKey"] or ""
     except (KeyError, IndexError, TypeError):
@@ -36,19 +36,19 @@ def sync_config():
     xray_config = export_xray_config(is_server=True)
     status = get_vless_status()
 
-    # Свежая установка: Reality privateKey пуст → xray падает с
-    # 'Failed to build REALITY config: empty "privateKey"'. Генерируем ключи
-    # (uuid + x25519 + short_id + default-клиент) и пере-экспортируем конфиг,
-    # чтобы VLESS стартовал из коробки. Кастомизация — потом через бота (/vless_*).
+    # Fresh install: empty Reality privateKey → xray dies with
+    # 'Failed to build REALITY config: empty "privateKey"'. Generate keys
+    # (uuid + x25519 + short_id + default client) and re-export the config
+    # so VLESS starts out of the box. Customize later via the bot (/vless_*).
     if not _reality_private_key(xray_config):
-        print("Reality privateKey пуст — генерирую ключи VLESS (uuid + x25519 + default client)...")
+        print("Reality privateKey is empty — generating VLESS keys (uuid + x25519 + default client)...")
         ok, _keys, msg = generate_all_keys()
         print(f"  {msg}")
         xray_config = export_xray_config(is_server=True)
         status = get_vless_status()
         if not _reality_private_key(xray_config):
-            print("⚠️ Не удалось сгенерировать Reality-ключи (нет xray x25519 и cryptography?). "
-                  "Сгенерируй через бота: /vless_gen_keys, затем systemctl restart xray.")
+            print("⚠️ Failed to generate Reality keys (no xray x25519 and cryptography?). "
+                  "Generate via the bot: /vless_gen_keys, then systemctl restart xray.")
 
     if not status['configured']:
         print("Warning: VLESS is not fully configured in vless_manager. Using partial config.")
@@ -62,9 +62,9 @@ def sync_config():
             
         print(f"Successfully wrote Xray config to {XRAY_CONFIG_PATH}")
         print(f"Server Port: {status.get('port', 443)}")
-        # UUID/SNI печатаем только если VLESS уже сконфигурирован. На свежей
-        # установке клиентов/serverNames ещё нет — это НЕ ошибка (конфиг записан
-        # выше, xray стартует), поэтому не индексируем пустые списки вслепую.
+        # Print UUID/SNI only if VLESS is already configured. On a fresh
+        # install there are no clients/serverNames yet — that is NOT an error
+        # (config was written above, xray starts), so do not index empty lists.
         try:
             inbound = xray_config.get("inbounds", [{}])[0]
             clients = inbound.get("settings", {}).get("clients", []) or []
@@ -75,11 +75,11 @@ def sync_config():
             if snis:
                 print(f"SNI: {snis[0]}")
             if not clients:
-                print("VLESS ещё не настроен (нет клиентов). Конфиг записан, xray "
-                      "запущен — добавь клиента через бота (/vless_*), затем "
-                      "перезапусти: systemctl restart xray.")
+                print("VLESS is not configured yet (no clients). Config is written, xray "
+                      "is running — add a client via the bot (/vless_*), then "
+                      "restart: systemctl restart xray.")
         except (KeyError, IndexError, TypeError):
-            pass  # диагностический вывод не должен ронять синк
+            pass  # diagnostic output must not crash the sync
 
     except PermissionError:
         print(f"Error: Permission denied writing to {XRAY_CONFIG_PATH}. Run as root.")

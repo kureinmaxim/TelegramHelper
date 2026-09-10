@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # ============================================================================
-# preflight_subnets.sh — сверка подсетей compose.yaml с уже существующими
-# сетями Docker на этом хосте.
+# preflight_subnets.sh — compare compose.yaml subnets with existing
+# Docker networks on this host.
 #
-# Зачем: compose.yaml закрепляет подсети сетей default и socket_proxy
-# (переменные COMPOSE_DEFAULT_SUBNET / COMPOSE_SOCKET_PROXY_SUBNET,
-# см. DEPLOY.md §8.9). На хосте, где стек уже развёрнут с ДРУГОЙ подсетью
-# (например, headscale-хост с 172.20.0.0/16), `docker compose up` видит
-# несовпадение и пытается пересоздать сеть: контейнер бота останавливается,
-# удаление сети падает из-за активных dockhand/headplane — и бот остаётся
-# лежать с ошибкой "is not connected to the network". Этот скрипт ловит
-# расхождение ДО `up`.
+# Why: compose.yaml pins the default and socket_proxy network subnets
+# (COMPOSE_DEFAULT_SUBNET / COMPOSE_SOCKET_PROXY_SUBNET,
+# see DEPLOY.md §8.9). On a host where the stack is already deployed with a
+# DIFFERENT subnet (e.g. a headscale host with 172.20.0.0/16), `docker compose
+# up` sees the mismatch and tries to recreate the network: the bot container
+# stops, network delete fails because dockhand/headplane are still attached —
+# and the bot is left with "is not connected to the network". This script
+# catches the mismatch BEFORE `up`.
 #
-#   bash scripts/preflight_subnets.sh          # проверка; exit 1 при расхождении
-#   bash scripts/preflight_subnets.sh --fix    # прописать существующие подсети в .env
+#   bash scripts/preflight_subnets.sh          # check; exit 1 on mismatch
+#   bash scripts/preflight_subnets.sh --fix    # write existing subnets into .env
 # ============================================================================
 set -euo pipefail
 
@@ -23,20 +23,20 @@ cd "$SCRIPT_DIR/.."
 FIX=0
 [[ "${1:-}" == "--fix" ]] && FIX=1
 
-# Дефолты обязаны совпадать с compose.yaml (${VAR:-...}).
+# Defaults must match compose.yaml (${VAR:-...}).
 DEF_DEFAULT_SUBNET="172.18.0.0/16"
 DEF_PROXY_SUBNET="172.28.0.0/24"
 
 if ! command -v docker >/dev/null 2>&1; then
-    echo "docker не найден — проверять нечего (первая установка?)."
+    echo "docker not found — nothing to check (first install?)."
     exit 0
 fi
 
-# Имя compose-проекта: COMPOSE_PROJECT_NAME или имя каталога,
-# нормализованное по правилам compose (lowercase, [a-z0-9_-]).
+# Compose project name: COMPOSE_PROJECT_NAME or the directory name,
+# normalised per compose rules (lowercase, [a-z0-9_-]).
 proj="${COMPOSE_PROJECT_NAME:-$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')}"
 
-# Последнее значение переменной из .env (как это делает compose).
+# Last value of the variable from .env (same as compose).
 env_get() {
     [[ -f .env ]] || return 0
     sed -n "s/^${1}=//p" .env | tail -1
@@ -48,7 +48,7 @@ declared_proxy="$(env_get COMPOSE_SOCKET_PROXY_SUBNET)"
 declared_proxy="${declared_proxy:-$DEF_PROXY_SUBNET}"
 
 mismatch=0
-fix_vars=()   # "VAR=actual_subnet" для --fix
+fix_vars=()   # "VAR=actual_subnet" for --fix
 
 check_net() {
     local net="$1" declared="$2" var="$3"
@@ -56,11 +56,11 @@ check_net() {
     actual="$(docker network inspect "$net" \
         -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}' 2>/dev/null || true)"
     if [[ -z "$actual" ]]; then
-        echo "✓ ${net}: сети ещё нет — compose создаст её с подсетью ${declared}"
+        echo "✓ ${net}: network does not exist yet — compose will create it with subnet ${declared}"
     elif [[ "$actual" == "$declared" ]]; then
-        echo "✓ ${net}: ${actual} (совпадает с объявленной)"
+        echo "✓ ${net}: ${actual} (matches declared)"
     else
-        echo "✗ ${net}: существует с подсетью ${actual}, а объявлена ${declared}"
+        echo "✗ ${net}: exists with subnet ${actual}, but declared is ${declared}"
         fix_vars+=("${var}=${actual}")
         mismatch=1
     fi
@@ -70,7 +70,7 @@ check_net "${proj}_default"      "$declared_default" "COMPOSE_DEFAULT_SUBNET"
 check_net "${proj}_socket_proxy" "$declared_proxy"   "COMPOSE_SOCKET_PROXY_SUBNET"
 
 if [[ "$mismatch" -eq 0 ]]; then
-    echo "Подсети в порядке, можно делать docker compose up."
+    echo "Subnets look good, docker compose up is safe."
     exit 0
 fi
 
@@ -79,20 +79,20 @@ if [[ "$FIX" -eq 1 ]]; then
         var="${kv%%=*}"
         val="${kv#*=}"
         if [[ -f .env ]] && grep -q "^${var}=" .env; then
-            # Заменяем на месте: дубликаты ключей в .env — источник путаницы.
+            # Replace in place: duplicate keys in .env are a source of confusion.
             sed -i.bak "s|^${var}=.*|${var}=${val}|" .env && rm -f .env.bak
         else
             printf '%s=%s\n' "$var" "$val" >> .env
         fi
         echo "→ .env: ${var}=${val}"
     done
-    echo "Готово. Теперь docker compose up не будет пересоздавать сети."
+    echo "Done. docker compose up will no longer recreate the networks."
     exit 0
 fi
 
 echo ""
-echo "docker compose up сейчас попытается ПЕРЕСОЗДАТЬ сеть и уронит бота."
-echo "Исправить автоматически (пропишет существующие подсети в .env):"
+echo "docker compose up will now try to RECREATE the network and take the bot down."
+echo "Fix automatically (writes existing subnets into .env):"
 echo ""
 echo "    bash scripts/preflight_subnets.sh --fix"
 echo ""
