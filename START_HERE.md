@@ -6,10 +6,6 @@ Reticulum bridge, and (optionally) a path to Home Assistant on a NAS.
 This tree is the **public, slightly trimmed** edition. The full private
 operator tree is **TelegramOnly**. Both share the same core **v3.19.5**.
 
-![First hour](docs/images/first-hour.png)
-
-![Two editions](docs/images/editions.png)
-
 | | **TelegramHelper** (this repo) | **TelegramOnly** (private) |
 | --- | --- | --- |
 | Who it is for | GitHub, fork, clean VPS install | The operator's full copy |
@@ -20,8 +16,6 @@ operator tree is **TelegramOnly**. Both share the same core **v3.19.5**.
 | Extra here | `/ai`, `/tr`, `/prompt` | — |
 
 Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md).
-
-![Architecture](docs/images/architecture.png)
 
 ## First Steps on a Fresh Debian VPS
 
@@ -39,13 +33,9 @@ Architecture overview: [ARCHITECTURE.md](ARCHITECTURE.md).
 Then issue the first profile: `/special_add` → `/provision` → `/profiles`,
 or let the user fetch `/my_profile`. Details: [QR_CLIENT_ONBOARDING.md](QR_CLIENT_ONBOARDING.md).
 
-![Profile delivery](docs/images/provision-flow.png)
-
 Only one TLS service can own `443/tcp`. Pick the owner before install
 (VLESS, NaiveProxy, or leave 443 free and run Mieru on `29999`).
 Table: [DEPLOY.md](DEPLOY.md).
-
-![Port 443](docs/images/port-443.png)
 
 ## Component Overview
 

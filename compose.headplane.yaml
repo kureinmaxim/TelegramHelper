@@ -1,36 +1,37 @@
-# Docker Compose файл для Headplane (Web UI для Headscale).
+# Docker Compose file for Headplane (web UI for Headscale).
 #
-# Headplane — современная админ-панель для self-hosted Tailscale координатора
-# (Headscale). Управление пользователями, нодами, pre-auth ключами, ACL,
-# DNS, маршрутами через браузер.
+# Headplane is a modern admin panel for a self-hosted Tailscale coordinator
+# (Headscale). Manage users, nodes, pre-auth keys, ACLs, DNS, and routes
+# in the browser.
 #
-# Архитектура (Вариант А — SSH-туннель, безопасный по умолчанию):
+# Architecture (Variant A — SSH tunnel, safe by default):
 #
-#   Браузер на Windows → ssh -L 3000:127.0.0.1:3000 root@VPS → headplane :3000
+#   Browser on Windows → ssh -L 3000:127.0.0.1:3000 root@VPS → headplane :3000
 #                                                                       │
 #                                                                       │ host loopback
 #                                                                       ▼
 #                                                                  headscale :8080
 #
-# Используется `network_mode: host` — headplane делит сетевой namespace
-# с хостом, поэтому:
-#   • биндится прямо на 127.0.0.1:3000 хоста (см. server.host в config.yaml);
-#   • к headscale ходит через 127.0.0.1:8080 — работает что для headscale,
-#     поднятого нашим compose.headscale.yaml, что для существующей standalone
-#     инсталляции (как `/etc/headscale/` mount у legacy серверов);
-#   • не нужно `depends_on` и резолв имён сервисов compose;
-#   • не нужен общий compose-проект с headscale.
+# Uses `network_mode: host` — Headplane shares the host network namespace,
+# so:
+#   • it binds directly to the host's 127.0.0.1:3000 (see server.host in
+#     config.yaml);
+#   • it reaches Headscale at 127.0.0.1:8080 — works both for Headscale
+#     started by our compose.headscale.yaml and for an existing standalone
+#     install (legacy servers that mount `/etc/headscale/`);
+#   • no `depends_on` or compose service-name DNS is required;
+#   • no shared compose project with Headscale is required.
 #
-# Файл автономный — запускается отдельно:
+# This file is standalone — start it separately:
 #   docker compose -f compose.headplane.yaml up -d
 #
-# Перед первым стартом запустите ./scripts/install_headplane.sh — он:
-#   • создаст headplane/data, headplane/config.yaml из шаблона;
-#   • сгенерирует cookie_secret (32 hex);
-#   • найдёт реальный путь к headscale конфигу (docker inspect) и пропишет
-#     в .env как HEADSCALE_CONFIG_FILE;
-#   • выпустит headscale API-ключ через docker exec headscale;
-#   • подложит ключ в config.yaml.
+# Before the first start, run ./scripts/install_headplane.sh — it will:
+#   • create headplane/data and headplane/config.yaml from the template;
+#   • generate cookie_secret (32 hex chars);
+#   • find the real Headscale config path (docker inspect) and write it
+#     to .env as HEADSCALE_CONFIG_FILE;
+#   • issue a Headscale API key via docker exec headscale;
+#   • put the key into config.yaml.
 
 services:
   headplane:
@@ -38,21 +39,21 @@ services:
     image: ghcr.io/tale/headplane:latest
     restart: unless-stopped
 
-    # Host network: headplane слушает loopback хоста напрямую.
-    # Доступ снаружи закрыт через server.host: "127.0.0.1" в config.yaml.
+    # Host network: Headplane listens on the host loopback directly.
+    # External access is closed via server.host: "127.0.0.1" in config.yaml.
     network_mode: host
 
     volumes:
-      # Конфиг Headplane (с cookie_secret и headscale API key).
+      # Headplane config (cookie_secret and Headscale API key).
       - ./headplane/config.yaml:/etc/headplane/config.yaml:ro
-      # Конфиг Headscale — read-only. Headplane показывает настройки в UI.
-      # Путь на хосте автодетектится установщиком и записывается в .env как
+      # Headscale config — read-only. Headplane shows settings in the UI.
+      # Host path is auto-detected by the installer and written to .env as
       # HEADSCALE_CONFIG_FILE (default: /etc/headscale/config.yaml).
       - ${HEADSCALE_CONFIG_FILE:-/etc/headscale/config.yaml}:/etc/headscale/config.yaml:ro
-      # Persist Headplane state (внутренняя БД, кэш).
+      # Persist Headplane state (internal DB, cache).
       - ./headplane/data:/var/lib/headplane
-      # Docker socket — для integration.docker (signal headscale после
-      # изменений ACL/DNS). Read-only достаточно.
+      # Docker socket — for integration.docker (signal Headscale after
+      # ACL/DNS changes). Read-only is enough.
       - /var/run/docker.sock:/var/run/docker.sock:ro
     logging:
       driver: json-file

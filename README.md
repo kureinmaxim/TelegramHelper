@@ -6,8 +6,6 @@ Operators manage the server from Telegram (or an SSH CLI). Users receive
 VLESS, Hysteria2, MTProto and other profiles as URI, QR, or email.
 A FastAPI service exposes AI queries behind API keys, HMAC, and AES-256-GCM.
 
-![Architecture](docs/images/architecture.png)
-
 ## What you get
 
 - Telegram control plane with admin guards and a role-aware command menu
@@ -35,8 +33,6 @@ core **v3.19.5**.
 
 Keep real VPS inventory, tokens, and host-specific runbooks out of this
 tree. First hour: [START_HERE.md](START_HERE.md).
-
-![Two editions](docs/images/editions.png)
 
 ## Quick start (local)
 
@@ -74,8 +70,6 @@ host: [POST_DEPLOY.md](POST_DEPLOY.md). First-hour checklist: [START_HERE.md](ST
 
 ## How profiles are delivered
 
-![Profile delivery](docs/images/provision-flow.png)
-
 ```text
 /special_add 123456789
 /provision 123456789
@@ -97,8 +91,6 @@ Details: [QR_CLIENT_ONBOARDING.md](QR_CLIENT_ONBOARDING.md).
 
 ## Security layers
 
-![Security layers](docs/images/security-layers.png)
-
 | Layer | Role |
 | --- | --- |
 | Telegram admin IDs | Control-plane auth (`ADMIN_USER_IDS`) |
@@ -111,8 +103,6 @@ Never commit `.env`, `app_keys.json`, `*_config.json`, or Gmail OAuth files.
 See [SECURITY.md](SECURITY.md).
 
 ## Who owns port 443?
-
-![Port 443](docs/images/port-443.png)
 
 Only one TLS service can own `443/tcp`. Pick before install:
 

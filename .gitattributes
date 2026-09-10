@@ -1,4 +1,4 @@
-# Shell-скрипты всегда LF — иначе на Linux `set -o pipefail` падает
-# с «invalid option name» из‑за CR (\r) в конце строки.
+# Keep shell scripts as LF. On Linux, CRLF makes `set -o pipefail`
+# fail with "invalid option name" because of the trailing CR.
 *.sh text eol=lf
 scripts/**/*.sh text eol=lf

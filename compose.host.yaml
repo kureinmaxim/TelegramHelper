@@ -1,16 +1,16 @@
-# compose.host.yaml — override для случая, когда боту нужен доступ к
-# Tailscale/Headscale mesh-сети хоста (например, чтобы /xui_setup
-# смотрел на mesh-IP панели 3x-ui вроде https://100.64.0.6:8081/...).
+# compose.host.yaml — override when the bot needs access to the host
+# Tailscale/Headscale mesh (for example so /xui_setup can reach a 3x-ui
+# panel on a mesh IP such as https://100.64.0.6:8081/...).
 #
-# === Применение ===
-# Использовать ВМЕСТЕ с основным compose.yaml через `-f` дважды:
+# === How to apply ===
+# Use TOGETHER with the main compose.yaml via `-f` twice:
 #
 #   docker compose \
 #     -f compose.yaml \
 #     -f compose.host.yaml \
 #     up -d --force-recreate
 #
-# То же самое в обновлении (с предварительным `git pull`):
+# Same pattern after an update (with a prior `git pull`):
 #
 #   cd /opt/TelegramHelper
 #   git pull origin main
@@ -19,53 +19,53 @@
 #   docker compose -f compose.yaml -f compose.host.yaml \
 #     up -d --force-recreate
 #
-# Чтобы вернуться обратно на bridge-сеть — просто запускайте без
+# To switch back to the bridge network, just run without
 # `-f compose.host.yaml`:
 #
 #   docker compose up -d --force-recreate
 #
-# === Что override делает ===
-# 1. telegram-helper переходит в `network_mode: host` — контейнер
-#    делит сетевой namespace с хостом и видит все его интерфейсы:
-#    eth0, lo, tailscale0, utun*. Mesh-IP'ы (100.64.0.0/10 и
-#    Tailscale-ULA) теперь резолвятся и пингуются.
+# === What the override does ===
+# 1. telegram-helper switches to `network_mode: host` — the container
+#    shares the host network namespace and sees all host interfaces:
+#    eth0, lo, tailscale0, utun*. Mesh IPs (100.64.0.0/10 and
+#    Tailscale ULA) then resolve and ping.
 #
-# 2. dockhand остаётся на bridge-сети (так дешевле / меньше blast
-#    radius, чем тоже переводить в host-mode), и получает алиас
-#    `telegram-helper:host-gateway` через extra_hosts. Это сохраняет
-#    DOCKHAND_API_URL=http://telegram-helper:8000 рабочим: dockhand
-#    стучится на host-gateway:8000, а на этом IP бот уже слушает
-#    благодаря host-mode.
+# 2. dockhand stays on the bridge network (cheaper / smaller blast
+#    radius than host-mode) and gets a `telegram-helper:host-gateway`
+#    alias via extra_hosts. That keeps
+#    DOCKHAND_API_URL=http://telegram-helper:8000 working: dockhand
+#    hits host-gateway:8000, and the bot already listens on that IP
+#    because of host-mode.
 #
-# === Что нужно учесть ===
-# - При `network_mode: host` блок `ports:` Compose'ом игнорируется
-#   с предупреждением. Это нормально — порт 8000 теперь слушает
-#   напрямую на хосте, без NAT через docker bridge.
-# - `pid: host` и `privileged: true` уже стояли в compose.yaml; при
-#   host-сети профиль безопасности фактически не меняется.
-# - Если на хосте есть НЕmesh-сервис тоже на 8000 — будет конфликт.
-#   Перенесите бот на другой порт через переменную окружения (если
-#   код поддерживает) или вернитесь на bridge.
-# - `host.docker.internal` в Linux Docker по умолчанию не доступен;
-#   мы явно прописываем `telegram-helper:host-gateway`, потому что
-#   `host-gateway` — официальный способ из контейнера достучаться до
-#   IP хоста на современных версиях Docker.
+# === What to watch for ===
+# - With `network_mode: host`, Compose ignores the `ports:` block and
+#   warns. That is expected — port 8000 now listens directly on the
+#   host, with no NAT through the Docker bridge.
+# - `pid: host` and `privileged: true` were already set in compose.yaml;
+#   host networking does not change that security profile.
+# - If a non-mesh service on the host also uses 8000, there will be a
+#   conflict. Move the bot to another port via env (if the code supports
+#   it) or return to bridge mode.
+# - `host.docker.internal` is not available by default on Linux Docker;
+#   we explicitly set `telegram-helper:host-gateway` because
+#   `host-gateway` is the supported way for a container to reach the
+#   host IP on modern Docker.
 
 services:
   telegram-helper:
     network_mode: host
-    # Host-network контейнер делит network namespace с VPS. Docker не разрешает
-    # задавать sysctls в этом режиме, поэтому сбрасываем sysctls из compose.yaml.
-    # PMTU workaround для host-mode задаётся на самом VPS через sysctl.
+    # A host-network container shares the VPS network namespace. Docker
+    # does not allow sysctls in this mode, so clear sysctls from compose.yaml.
+    # Apply the PMTU workaround on the VPS itself via sysctl.
     sysctls: !override []
-    # Убираем предупреждение "Published ports are discarded when using host
-    # network mode"; порт 8000 слушает напрямую на хосте.
+    # Drop the "Published ports are discarded when using host network mode"
+    # warning; port 8000 listens directly on the host.
     ports: !override []
 
   dockhand:
     extra_hosts:
-      # Бот в host-mode → Docker DNS его не видит как
-      # `telegram-helper`. Этот алиас резолвится в IP хоста с
-      # точки зрения dockhand-контейнера, а на хосте бот теперь
-      # слушает 0.0.0.0:8000 — попадает напрямую.
+      # The bot is in host-mode, so Docker DNS no longer sees it as
+      # `telegram-helper`. This alias resolves to the host IP from the
+      # dockhand container; on the host the bot now listens on
+      # 0.0.0.0:8000, so the request lands directly.
       - "telegram-helper:host-gateway"
